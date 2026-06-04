@@ -3,7 +3,6 @@ let groupedView = true;
 
 const byId = (id) => document.getElementById(id);
 const storageKey = "kb-dashboard-records-v1";
-
 const normalize = (s) => (s || "").toString().trim();
 const lower = (s) => normalize(s).toLowerCase();
 
@@ -37,6 +36,7 @@ async function loadInitialData() {
   }
   ensureIds();
   populateFilters();
+  injectAnalyticsPanel();
   render();
 }
 
@@ -70,9 +70,9 @@ function populateFilters() {
   fillSelect("typeFilter", uniqueValues("typ"));
 }
 
-function filteredRecords() {
+function filteredRecords(options = {}) {
   const period = byId("periodFilter").value;
-  const agenda = byId("agendaFilter").value;
+  const agenda = options.ignoreAgenda ? "" : byId("agendaFilter").value;
   const meeting = byId("meetingFilter").value;
   const status = byId("statusFilter").value;
   const type = byId("typeFilter").value;
@@ -107,6 +107,7 @@ function render() {
   byId("countNew").textContent = data.filter(r => ["nové","k roztřídění"].includes(lower(r.stav))).length;
   byId("countRisks").textContent = data.filter(r => ["riziko","konflikt / problém"].includes(lower(r.typ)) || lower(r.agenda).includes("rizik")).length;
   byId("countMeetings").textContent = data.filter(r => normalize(r.kam_patri) && !["nezařazeno", "archiv"].includes(lower(r.kam_patri))).length;
+  renderAgendaAnalytics();
 
   const container = byId("records");
   if (!data.length) {
@@ -114,6 +115,102 @@ function render() {
     return;
   }
   container.innerHTML = groupedView ? renderGrouped(data) : renderTable(data);
+}
+
+function injectAnalyticsPanel() {
+  if (byId("agendaAnalytics")) return;
+  const cards = document.querySelector(".cards");
+  if (!cards) return;
+  const section = document.createElement("section");
+  section.className = "panel analyticsPanel";
+  section.innerHTML = `
+    <div class="sectionHeader">
+      <div>
+        <h2>Analýza podle agendy</h2>
+        <p class="hint">Počty vycházejí z aktuálně vyfiltrovaných záznamů. Kliknutím na řádek rychle vyfiltrujete agendu.</p>
+      </div>
+      <button id="clearAgendaQuickFilter" class="button small secondary">Zrušit filtr agendy</button>
+    </div>
+    <div id="agendaAnalytics"></div>`;
+  cards.insertAdjacentElement("afterend", section);
+  byId("clearAgendaQuickFilter").addEventListener("click", () => { byId("agendaFilter").value = ""; render(); });
+  injectAnalyticsStyles();
+}
+
+function injectAnalyticsStyles() {
+  if (document.getElementById("analyticsStyles")) return;
+  const style = document.createElement("style");
+  style.id = "analyticsStyles";
+  style.textContent = `
+    .analyticsPanel { margin-bottom: 1rem; }
+    .analyticsGrid { display: grid; grid-template-columns: 1.4fr repeat(7, minmax(70px, .6fr)); gap: .35rem; align-items: stretch; overflow-x: auto; }
+    .analyticsHead, .analyticsCell { padding: .55rem .6rem; border-bottom: 1px solid var(--line); background: white; min-width: 74px; }
+    .analyticsHead { font-size: .75rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+    .analyticsAgenda { font-weight: 800; color: var(--text); min-width: 180px; }
+    .analyticsRow { display: contents; cursor: pointer; }
+    .analyticsRow:hover .analyticsCell { background: #f8fafc; }
+    .analyticsNumber { font-weight: 800; }
+    .analyticsSub { display: block; color: var(--muted); font-size: .75rem; margin-top: .12rem; }
+    .analyticsBar { height: 8px; background: #e4e7ec; border-radius: 999px; overflow: hidden; margin-top: .35rem; }
+    .analyticsBar span { display: block; height: 100%; width: 0%; background: var(--accent); }
+    @media (max-width: 900px) { .analyticsGrid { grid-template-columns: 170px repeat(7, 86px); } }
+  `;
+  document.head.appendChild(style);
+}
+
+function renderAgendaAnalytics() {
+  const container = byId("agendaAnalytics");
+  if (!container) return;
+  const data = filteredRecords({ ignoreAgenda: true });
+  if (!data.length) {
+    container.innerHTML = `<p class="hint">Žádné záznamy pro analýzu podle aktuálních filtrů.</p>`;
+    return;
+  }
+
+  const rows = {};
+  data.forEach(r => {
+    const agenda = normalize(r.agenda) || "Nezařazeno";
+    rows[agenda] ||= { agenda, total: 0, unclassified: 0, newOrTriage: 0, meeting: 0, risks: 0, closed: 0, missingSummary: 0 };
+    const row = rows[agenda];
+    row.total += 1;
+    const status = lower(r.stav);
+    const type = lower(r.typ);
+    const meeting = lower(r.kam_patri);
+    const agendaLower = lower(r.agenda);
+    if (!agendaLower || agendaLower === "nezařazeno") row.unclassified += 1;
+    if (["nové", "k roztřídění"].includes(status)) row.newOrTriage += 1;
+    if (normalize(r.kam_patri) && !["nezařazeno", "archiv"].includes(meeting)) row.meeting += 1;
+    if (["riziko", "konflikt / problém"].includes(type) || agendaLower.includes("rizik")) row.risks += 1;
+    if (["uzavřeno", "archiv", "projednáno"].includes(status)) row.closed += 1;
+    if (!normalize(r.shrnuti)) row.missingSummary += 1;
+  });
+
+  const sorted = Object.values(rows).sort((a, b) => b.total - a.total || a.agenda.localeCompare(b.agenda, "cs"));
+  const max = Math.max(...sorted.map(r => r.total), 1);
+  container.innerHTML = `
+    <div class="analyticsGrid">
+      <div class="analyticsHead">Agenda</div><div class="analyticsHead">Celkem</div><div class="analyticsHead">Netříděno</div><div class="analyticsHead">Nové</div><div class="analyticsHead">K jednání</div><div class="analyticsHead">Rizika</div><div class="analyticsHead">Bez shrnutí</div><div class="analyticsHead">Uzavřeno</div>
+      ${sorted.map(r => `
+        <div class="analyticsRow" onclick="setAgendaFilter('${escapeForJs(r.agenda)}')" title="Filtrovat agendu: ${escapeHtml(r.agenda)}">
+          <div class="analyticsCell analyticsAgenda">${escapeHtml(r.agenda)}<div class="analyticsBar"><span style="width:${Math.round((r.total / max) * 100)}%"></span></div></div>
+          <div class="analyticsCell"><span class="analyticsNumber">${r.total}</span></div>
+          <div class="analyticsCell"><span class="analyticsNumber">${r.unclassified}</span><span class="analyticsSub">agenda</span></div>
+          <div class="analyticsCell"><span class="analyticsNumber">${r.newOrTriage}</span><span class="analyticsSub">nové/třídit</span></div>
+          <div class="analyticsCell"><span class="analyticsNumber">${r.meeting}</span><span class="analyticsSub">kam patří</span></div>
+          <div class="analyticsCell"><span class="analyticsNumber">${r.risks}</span><span class="analyticsSub">rizika</span></div>
+          <div class="analyticsCell"><span class="analyticsNumber">${r.missingSummary}</span><span class="analyticsSub">doplnit</span></div>
+          <div class="analyticsCell"><span class="analyticsNumber">${r.closed}</span><span class="analyticsSub">hotovo</span></div>
+        </div>`).join("")}
+    </div>`;
+}
+
+function escapeForJs(s) {
+  return normalize(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+window.setAgendaFilter = function(agenda) {
+  byId("agendaFilter").value = agenda;
+  render();
 }
 
 function renderGrouped(data) {
@@ -149,22 +246,10 @@ function renderCard(r) {
   const isRisk = ["riziko", "konflikt / problém"].includes(lower(r.typ));
   const isMeeting = normalize(r.kam_patri) && !["nezařazeno", "archiv"].includes(lower(r.kam_patri));
   return `<article class="record">
-    <div class="recordHeader">
-      <div>
-        <div class="recordTitle">${escapeHtml(r.title || r.predmet)}</div>
-        <div class="meta">${escapeHtml(formatDate(getDateValue(r)))} · ${escapeHtml(r.odesilatel || "")}</div>
-      </div>
-      <div class="meta">${escapeHtml(r.stav || "")}</div>
-    </div>
-    <div class="badges">
-      ${r.typ ? `<span class="badge ${isRisk ? "risk" : ""}">${escapeHtml(r.typ)}</span>` : ""}
-      ${r.kam_patri ? `<span class="badge ${isMeeting ? "meeting" : ""}">${escapeHtml(r.kam_patri)}</span>` : ""}
-      ${r.priorita ? `<span class="badge priority">${escapeHtml(r.priorita)}</span>` : ""}
-    </div>
+    <div class="recordHeader"><div><div class="recordTitle">${escapeHtml(r.title || r.predmet)}</div><div class="meta">${escapeHtml(formatDate(getDateValue(r)))} · ${escapeHtml(r.odesilatel || "")}</div></div><div class="meta">${escapeHtml(r.stav || "")}</div></div>
+    <div class="badges">${r.typ ? `<span class="badge ${isRisk ? "risk" : ""}">${escapeHtml(r.typ)}</span>` : ""}${r.kam_patri ? `<span class="badge ${isMeeting ? "meeting" : ""}">${escapeHtml(r.kam_patri)}</span>` : ""}${r.priorita ? `<span class="badge priority">${escapeHtml(r.priorita)}</span>` : ""}</div>
     <div class="summary">${escapeHtml(r.shrnuti || firstWords(r.text, 45) || "Bez shrnutí")}</div>
-    <div class="recordActions">
-      <button class="button small secondary" onclick="openRecord('${r.id}')">Otevřít / třídit</button>
-    </div>
+    <div class="recordActions"><button class="button small secondary" onclick="openRecord('${r.id}')">Otevřít / třídit</button></div>
   </article>`;
 }
 
@@ -199,19 +284,7 @@ function saveRecord(e) {
   const id = byId("editId").value;
   const idx = records.findIndex(x => x.id === id);
   if (idx === -1) return;
-  records[idx] = {
-    ...records[idx],
-    agenda: byId("editAgenda").value,
-    typ: byId("editType").value,
-    kam_patri: byId("editMeeting").value,
-    stav: byId("editStatus").value,
-    priorita: byId("editPriority").value,
-    termin: byId("editDeadline").value,
-    shrnuti: byId("editSummary").value,
-    ukol_dalsi_krok: byId("editNextStep").value,
-    text: byId("editBody").value,
-    updated_at: new Date().toISOString()
-  };
+  records[idx] = { ...records[idx], agenda: byId("editAgenda").value, typ: byId("editType").value, kam_patri: byId("editMeeting").value, stav: byId("editStatus").value, priorita: byId("editPriority").value, termin: byId("editDeadline").value, shrnuti: byId("editSummary").value, ukol_dalsi_krok: byId("editNextStep").value, text: byId("editBody").value, updated_at: new Date().toISOString() };
   persist();
   populateFilters();
   render();
@@ -292,9 +365,7 @@ function resetFilters() {
 
 document.addEventListener("DOMContentLoaded", () => {
   loadInitialData();
-  ["periodFilter","agendaFilter","meetingFilter","statusFilter","typeFilter","searchInput"].forEach(id => {
-    byId(id).addEventListener("input", render);
-  });
+  ["periodFilter","agendaFilter","meetingFilter","statusFilter","typeFilter","searchInput"].forEach(id => byId(id).addEventListener("input", render));
   byId("resetBtn").addEventListener("click", resetFilters);
   byId("viewGrouped").addEventListener("click", () => { groupedView = true; render(); });
   byId("viewFlat").addEventListener("click", () => { groupedView = false; render(); });
