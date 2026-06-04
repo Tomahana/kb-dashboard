@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sample-1",
+    "title": "Dotaz k výsledkům UHK Prestige",
+    "datum_emailu": "2026-06-04T08:53:00+02:00",
+    "datum_pridani": "2026-06-04T10:15:00+02:00",
+    "odesilatel": "katerina.rybakova@uhk.cz",
+    "agenda": "Prestige",
+    "typ": "Námět na jednání",
+    "kam_patri": "Proděkani pro vědu",
+    "stav": "Nové",
+    "priorita": "Běžná",
+    "shrnuti": "Dotaz na termín vyhlášení výsledků soutěže Prestige. Vhodné sjednotit komunikaci k fakultám a žadatelům.",
+    "ukol_dalsi_krok": "Připravit jednotné sdělení o harmonogramu vyhlášení.",
+    "text": "Vážená paní prorektorko, prosím o informaci, kdy budou vyhlášeny výsledky soutěže UHK Prestige..."
+  },
+  {
+    "id": "sample-2",
+    "title": "Bezpečnost výzkumu – registrace na akci",
+    "datum_emailu": "2026-06-02T12:10:00+02:00",
+    "datum_pridani": "2026-06-02T14:00:00+02:00",
+    "odesilatel": "organizace@uhk.cz",
+    "agenda": "Bezpečnost výzkumu",
+    "typ": "Podklad",
+    "kam_patri": "Kolegium rektora",
+    "stav": "Připravit bod",
+    "priorita": "Vysoká",
+    "shrnuti": "Je potřeba posílit účast vědců UHK na akci k bezpečnosti výzkumu a vysvětlit souvislost se změnami legislativy a mezinárodní spolupráce.",
+    "ukol_dalsi_krok": "Zařadit informaci na nejbližší kolegium a připravit apel na fakulty.",
+    "text": "Akce Bezpečnost výzkumu se bude konat 8. června 2026 od 10 hodin..."
+  }
+]
