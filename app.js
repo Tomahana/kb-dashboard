@@ -3,8 +3,10 @@ let groupedView = true;
 
 const byId = (id) => document.getElementById(id);
 const storageKey = "kb-dashboard-records-v1";
+const hideExcludedKey = "kb-dashboard-hide-excluded-v1";
 const normalize = (s) => (s || "").toString().trim();
 const lower = (s) => normalize(s).toLowerCase();
+const EXCLUDED_STATUSES = ["vyřazeno", "archiv"];
 
 function parseDate(value) {
   if (!value) return null;
@@ -22,6 +24,15 @@ function getDateValue(r) {
   return r.datum_pridani || r.datum_emailu || r.created || r.dateAdded;
 }
 
+function isExcluded(r) {
+  return EXCLUDED_STATUSES.includes(lower(r.stav)) || lower(r.typ) === "vyřazeno";
+}
+
+function hideExcludedIsOn() {
+  const el = byId("hideExcludedToggle");
+  return el ? el.checked : true;
+}
+
 async function loadInitialData() {
   const local = localStorage.getItem(storageKey);
   if (local) {
@@ -36,6 +47,8 @@ async function loadInitialData() {
   }
   ensureIds();
   populateFilters();
+  injectExclusionControl();
+  injectDiscardButton();
   injectAnalyticsPanel();
   render();
 }
@@ -70,6 +83,69 @@ function populateFilters() {
   fillSelect("typeFilter", uniqueValues("typ"));
 }
 
+function injectExclusionControl() {
+  if (byId("hideExcludedToggle")) return;
+  const filters = document.querySelector(".filters");
+  const reset = byId("resetBtn");
+  if (!filters || !reset) return;
+  const wrapper = document.createElement("label");
+  wrapper.className = "checkboxLine";
+  const saved = localStorage.getItem(hideExcludedKey);
+  const checked = saved === null ? true : saved === "true";
+  wrapper.innerHTML = `<input id="hideExcludedToggle" type="checkbox" ${checked ? "checked" : ""} /> Skrýt vyřazené a archiv`;
+  filters.insertBefore(wrapper, reset);
+  byId("hideExcludedToggle").addEventListener("change", (e) => {
+    localStorage.setItem(hideExcludedKey, e.target.checked ? "true" : "false");
+    render();
+  });
+  injectExclusionStyles();
+}
+
+function injectDiscardButton() {
+  if (byId("discardRecordBtn")) return;
+  const actions = document.querySelector("#recordForm .dialogActions");
+  if (!actions) return;
+  const btn = document.createElement("button");
+  btn.id = "discardRecordBtn";
+  btn.type = "button";
+  btn.className = "button danger";
+  btn.textContent = "Vyřadit";
+  btn.title = "Označí záznam jako Vyřazeno. Záznam se nemaže.";
+  btn.addEventListener("click", markCurrentRecordExcluded);
+  actions.insertBefore(btn, actions.firstChild);
+}
+
+function markCurrentRecordExcluded() {
+  const id = byId("editId").value;
+  const idx = records.findIndex(x => x.id === id);
+  if (idx === -1) return;
+  records[idx] = {
+    ...records[idx],
+    stav: "Vyřazeno",
+    vyrazeno: true,
+    vyrazeno_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  persist();
+  populateFilters();
+  render();
+  byId("recordDialog").close();
+}
+
+function injectExclusionStyles() {
+  if (document.getElementById("exclusionStyles")) return;
+  const style = document.createElement("style");
+  style.id = "exclusionStyles";
+  style.textContent = `
+    .checkboxLine { display: flex; align-items: center; gap: .45rem; color: var(--text); font-size: .9rem; margin: .9rem 0; }
+    .checkboxLine input { width: auto; margin: 0; }
+    .button.danger { background: #fee4e2; color: #b42318; }
+    .button.danger:hover { background: #fecdca; }
+    .badge.excluded { background: #f2f4f7; color: #667085; }
+  `;
+  document.head.appendChild(style);
+}
+
 function filteredRecords(options = {}) {
   const period = byId("periodFilter").value;
   const agenda = options.ignoreAgenda ? "" : byId("agendaFilter").value;
@@ -81,6 +157,7 @@ function filteredRecords(options = {}) {
 
   return records
     .filter(r => {
+      if (!options.includeExcluded && hideExcludedIsOn() && isExcluded(r)) return false;
       if (period !== "all") {
         const d = parseDate(getDateValue(r));
         if (!d) return false;
@@ -103,11 +180,13 @@ function filteredRecords(options = {}) {
 
 function render() {
   const data = filteredRecords();
+  const allForPeriod = filteredRecords({ includeExcluded: true });
   byId("countAll").textContent = data.length;
   byId("countNew").textContent = data.filter(r => ["nové","k roztřídění"].includes(lower(r.stav))).length;
   byId("countRisks").textContent = data.filter(r => ["riziko","konflikt / problém"].includes(lower(r.typ)) || lower(r.agenda).includes("rizik")).length;
   byId("countMeetings").textContent = data.filter(r => normalize(r.kam_patri) && !["nezařazeno", "archiv"].includes(lower(r.kam_patri))).length;
   renderAgendaAnalytics();
+  renderExcludedInfo(allForPeriod);
 
   const container = byId("records");
   if (!data.length) {
@@ -115,6 +194,20 @@ function render() {
     return;
   }
   container.innerHTML = groupedView ? renderGrouped(data) : renderTable(data);
+}
+
+function renderExcludedInfo(allForPeriod) {
+  let el = byId("excludedInfo");
+  const cards = document.querySelector(".cards");
+  if (!el && cards) {
+    el = document.createElement("p");
+    el.id = "excludedInfo";
+    el.className = "hint excludedInfo";
+    cards.insertAdjacentElement("afterend", el);
+  }
+  if (!el) return;
+  const excludedCount = allForPeriod.filter(isExcluded).length;
+  el.textContent = hideExcludedIsOn() && excludedCount ? `Skryto vyřazených / archivovaných záznamů: ${excludedCount}. Zobrazíte je vypnutím volby „Skrýt vyřazené a archiv“. ` : "";
 }
 
 function injectAnalyticsPanel() {
@@ -143,7 +236,8 @@ function injectAnalyticsStyles() {
   style.id = "analyticsStyles";
   style.textContent = `
     .analyticsPanel { margin-bottom: 1rem; }
-    .analyticsGrid { display: grid; grid-template-columns: 1.4fr repeat(7, minmax(70px, .6fr)); gap: .35rem; align-items: stretch; overflow-x: auto; }
+    .excludedInfo { margin: -.45rem 0 1rem; }
+    .analyticsGrid { display: grid; grid-template-columns: 1.4fr repeat(8, minmax(70px, .6fr)); gap: .35rem; align-items: stretch; overflow-x: auto; }
     .analyticsHead, .analyticsCell { padding: .55rem .6rem; border-bottom: 1px solid var(--line); background: white; min-width: 74px; }
     .analyticsHead { font-size: .75rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
     .analyticsAgenda { font-weight: 800; color: var(--text); min-width: 180px; }
@@ -153,7 +247,7 @@ function injectAnalyticsStyles() {
     .analyticsSub { display: block; color: var(--muted); font-size: .75rem; margin-top: .12rem; }
     .analyticsBar { height: 8px; background: #e4e7ec; border-radius: 999px; overflow: hidden; margin-top: .35rem; }
     .analyticsBar span { display: block; height: 100%; width: 0%; background: var(--accent); }
-    @media (max-width: 900px) { .analyticsGrid { grid-template-columns: 170px repeat(7, 86px); } }
+    @media (max-width: 900px) { .analyticsGrid { grid-template-columns: 170px repeat(8, 86px); } }
   `;
   document.head.appendChild(style);
 }
@@ -166,11 +260,10 @@ function renderAgendaAnalytics() {
     container.innerHTML = `<p class="hint">Žádné záznamy pro analýzu podle aktuálních filtrů.</p>`;
     return;
   }
-
   const rows = {};
   data.forEach(r => {
     const agenda = normalize(r.agenda) || "Nezařazeno";
-    rows[agenda] ||= { agenda, total: 0, unclassified: 0, newOrTriage: 0, meeting: 0, risks: 0, closed: 0, missingSummary: 0 };
+    rows[agenda] ||= { agenda, total: 0, unclassified: 0, newOrTriage: 0, meeting: 0, risks: 0, closed: 0, missingSummary: 0, excluded: 0 };
     const row = rows[agenda];
     row.total += 1;
     const status = lower(r.stav);
@@ -183,13 +276,13 @@ function renderAgendaAnalytics() {
     if (["riziko", "konflikt / problém"].includes(type) || agendaLower.includes("rizik")) row.risks += 1;
     if (["uzavřeno", "archiv", "projednáno"].includes(status)) row.closed += 1;
     if (!normalize(r.shrnuti)) row.missingSummary += 1;
+    if (isExcluded(r)) row.excluded += 1;
   });
-
   const sorted = Object.values(rows).sort((a, b) => b.total - a.total || a.agenda.localeCompare(b.agenda, "cs"));
   const max = Math.max(...sorted.map(r => r.total), 1);
   container.innerHTML = `
     <div class="analyticsGrid">
-      <div class="analyticsHead">Agenda</div><div class="analyticsHead">Celkem</div><div class="analyticsHead">Netříděno</div><div class="analyticsHead">Nové</div><div class="analyticsHead">K jednání</div><div class="analyticsHead">Rizika</div><div class="analyticsHead">Bez shrnutí</div><div class="analyticsHead">Uzavřeno</div>
+      <div class="analyticsHead">Agenda</div><div class="analyticsHead">Celkem</div><div class="analyticsHead">Netříděno</div><div class="analyticsHead">Nové</div><div class="analyticsHead">K jednání</div><div class="analyticsHead">Rizika</div><div class="analyticsHead">Bez shrnutí</div><div class="analyticsHead">Uzavřeno</div><div class="analyticsHead">Vyřazeno</div>
       ${sorted.map(r => `
         <div class="analyticsRow" onclick="setAgendaFilter('${escapeForJs(r.agenda)}')" title="Filtrovat agendu: ${escapeHtml(r.agenda)}">
           <div class="analyticsCell analyticsAgenda">${escapeHtml(r.agenda)}<div class="analyticsBar"><span style="width:${Math.round((r.total / max) * 100)}%"></span></div></div>
@@ -200,6 +293,7 @@ function renderAgendaAnalytics() {
           <div class="analyticsCell"><span class="analyticsNumber">${r.risks}</span><span class="analyticsSub">rizika</span></div>
           <div class="analyticsCell"><span class="analyticsNumber">${r.missingSummary}</span><span class="analyticsSub">doplnit</span></div>
           <div class="analyticsCell"><span class="analyticsNumber">${r.closed}</span><span class="analyticsSub">hotovo</span></div>
+          <div class="analyticsCell"><span class="analyticsNumber">${r.excluded}</span><span class="analyticsSub">mimo</span></div>
         </div>`).join("")}
     </div>`;
 }
@@ -243,11 +337,12 @@ function renderTable(data) {
 }
 
 function renderCard(r) {
-  const isRisk = ["riziko", "konflikt / problém"].includes(lower(r.typ));
-  const isMeeting = normalize(r.kam_patri) && !["nezařazeno", "archiv"].includes(lower(r.kam_patri));
+  const risk = ["riziko", "konflikt / problém"].includes(lower(r.typ));
+  const meeting = normalize(r.kam_patri) && !["nezařazeno", "archiv"].includes(lower(r.kam_patri));
+  const excluded = isExcluded(r);
   return `<article class="record">
     <div class="recordHeader"><div><div class="recordTitle">${escapeHtml(r.title || r.predmet)}</div><div class="meta">${escapeHtml(formatDate(getDateValue(r)))} · ${escapeHtml(r.odesilatel || "")}</div></div><div class="meta">${escapeHtml(r.stav || "")}</div></div>
-    <div class="badges">${r.typ ? `<span class="badge ${isRisk ? "risk" : ""}">${escapeHtml(r.typ)}</span>` : ""}${r.kam_patri ? `<span class="badge ${isMeeting ? "meeting" : ""}">${escapeHtml(r.kam_patri)}</span>` : ""}${r.priorita ? `<span class="badge priority">${escapeHtml(r.priorita)}</span>` : ""}</div>
+    <div class="badges">${excluded ? `<span class="badge excluded">Vyřazeno</span>` : ""}${r.typ ? `<span class="badge ${risk ? "risk" : ""}">${escapeHtml(r.typ)}</span>` : ""}${r.kam_patri ? `<span class="badge ${meeting ? "meeting" : ""}">${escapeHtml(r.kam_patri)}</span>` : ""}${r.priorita ? `<span class="badge priority">${escapeHtml(r.priorita)}</span>` : ""}</div>
     <div class="summary">${escapeHtml(r.shrnuti || firstWords(r.text, 45) || "Bez shrnutí")}</div>
     <div class="recordActions"><button class="button small secondary" onclick="openRecord('${r.id}')">Otevřít / třídit</button></div>
   </article>`;
@@ -284,7 +379,7 @@ function saveRecord(e) {
   const id = byId("editId").value;
   const idx = records.findIndex(x => x.id === id);
   if (idx === -1) return;
-  records[idx] = { ...records[idx], agenda: byId("editAgenda").value, typ: byId("editType").value, kam_patri: byId("editMeeting").value, stav: byId("editStatus").value, priorita: byId("editPriority").value, termin: byId("editDeadline").value, shrnuti: byId("editSummary").value, ukol_dalsi_krok: byId("editNextStep").value, text: byId("editBody").value, updated_at: new Date().toISOString() };
+  records[idx] = { ...records[idx], agenda: byId("editAgenda").value, typ: byId("editType").value, kam_patri: byId("editMeeting").value, stav: byId("editStatus").value, priorita: byId("editPriority").value, termin: byId("editDeadline").value, shrnuti: byId("editSummary").value, ukol_dalsi_krok: byId("editNextStep").value, text: byId("editBody").value, vyrazeno: lower(byId("editStatus").value) === "vyřazeno", updated_at: new Date().toISOString() };
   persist();
   populateFilters();
   render();
@@ -360,6 +455,8 @@ function resetFilters() {
   ["agendaFilter","meetingFilter","statusFilter","typeFilter"].forEach(id => byId(id).value = "");
   byId("periodFilter").value = "30";
   byId("searchInput").value = "";
+  if (byId("hideExcludedToggle")) byId("hideExcludedToggle").checked = true;
+  localStorage.setItem(hideExcludedKey, "true");
   render();
 }
 
