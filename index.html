@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KB Dashboard – Agenda k jednání</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>KB Dashboard</h1>
+      <p>Znalostní báze e-mailů a podkladů k jednáním</p>
+    </div>
+    <div class="actions">
+      <label class="button secondary">
+        Import JSON
+        <input id="importFile" type="file" accept=".json,application/json" hidden />
+      </label>
+      <button id="exportBtn" class="button">Export JSON</button>
+      <button id="aiPromptBtn" class="button accent">AI prompt</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel filters">
+      <h2>Filtry</h2>
+
+      <label>Období
+        <select id="periodFilter">
+          <option value="7">Posledních 7 dní</option>
+          <option value="30" selected>Posledních 30 dní</option>
+          <option value="90">Posledních 90 dní</option>
+          <option value="all">Vše</option>
+        </select>
+      </label>
+
+      <label>Agenda
+        <select id="agendaFilter"><option value="">Vše</option></select>
+      </label>
+
+      <label>Kam patří
+        <select id="meetingFilter"><option value="">Vše</option></select>
+      </label>
+
+      <label>Stav
+        <select id="statusFilter"><option value="">Vše</option></select>
+      </label>
+
+      <label>Typ záznamu
+        <select id="typeFilter"><option value="">Vše</option></select>
+      </label>
+
+      <label>Fulltext
+        <input id="searchInput" type="search" placeholder="Hledat v názvu, shrnutí, textu…" />
+      </label>
+
+      <button id="resetBtn" class="button secondary full">Vymazat filtry</button>
+    </section>
+
+    <section class="content">
+      <section class="cards">
+        <div class="metric">
+          <span id="countAll">0</span>
+          <small>záznamů ve výběru</small>
+        </div>
+        <div class="metric">
+          <span id="countNew">0</span>
+          <small>nové / k roztřídění</small>
+        </div>
+        <div class="metric">
+          <span id="countRisks">0</span>
+          <small>rizika / problémy</small>
+        </div>
+        <div class="metric">
+          <span id="countMeetings">0</span>
+          <small>k jednání</small>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="sectionHeader">
+          <h2>Záznamy</h2>
+          <div>
+            <button id="viewGrouped" class="button small secondary">Seskupit podle agendy</button>
+            <button id="viewFlat" class="button small secondary">Tabulka</button>
+          </div>
+        </div>
+        <div id="records"></div>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="recordDialog">
+    <form method="dialog" id="recordForm">
+      <div class="dialogHeader">
+        <h2 id="dialogTitle">Záznam</h2>
+        <button class="iconButton" value="cancel">×</button>
+      </div>
+
+      <input type="hidden" id="editId" />
+
+      <div class="grid2">
+        <label>Agenda
+          <input id="editAgenda" list="agendaList" />
+        </label>
+        <label>Typ záznamu
+          <input id="editType" list="typeList" />
+        </label>
+        <label>Kam patří
+          <input id="editMeeting" list="meetingList" />
+        </label>
+        <label>Stav
+          <input id="editStatus" list="statusList" />
+        </label>
+        <label>Priorita
+          <input id="editPriority" list="priorityList" />
+        </label>
+        <label>Termín
+          <input id="editDeadline" type="date" />
+        </label>
+      </div>
+
+      <label>Shrnutí
+        <textarea id="editSummary" rows="4"></textarea>
+      </label>
+
+      <label>Úkol / další krok
+        <textarea id="editNextStep" rows="3"></textarea>
+      </label>
+
+      <label>Text e-mailu / podkladu
+        <textarea id="editBody" rows="10"></textarea>
+      </label>
+
+      <div class="dialogActions">
+        <button value="cancel" class="button secondary">Zavřít</button>
+        <button id="saveRecordBtn" value="default" class="button accent">Uložit v prohlížeči</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="aiDialog">
+    <form method="dialog">
+      <div class="dialogHeader">
+        <h2>AI prompt pro vybrané záznamy</h2>
+        <button class="iconButton" value="cancel">×</button>
+      </div>
+      <p class="hint">Zkopírujte tento blok do ChatGPT/Claude. Obsahuje jen aktuálně vyfiltrované záznamy.</p>
+      <textarea id="aiPromptText" rows="18"></textarea>
+      <div class="dialogActions">
+        <button value="cancel" class="button secondary">Zavřít</button>
+        <button id="copyPromptBtn" type="button" class="button accent">Kopírovat</button>
+      </div>
+    </form>
+  </dialog>
+
+  <datalist id="agendaList">
+    <option>Nezařazeno</option><option>Věda a výzkum</option><option>Interní granty</option><option>Prestige</option>
+    <option>ReGa</option><option>Connect</option><option>Návraty</option><option>DKRVO</option>
+    <option>Bezpečnost výzkumu</option><option>Open Science</option><option>Doktorské studium</option>
+    <option>Mezinárodní projekty</option><option>Transfer znalostí</option><option>Univerzitní knihovna</option>
+    <option>Kolegium / vedení</option><option>Personální agenda</option><option>Projekty OP JAK</option>
+    <option>Smlouvy / právní agenda</option><option>Rizika a konflikty</option><option>Ostatní</option>
+  </datalist>
+  <datalist id="typeList">
+    <option>Informace</option><option>Riziko</option><option>Rozhodnutí</option><option>Podklad</option>
+    <option>Úkol</option><option>Námět na jednání</option><option>Konflikt / problém</option>
+    <option>Termín</option><option>Finance</option><option>Personální věc</option><option>Strategická poznámka</option>
+  </datalist>
+  <datalist id="meetingList">
+    <option>Nezařazeno</option><option>Kolegium rektora</option><option>Úzké kolegium</option>
+    <option>Porada OVV</option><option>Proděkani pro vědu</option><option>Jednání s rektorem</option>
+    <option>Jednání s kvestorem</option><option>Jednání s děkany</option><option>Porada oddělení</option>
+    <option>Individuální řešení</option><option>Archiv</option>
+  </datalist>
+  <datalist id="statusList">
+    <option>Nové</option><option>K roztřídění</option><option>Připravit bod</option>
+    <option>Zařazeno na jednání</option><option>Projednáno</option><option>Čeká na odpověď</option>
+    <option>Uzavřeno</option><option>Archiv</option>
+  </datalist>
+  <datalist id="priorityList">
+    <option>Nízká</option><option>Běžná</option><option>Vysoká</option><option>Kritická</option>
+  </datalist>
+
+  <script src="app.js"></script>
+</body>
+</html>
