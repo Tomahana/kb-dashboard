@@ -59,8 +59,17 @@ Nebo ze složky repozitáře:
 
 1. Tvrdý refresh (`Ctrl+Shift+R`)
 2. **Přihlásit se** (proxy vyžaduje Supabase session)
-3. **Nastavení → Nastavení Notion** → token + odkaz/ID databáze
-4. **Otestovat Notion**
+
+### Hned teď — bez proxy
+
+V dialogu e-mailu → panel **Notion**:
+- **Ruční propojení odkazem** — vložte URL zápisu ze schůzky → Propojit
+- **Kopírovat shrnutí pro Notion** — vložte do Notion ručně
+
+### Plná integrace (vyhledávání v Notion)
+
+3. **Nastavení → Nastavení Notion** → nasadit proxy (kód lze zkopírovat v dialogu)
+4. Token + odkaz/ID databáze → **Otestovat Notion API**
 
 ---
 
