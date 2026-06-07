@@ -4,6 +4,10 @@
 -- Kde spustit: Supabase Dashboard → SQL Editor → New query → Run
 -- Projekt:     https://supabase.com/dashboard/project/xrgdfghiwjyrdckpjzdj
 --
+-- Přímé připojení (psql, terminál):
+--   postgresql://postgres:[HESLO]@db.xrgdfghiwjyrdckpjzdj.supabase.co:5432/postgres
+-- Heslo: Project Settings → Database → Database password
+--
 -- Po úspěšném spuštění dashboard automaticky přepne témata ze localStorage
 -- na Supabase (tabulky kb_topics + kb_topic_records).
 -- =============================================================================

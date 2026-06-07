@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Spustí topics-schema.sql proti Supabase Postgresu.
 #
-# Potřebujete connection string z:
-#   Supabase Dashboard → Project Settings → Database → Connection string (URI)
+# Potřebujete heslo z:
+#   Supabase Dashboard → Project Settings → Database → Database password
 #
-# Použití:
-#   export DATABASE_URL='postgresql://postgres.[ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres'
+# Přímé připojení (port 5432):
+#   export DATABASE_URL='postgresql://postgres:[HESLO]@db.xrgdfghiwjyrdckpjzdj.supabase.co:5432/postgres'
 #   ./scripts/apply-topics-schema.sh
+#
+# Pooler (port 6543) – alternativa:
+#   export DATABASE_URL='postgresql://postgres.xrgdfghiwjyrdckpjzdj:[HESLO]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres'
 #
 # Nebo ručně v SQL Editoru zkopírujte obsah supabase/topics-schema.sql.
 
