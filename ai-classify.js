@@ -264,6 +264,7 @@ ${text || "(prázdný text)"}`;
         input.value = value;
       }
       input.classList.add("ai-filled");
+      if (window.kbPickers?.syncPicker) window.kbPickers.syncPicker(input);
     });
     showProposalBanner(true);
     const saveBtn = el("saveRecordBtn");
@@ -271,7 +272,12 @@ ${text || "(prázdný text)"}`;
   }
 
   function clearProposalFormStyles() {
-    Object.values(FIELD_IDS).forEach(id => el(id)?.classList.remove("ai-filled"));
+    Object.values(FIELD_IDS).forEach(id => {
+      const input = el(id);
+      if (!input) return;
+      input.classList.remove("ai-filled");
+      if (window.kbPickers?.syncPicker) window.kbPickers.syncPicker(input);
+    });
     showProposalBanner(false);
     const saveBtn = el("saveRecordBtn");
     if (saveBtn) saveBtn.textContent = "Uložit klasifikaci";

@@ -350,6 +350,7 @@
       </form>
     `;
     document.body.appendChild(dialog);
+    if (window.kbPickers?.enhanceAll) window.kbPickers.enhanceAll(dialog);
     el("saveTopicBtn").addEventListener("click", async (e) => {
       e.preventDefault();
       await saveTopicForm();

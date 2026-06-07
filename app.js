@@ -463,6 +463,7 @@ function setSelectField(selectId, value) {
   const custom = new Option(`${v} (vlastní)`, v);
   select.add(custom);
   select.value = v;
+  if (window.kbPickers?.refresh) window.kbPickers.refresh(select);
 }
 
 function hasAiProposal(r) {
@@ -489,6 +490,9 @@ window.openRecord = function(id) {
   byId("editNextStep").value = r.ukol_dalsi_krok || "";
   byId("editBody").value = r.text || "";
   byId("recordDialog").showModal();
+  if (window.kbPickers?.refresh) {
+    ["editAgenda", "editType", "editMeeting", "editStatus", "editPriority"].forEach(window.kbPickers.refresh);
+  }
 }
 
 window.saveRecord = function saveRecord(e) {
