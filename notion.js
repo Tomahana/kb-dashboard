@@ -50,15 +50,19 @@
     if (!input) return "";
 
     const dashed = input.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    if (dashed) return dashed[0].replace(/-/g, "");
+    if (dashed) return dashed[0].replace(/-/g, "").toLowerCase();
 
-    const fromUrl = input.match(/(?:^|-)([0-9a-f]{32})(?:\?|$)/i);
+    const beforeV = input.match(/([0-9a-f]{32})\?v=/i);
+    if (beforeV) return beforeV[1].toLowerCase();
+
+    const fromUrl = input.match(/(?:^|\/|-)([0-9a-f]{32})(?:[/?#]|$)/i);
     if (fromUrl) return fromUrl[1].toLowerCase();
 
     if (/^[0-9a-f]{32}$/i.test(input)) return input.toLowerCase();
 
-    const digits = input.replace(/[^0-9a-f]/gi, "");
-    if (digits.length === 32) return digits.toLowerCase();
+    const hexRuns = input.match(/[0-9a-f]{32}/gi);
+    if (hexRuns?.length) return hexRuns[hexRuns.length - 1].toLowerCase();
+
     return "";
   }
 
@@ -87,15 +91,64 @@
     return /failed to fetch|network|cors|load failed/i.test(error?.message || String(error));
   }
 
-  async function notionFetch(path, options = {}) {
-    const settings = loadSettings();
-    const token = n(settings.integrationToken);
-    if (!token) throw new Error("V Nastavení doplňte Notion Integration Token.");
+  function isProxyMissingError(errorOrData, status) {
+    const msg = (errorOrData?.message || errorOrData?.error || "").toString().toLowerCase();
+    return status === 404 || msg.includes("proxy") || msg.includes("function not found");
+  }
 
+  async function getSupabaseAccessToken() {
+    if (!window.kbAuth?.getSession) return null;
+    const session = await window.kbAuth.getSession();
+    return session?.access_token || null;
+  }
+
+  function parseNotionError(data, status) {
+    if (data?.message) return data.message;
+    if (data?.error) return typeof data.error === "string" ? data.error : JSON.stringify(data.error);
+    if (status === 401) return "Neplatný Notion token nebo nepřihlášená session.";
+    if (status === 404) return "Notion databáze nebo stránka nenalezena — zkontrolujte ID a sdílení s integrací.";
+    if (status === 403) return "Integrace nemá přístup — v Notion u databáze přidejte Connection k integraci.";
+    return `Notion HTTP ${status}`;
+  }
+
+  async function notionFetchViaProxy(path, options, notionToken, accessToken) {
+    const supabaseUrl = n(window.KB_SUPABASE?.url);
+    const anonKey = n(window.KB_SUPABASE?.anonKey);
+    if (!supabaseUrl || !anonKey) {
+      throw new Error("Chybí Supabase konfigurace pro Notion proxy.");
+    }
+
+    const method = options.method || (options.body ? "POST" : "GET");
+    const body = options.body ? JSON.parse(options.body) : null;
+
+    const res = await fetch(`${supabaseUrl}/functions/v1/notion-proxy`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: anonKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ notionToken, path, method, body })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (isProxyMissingError(data, res.status)) {
+        throw new Error(
+          "Notion proxy není nasazená v Supabase. Spusťte v terminálu:\n" +
+          "npx supabase functions deploy notion-proxy --project-ref xrgdfghiwjyrdckpjzdj"
+        );
+      }
+      throw new Error(parseNotionError(data, res.status));
+    }
+    return data;
+  }
+
+  async function notionFetchDirect(path, options, notionToken) {
     const res = await fetch(`https://api.notion.com/v1${path}`, {
       ...options,
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${notionToken}`,
         "Notion-Version": NOTION_VERSION,
         "Content-Type": "application/json",
         ...(options.headers || {})
@@ -103,11 +156,55 @@
     });
 
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const msg = data.message || data.error || `Notion HTTP ${res.status}`;
-      throw new Error(msg);
-    }
+    if (!res.ok) throw new Error(parseNotionError(data, res.status));
     return data;
+  }
+
+  async function notionFetch(path, options = {}) {
+    const settings = loadSettings();
+    const notionToken = n(settings.integrationToken);
+    if (!notionToken) throw new Error("V Nastavení doplňte Notion Integration Token.");
+
+    const accessToken = await getSupabaseAccessToken();
+    if (!accessToken) {
+      throw new Error("Pro Notion se nejdříve přihlaste do KB Dashboardu (Supabase Auth).");
+    }
+
+    try {
+      return await notionFetchViaProxy(path, options, notionToken, accessToken);
+    } catch (error) {
+      if (!isCorsError(error) && !isProxyMissingError(error)) throw error;
+      try {
+        return await notionFetchDirect(path, options, notionToken);
+      } catch (directError) {
+        if (isCorsError(directError) || isProxyMissingError(error)) {
+          throw new Error(
+            (error.message || "") +
+            "\n\nNotion API nejde volat přímo z prohlížeče. Nasajte proxy:\n" +
+            "scripts/deploy-notion-proxy.sh"
+          );
+        }
+        throw directError;
+      }
+    }
+  }
+
+  function detectPropertiesFromSchema(schema) {
+    const props = schema?.properties || {};
+    const detected = { ...DEFAULTS.properties };
+    for (const [name, prop] of Object.entries(props)) {
+      if (prop?.type === "title") detected.title = name;
+      if (prop?.type === "date" && !detected.date) detected.date = name;
+      if (prop?.type === "rich_text" && /kb/i.test(name)) detected.kbId = name;
+      if (prop?.type === "select" && /typ|schůz|meeting/i.test(name)) detected.meetingType = name;
+    }
+    return detected;
+  }
+
+  async function fetchDatabaseSchema(databaseId, settings) {
+    const id = parseNotionId(databaseId);
+    if (!id) throw new Error("Neplatné ID Notion databáze.");
+    return notionFetch(`/databases/${toDashedId(id)}`, { method: "GET" });
   }
 
   function extractTitle(properties, titleProp) {
@@ -158,32 +255,54 @@
     if (!dbId) throw new Error("V Nastavení doplňte ID databáze zápisů ze schůzek.");
 
     const titleProp = settings.properties.title || "Name";
-    const body = {
-      sorts: [{ timestamp: "last_edited_time", direction: "descending" }]
+    const baseBody = {
+      sorts: [{ timestamp: "last_edited_time", direction: "descending" }],
+      page_size: 30
     };
 
     const q = n(query);
+    let data;
+
     if (q) {
-      body.filter = {
-        property: titleProp,
-        title: { contains: q }
-      };
+      try {
+        data = await queryDatabase(dbId, {
+          ...baseBody,
+          filter: { property: titleProp, title: { contains: q } }
+        });
+      } catch (error) {
+        if (!/property|validation|column/i.test(error.message || "")) throw error;
+        data = await queryDatabase(dbId, baseBody);
+      }
+    } else {
+      data = await queryDatabase(dbId, baseBody);
     }
 
-    const data = await queryDatabase(dbId, body);
-    return (data.results || []).map(page => mapMeetingPage(page, settings));
+    let results = (data.results || []).map(page => mapMeetingPage(page, settings));
+    if (q && results.length) {
+      const needle = l(q);
+      const filtered = results.filter(item => l(item.title).includes(needle));
+      if (filtered.length) results = filtered;
+    }
+    return results;
   }
 
   async function testConnection(overrideSettings) {
     const settings = overrideSettings || loadSettings();
     const dbId = parseNotionId(settings.meetingsDatabaseId);
     if (!dbId) throw new Error("Vyplňte Integration Token a ID databáze schůzek.");
-    const data = await queryDatabase(dbId, { page_size: 1 });
+
+    const schema = await fetchDatabaseSchema(dbId, settings);
+    const detected = detectPropertiesFromSchema(schema);
+    const merged = { ...settings, properties: { ...settings.properties, ...detected } };
+    if (!overrideSettings) saveSettings(merged);
+
+    const data = await queryDatabase(dbId, { page_size: 3 });
     const sample = (data.results || [])[0];
-    const name = sample ? mapMeetingPage(sample, settings).title : null;
+    const name = sample ? mapMeetingPage(sample, merged).title : null;
+    const dbTitle = schema?.title?.[0]?.plain_text || "databáze";
     return name
-      ? `Notion OK — databáze schůzek dostupná (např. „${name}“).`
-      : "Notion OK — databáze schůzek dostupná (zatím bez záznamů).";
+      ? `Notion OK — „${dbTitle}“ (sloupec „${merged.properties.title}“). Např. zápis: „${name}“.`
+      : `Notion OK — „${dbTitle}“ připojena (zatím bez záznamů). Sloupec názvu: „${merged.properties.title}“.`;
   }
 
   function buildRecordMarkdown(record) {
@@ -545,21 +664,21 @@
   }
 
   async function handleNotionError(error, record) {
-    if (isCorsError(error)) {
+    const msg = error?.message || String(error);
+    if (isCorsError(error) || /proxy není nasazen/i.test(msg)) {
       const text = buildRecordMarkdown(record || buildRecordFromForm(getCurrentRecord()));
       try {
         await navigator.clipboard.writeText(text);
-        alert(
-          "Notion API nelze volat přímo z prohlížeče (CORS).\n\n" +
-          "Text byl zkopírován do schránky — vložte ho do Notion ručně.\n\n" +
-          "Alternativa: použijte Zapier/Make webhook nebo Supabase Edge Function jako proxy."
-        );
-      } catch (_) {
-        alert("Notion API není z prohlížeče dostupné. Zkopírujte obsah ručně z pole Shrnutí.");
-      }
+      } catch (_) {}
+      alert(
+        msg + "\n\n" +
+        (isCorsError(error)
+          ? "Text byl zkopírován do schránky pro ruční vložení do Notion."
+          : "Po nasazení proxy znovu klikněte Otestovat Notion.")
+      );
       return;
     }
-    alert("Notion: " + (error.message || error));
+    alert("Notion: " + msg);
   }
 
   function injectSettingsDialog() {
@@ -572,7 +691,7 @@
           <h2>Notion — nastavení</h2>
           <button class="iconButton" value="cancel">×</button>
         </div>
-        <p class="hint">Vytvořte integraci na <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener">notion.so/my-integrations</a> a sdílejte databázi se zápisy se schůzek s touto integrací (Invite).</p>
+        <p class="hint">Vytvořte integraci na <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener">notion.so/my-integrations</a>, sdílejte databázi se zápisy s integrací (Connections), a nasajte proxy: <code>scripts/deploy-notion-proxy.sh</code> (kvůli CORS z prohlížeče).</p>
         <label>Integration token
           <input id="notionToken" type="password" placeholder="secret_…" autocomplete="off" />
         </label>
