@@ -94,7 +94,10 @@
   <dialog id="recordDialog">
     <form method="dialog" id="recordForm">
       <div class="dialogHeader">
-        <h2 id="dialogTitle">Záznam</h2>
+        <div>
+          <h2 id="dialogTitle">Záznam</h2>
+          <p id="recordDialogHint" class="hint">Klasifikace e-mailu — ručně nebo přes AI.</p>
+        </div>
         <button class="iconButton" value="cancel">×</button>
       </div>
 
@@ -135,7 +138,7 @@
 
       <div class="dialogActions">
         <button value="cancel" class="button secondary">Zavřít</button>
-        <button id="saveRecordBtn" value="default" class="button accent">Uložit v prohlížeči</button>
+        <button id="saveRecordBtn" value="default" class="button accent">Uložit klasifikaci</button>
       </div>
     </form>
   </dialog>
@@ -188,6 +191,7 @@
   <script src="app.js"></script>
   <script src="enhancements.js"></script>
   <script src="supabase-loader.js"></script>
+  <script src="supabase-topics.js"></script>
   <script src="topics.js"></script>
   <script src="record-click-fix.js"></script>
 </body>

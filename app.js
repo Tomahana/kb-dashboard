@@ -402,14 +402,15 @@ function renderTable(data) {
       ${data.map(r => {
         const rid = getRecordId(r);
         const checked = isRecordSelected(rid) ? "checked" : "";
-        return `<tr>
+        const needsClassify = !normalize(r.agenda) || lower(r.agenda) === "nezařazeno" || !normalize(r.shrnuti);
+        return `<tr class="recordRow ${needsClassify ? "needsClassify" : ""}" data-record-id="${escapeHtml(rid)}" tabindex="0" role="button" aria-label="Klasifikovat: ${escapeHtml(r.title || r.predmet)}">
         <td class="selectCol"><input type="checkbox" class="recordSelect" data-record-id="${escapeHtml(rid)}" ${checked} aria-label="Vybrat záznam" /></td>
         <td>${escapeHtml(formatDate(getDateValue(r)))}</td>
-        <td><strong>${escapeHtml(r.title || r.predmet)}</strong><br><span class="meta">${escapeHtml(r.odesilatel || "")}</span></td>
+        <td><strong class="recordOpen">${escapeHtml(r.title || r.predmet)}</strong><br><span class="meta">${escapeHtml(r.odesilatel || "")}</span></td>
         <td>${escapeHtml(r.agenda || "")}</td>
         <td>${escapeHtml(r.kam_patri || "")}</td>
         <td>${escapeHtml(r.stav || "")}</td>
-        <td><button class="button small secondary" onclick="openRecord('${r.id}')">Otevřít</button></td>
+        <td><span class="openHint">Klasifikovat →</span></td>
       </tr>`;
       }).join("")}
     </tbody>
@@ -422,11 +423,12 @@ function renderCard(r) {
   const excluded = isExcluded(r);
   const rid = getRecordId(r);
   const checked = isRecordSelected(rid) ? "checked" : "";
-  return `<article class="record">
-    <div class="recordHeader"><label class="recordSelectWrap"><input type="checkbox" class="recordSelect" data-record-id="${escapeHtml(rid)}" ${checked} aria-label="Vybrat záznam" /></label><div><div class="recordTitle">${escapeHtml(r.title || r.predmet)}</div><div class="meta">${escapeHtml(formatDate(getDateValue(r)))} · ${escapeHtml(r.odesilatel || "")}</div></div><div class="meta">${escapeHtml(r.stav || "")}</div></div>
-    <div class="badges">${excluded ? `<span class="badge excluded">Vyřazeno</span>` : ""}${r.typ ? `<span class="badge ${risk ? "risk" : ""}">${escapeHtml(r.typ)}</span>` : ""}${r.kam_patri ? `<span class="badge ${meeting ? "meeting" : ""}">${escapeHtml(r.kam_patri)}</span>` : ""}${r.priorita ? `<span class="badge priority">${escapeHtml(r.priorita)}</span>` : ""}</div>
-    <div class="summary">${escapeHtml(r.shrnuti || firstWords(r.text, 45) || "Bez shrnutí")}</div>
-    <div class="recordActions"><button class="button small secondary" onclick="openRecord('${r.id}')">Otevřít / třídit</button></div>
+  const needsClassify = !normalize(r.agenda) || lower(r.agenda) === "nezařazeno" || !normalize(r.shrnuti);
+  return `<article class="record record-clickable ${needsClassify ? "needsClassify" : ""}" data-record-id="${escapeHtml(rid)}" tabindex="0" role="button" aria-label="Klasifikovat: ${escapeHtml(r.title || r.predmet)}">
+    <div class="recordHeader"><label class="recordSelectWrap"><input type="checkbox" class="recordSelect" data-record-id="${escapeHtml(rid)}" ${checked} aria-label="Vybrat záznam" /></label><div class="recordMain"><div class="recordTitle recordOpen">${escapeHtml(r.title || r.predmet)}</div><div class="meta">${escapeHtml(formatDate(getDateValue(r)))} · ${escapeHtml(r.odesilatel || "")}</div></div><div class="meta recordStatus">${escapeHtml(r.stav || "")}${needsClassify ? ' · <span class="openHint">k třídění</span>' : ""}</div></div>
+    <div class="badges">${excluded ? `<span class="badge excluded">Vyřazeno</span>` : ""}${needsClassify ? `<span class="badge classify">K roztřídění</span>` : ""}${r.typ ? `<span class="badge ${risk ? "risk" : ""}">${escapeHtml(r.typ)}</span>` : ""}${r.kam_patri ? `<span class="badge ${meeting ? "meeting" : ""}">${escapeHtml(r.kam_patri)}</span>` : ""}${r.priorita ? `<span class="badge priority">${escapeHtml(r.priorita)}</span>` : ""}</div>
+    <div class="summary recordOpen">${escapeHtml(r.shrnuti || firstWords(r.text, 45) || "Klikněte pro klasifikaci a shrnutí…")}</div>
+    <div class="recordActions"><span class="openHint">Klikněte pro ruční nebo AI klasifikaci →</span></div>
   </article>`;
 }
 
@@ -439,11 +441,19 @@ function escapeHtml(s) {
   return normalize(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
 
+function findRecordById(id) {
+  return records.find(x => x.id === id || x.kb_id === id || x.KB_ID === id);
+}
+
 window.openRecord = function(id) {
-  const r = records.find(x => x.id === id);
+  const r = findRecordById(id);
   if (!r) return;
-  byId("editId").value = r.id;
+  byId("editId").value = getRecordId(r);
   byId("dialogTitle").textContent = r.title || r.predmet || "Záznam";
+  const hint = byId("recordDialogHint");
+  if (hint) {
+    hint.textContent = `${formatDate(getDateValue(r))} · ${r.odesilatel || ""} — upravte metadata ručně nebo použijte AI klasifikaci.`;
+  }
   byId("editAgenda").value = r.agenda || "";
   byId("editType").value = r.typ || "";
   byId("editMeeting").value = r.kam_patri || "";
@@ -459,7 +469,7 @@ window.openRecord = function(id) {
 window.saveRecord = function saveRecord(e) {
   e.preventDefault();
   const id = byId("editId").value;
-  const idx = records.findIndex(x => x.id === id);
+  const idx = records.findIndex(x => getRecordId(x) === id);
   if (idx === -1) return;
   records[idx] = { ...records[idx], agenda: byId("editAgenda").value, typ: byId("editType").value, kam_patri: byId("editMeeting").value, stav: byId("editStatus").value, priorita: byId("editPriority").value, termin: byId("editDeadline").value, shrnuti: byId("editSummary").value, ukol_dalsi_krok: byId("editNextStep").value, text: byId("editBody").value, vyrazeno: lower(byId("editStatus").value) === "vyřazeno", updated_at: new Date().toISOString() };
   persist();

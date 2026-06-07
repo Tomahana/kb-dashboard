@@ -26,7 +26,10 @@
     return [];
   }
 
-  function loadTopics() {
+  let topicsUseSupabase = false;
+  let topicsLoading = false;
+
+  function loadTopicsLocal() {
     try {
       topics = JSON.parse(localStorage.getItem(TOPICS_KEY) || "[]");
     } catch (_) {
@@ -35,8 +38,43 @@
     if (!Array.isArray(topics)) topics = [];
   }
 
-  function persistTopics() {
+  async function loadTopics() {
+    if (!window.kbSupabaseTopics) {
+      loadTopicsLocal();
+      return;
+    }
+    topicsLoading = true;
+    renderTopicsPanel();
+    try {
+      const available = await window.kbSupabaseTopics.probeTables();
+      if (!available) {
+        topicsUseSupabase = false;
+        loadTopicsLocal();
+        return;
+      }
+      topicsUseSupabase = true;
+      await window.kbSupabaseTopics.migrateLocalTopicsIfNeeded();
+      topics = await window.kbSupabaseTopics.loadTopicsFromSupabase();
+    } catch (error) {
+      console.error(error);
+      topicsUseSupabase = false;
+      loadTopicsLocal();
+    } finally {
+      topicsLoading = false;
+      renderTopicsPanel();
+      populateTopicFilter();
+    }
+  }
+
+  async function persistTopic(topic) {
+    if (topicsUseSupabase && window.kbSupabaseTopics) {
+      return window.kbSupabaseTopics.saveTopicToSupabase(topic);
+    }
+    const idx = topics.findIndex(t => t.id === topic.id);
+    if (idx === -1) topics.unshift(topic);
+    else topics[idx] = { ...topics[idx], ...topic };
     localStorage.setItem(TOPICS_KEY, JSON.stringify(topics, null, 2));
+    return idx === -1 ? topics[0] : topics[idx];
   }
 
   function getTopic(id) {
@@ -54,26 +92,32 @@
     return getRecords().filter(r => ids.has(getRecordId(r)));
   }
 
-  function addRecordsToTopic(topicId, recordIds) {
+  async function addRecordsToTopic(topicId, recordIds) {
     const topic = getTopic(topicId);
     if (!topic) return false;
     const set = new Set(topic.recordIds || []);
     recordIds.forEach(id => { if (id) set.add(id); });
     topic.recordIds = [...set];
     topic.updated_at = new Date().toISOString();
-    persistTopics();
+    topic.__existing = true;
+    const saved = await persistTopic(topic);
+    const idx = topics.findIndex(t => t.id === topicId);
+    if (idx >= 0) topics[idx] = { ...topics[idx], ...saved };
     return true;
   }
 
-  function removeRecordFromTopic(topicId, recordId) {
+  async function removeRecordFromTopic(topicId, recordId) {
     const topic = getTopic(topicId);
     if (!topic) return;
     topic.recordIds = (topic.recordIds || []).filter(id => id !== recordId);
     topic.updated_at = new Date().toISOString();
-    persistTopics();
+    topic.__existing = true;
+    const saved = await persistTopic(topic);
+    const idx = topics.findIndex(t => t.id === topicId);
+    if (idx >= 0) topics[idx] = { ...topics[idx], ...saved };
   }
 
-  function saveTopicForm() {
+  async function saveTopicForm() {
     const id = el("topicEditId").value || uuid();
     const existing = getTopic(id);
     const payload = {
@@ -85,32 +129,58 @@
       recordIds: existing?.recordIds || [],
       created_at: existing?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      ai_summary_updated_at: existing?.ai_summary_updated_at || null
+      ai_summary_updated_at: existing?.ai_summary_updated_at || null,
+      __existing: !!existing
     };
     if (n(el("topicAiSummary").value) !== n(existing?.ai_summary)) {
       payload.ai_summary_updated_at = new Date().toISOString();
     }
-    const idx = topics.findIndex(t => t.id === id);
-    if (idx === -1) topics.unshift(payload);
-    else topics[idx] = { ...topics[idx], ...payload };
-    persistTopics();
-    renderTopicsPanel();
-    renderTopicRecordsList(id);
-    if (typeof render === "function") render();
+    const btn = el("saveTopicBtn");
+    const prev = btn?.textContent;
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = topicsUseSupabase ? "Ukládám do Supabase…" : "Ukládám…";
+      }
+      const saved = await persistTopic(payload);
+      const idx = topics.findIndex(t => t.id === id);
+      if (idx === -1) topics.unshift(saved);
+      else topics[idx] = { ...topics[idx], ...saved };
+      el("topicEditId").value = saved.id;
+      renderTopicsPanel();
+      renderTopicRecordsList(saved.id);
+      if (typeof render === "function") render();
+    } catch (error) {
+      console.error(error);
+      alert("Téma se nepodařilo uložit: " + (error.message || error));
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = prev || "Uložit téma";
+      }
+    }
   }
 
-  function deleteTopic() {
+  async function deleteTopic() {
     const id = el("topicEditId").value;
     if (!id || !confirm("Opravdu smazat toto téma? E-maily zůstanou v databázi.")) return;
-    topics = topics.filter(t => t.id !== id);
-    persistTopics();
-    if (el("topicFilter")?.value === id) {
-      el("topicFilter").value = "";
-      localStorage.removeItem(TOPIC_FILTER_KEY);
+    try {
+      if (topicsUseSupabase && window.kbSupabaseTopics) {
+        await window.kbSupabaseTopics.deleteTopicFromSupabase(id);
+      }
+      topics = topics.filter(t => t.id !== id);
+      if (!topicsUseSupabase) localStorage.setItem(TOPICS_KEY, JSON.stringify(topics, null, 2));
+      if (el("topicFilter")?.value === id) {
+        el("topicFilter").value = "";
+        localStorage.removeItem(TOPIC_FILTER_KEY);
+      }
+      el("topicDialog").close();
+      renderTopicsPanel();
+      if (typeof render === "function") render();
+    } catch (error) {
+      console.error(error);
+      alert("Téma se nepodařilo smazat: " + (error.message || error));
     }
-    el("topicDialog").close();
-    renderTopicsPanel();
-    if (typeof render === "function") render();
   }
 
   function openTopicDialog(topicId) {
@@ -147,8 +217,8 @@
       </div>`;
     }).join("")}</div>`;
     box.querySelectorAll("[data-remove-topic-record]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        removeRecordFromTopic(topicId, btn.dataset.removeTopicRecord);
+      btn.addEventListener("click", async () => {
+        await removeRecordFromTopic(topicId, btn.dataset.removeTopicRecord);
         renderTopicRecordsList(topicId);
         renderTopicsPanel();
         if (typeof render === "function") render();
@@ -159,8 +229,15 @@
   function renderTopicsPanel() {
     const list = el("topicsList");
     if (!list) return;
+    if (topicsLoading) {
+      list.innerHTML = `<p class="hint">Načítám témata${topicsUseSupabase ? " ze Supabase" : ""}…</p>`;
+      return;
+    }
     if (!topics.length) {
-      list.innerHTML = `<p class="hint">Zatím žádná témata. Vytvořte první téma pro seskupení e-mailů.</p>`;
+      const setupHint = topicsUseSupabase
+        ? "Zatím žádná témata. Vytvořte první téma — uloží se trvale do Supabase."
+        : "Zatím žádná témata. Pro trvalé uložení spusťte <code>supabase/topics-schema.sql</code> v Supabase SQL Editoru.";
+      list.innerHTML = `<p class="hint">${setupHint}</p>`;
       return;
     }
     list.innerHTML = topics.map(t => {
@@ -210,7 +287,8 @@
         <h2>Témata</h2>
         <button id="newTopicBtn" type="button" class="button small accent">+ Nové</button>
       </div>
-      <p class="hint">Seskupujte e-maily do témat, generujte AI shrnutí a ukládejte je k tématu.</p>
+      <p id="topicsStorageHint" class="hint">Seskupujte e-maily do témat, generujte AI shrnutí a ukládejte je k tématu.</p>
+      <button id="reloadTopicsBtn" type="button" class="button small secondary full">Obnovit témata</button>
       <label>Téma ve filtru
         <select id="topicFilter"><option value="">Vše</option></select>
       </label>
@@ -218,6 +296,7 @@
     `;
     filters.insertBefore(section, reset);
     el("newTopicBtn").addEventListener("click", () => openTopicDialog());
+    el("reloadTopicsBtn").addEventListener("click", () => loadTopics());
     el("topicFilter").addEventListener("change", (e) => {
       localStorage.setItem(TOPIC_FILTER_KEY, e.target.value);
       renderTopicsPanel();
@@ -262,9 +341,9 @@
       </form>
     `;
     document.body.appendChild(dialog);
-    el("saveTopicBtn").addEventListener("click", (e) => {
+    el("saveTopicBtn").addEventListener("click", async (e) => {
       e.preventDefault();
-      saveTopicForm();
+      await saveTopicForm();
       el("topicDialog").close();
     });
     el("deleteTopicBtn").addEventListener("click", deleteTopic);
@@ -276,7 +355,7 @@
       }
       showTopicAiPrompt(topicId);
     });
-    el("assignAllVisibleToTopicBtn").addEventListener("click", () => {
+    el("assignAllVisibleToTopicBtn").addEventListener("click", async () => {
       const topicId = el("topicEditId").value;
       if (!topicId) {
         alert("Nejdříve uložte téma.");
@@ -285,7 +364,7 @@
       const ids = (typeof filteredRecords === "function" ? filteredRecords() : getRecords())
         .map(getRecordId)
         .filter(Boolean);
-      addRecordsToTopic(topicId, ids);
+      await addRecordsToTopic(topicId, ids);
       renderTopicRecordsList(topicId);
       renderTopicsPanel();
       if (typeof render === "function") render();
@@ -313,7 +392,7 @@
       </form>
     `;
     document.body.appendChild(dialog);
-    el("confirmAssignTopicBtn").addEventListener("click", () => {
+    el("confirmAssignTopicBtn").addEventListener("click", async () => {
       const topicId = el("assignTopicSelect").value;
       const selected = getSelectedRecords();
       if (!topicId) return;
@@ -321,7 +400,7 @@
         alert("Nejdříve vyberte alespoň jeden e-mail.");
         return;
       }
-      addRecordsToTopic(topicId, selected.map(getRecordId));
+      await addRecordsToTopic(topicId, selected.map(getRecordId));
       el("assignTopicDialog").close();
       renderTopicsPanel();
       if (typeof render === "function") render();
@@ -498,8 +577,8 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
     const btn = document.createElement("button");
     btn.id = "singleRecordAiBtn";
     btn.type = "button";
-    btn.className = "button secondary";
-    btn.textContent = "AI klasifikace";
+    btn.className = "button accent";
+    btn.textContent = "AI klasifikace e-mailu";
     btn.addEventListener("click", () => {
       const id = el("editId")?.value;
       const r = getRecords().find(x => getRecordId(x) === id);
@@ -531,19 +610,27 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
     el("aiSelectionBtn")?.addEventListener("click", showSelectionAiPrompt);
   }
 
-  function init() {
-    loadTopics();
+  function updateTopicsStorageHint() {
+    const hint = el("topicsStorageHint");
+    if (!hint) return;
+    hint.textContent = topicsUseSupabase
+      ? "Témata se ukládají trvale do Supabase."
+      : "Témata jsou zatím jen v prohlížeči. Pro trvalé uložení spusťte supabase/topics-schema.sql.";
+  }
+
+  async function init() {
     injectTopicsPanel();
     injectTopicDialog();
     injectAssignDialog();
     injectRecordAiButton();
     patchFilteredRecords();
-    populateTopicFilter();
-    renderTopicsPanel();
     bindToolbarButtons();
+    await loadTopics();
+    updateTopicsStorageHint();
     setTimeout(() => {
       injectRecordAiButton();
       bindToolbarButtons();
+      updateTopicsStorageHint();
     }, 200);
   }
 
@@ -557,4 +644,9 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
   };
 
   document.addEventListener("DOMContentLoaded", init);
+  document.addEventListener("kb:records-loaded", () => {
+    renderTopicsPanel();
+    populateTopicFilter();
+    if (typeof render === "function") render();
+  });
 })();

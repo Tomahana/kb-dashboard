@@ -138,6 +138,7 @@
       if (typeof render === "function") render();
       document.dispatchEvent(new Event("input"));
 
+      document.dispatchEvent(new CustomEvent("kb:records-loaded"));
       alert("Načteno ze Supabase: " + records.length + " záznamů.");
     } catch (error) {
       console.error(error);
@@ -235,6 +236,7 @@
   }
 
   window.kbSupabase = {
+    getClient,
     saveRecordToSupabase,
     mapRecordToSupabase,
     loadFromSupabase
