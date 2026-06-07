@@ -75,7 +75,8 @@
   }
 
   function needsClassification(r) {
-    if (!r || r._aiProposal) return false;
+    if (typeof window.isRecordUnclassified === "function") return window.isRecordUnclassified(r);
+    if (!r || r._aiProposal) return true;
     const unclassifiedAgenda = !n(r.agenda) || l(r.agenda) === "nezařazeno";
     const missingSummary = !n(r.shrnuti);
     const newStatus = ["nové", "k roztřídění", ""].includes(l(r.stav));
@@ -520,16 +521,10 @@ ${text || "(prázdný text)"}`;
     if (!window.saveRecord || window.saveRecord.__aiConfirmed) return;
     const original = window.saveRecord;
     window.saveRecord = function aiConfirmedSaveRecord(e) {
-      const id = el("editId")?.value;
-      const idx = getRecords().findIndex(r => getRecordId(r) === id);
-      if (idx >= 0 && records[idx]._aiProposal) {
-        delete records[idx]._aiProposal;
-        records[idx].ai_confirmed_at = new Date().toISOString();
-        if (typeof persist === "function") persist();
-      }
       clearProposalFormStyles();
       original(e);
       updateAutoClassifyButton();
+      if (window.kbLayout?.updateBadges) window.kbLayout.updateBadges();
     };
     window.saveRecord.__aiConfirmed = true;
   }

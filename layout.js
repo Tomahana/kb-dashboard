@@ -52,7 +52,9 @@
       data = [];
     }
     const lower = (s) => (s || "").toString().trim().toLowerCase();
-    const newCount = data.filter(r => ["nové", "k roztřídění"].includes(lower(r.stav))).length;
+    const newCount = typeof isRecordUnclassified === "function"
+      ? data.filter(isRecordUnclassified).length
+      : data.filter(r => ["nové", "k roztřídění"].includes(lower(r.stav))).length;
     const pendingAi = window.kbAiClassify?.pendingReviewRecords?.().length || 0;
 
     const setBadge = (id, count) => {

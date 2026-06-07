@@ -257,7 +257,7 @@ function render() {
   injectSelectionToolbar();
   updateSelectionToolbar();
   byId("countAll").textContent = data.length;
-  byId("countNew").textContent = data.filter(r => ["nové","k roztřídění"].includes(lower(r.stav))).length;
+  byId("countNew").textContent = data.filter(isRecordUnclassified).length;
   byId("countRisks").textContent = data.filter(r => ["riziko","konflikt / problém"].includes(lower(r.typ)) || lower(r.agenda).includes("rizik")).length;
   byId("countMeetings").textContent = data.filter(r => normalize(r.kam_patri) && !["nezařazeno", "archiv"].includes(lower(r.kam_patri))).length;
   renderAgendaAnalytics();
@@ -404,7 +404,7 @@ function renderTable(data) {
       ${data.map(r => {
         const rid = getRecordId(r);
         const checked = isRecordSelected(rid) ? "checked" : "";
-        const needsClassify = !normalize(r.agenda) || lower(r.agenda) === "nezařazeno" || !normalize(r.shrnuti);
+        const needsClassify = isRecordUnclassified(r);
         return `<tr class="recordRow ${needsClassify ? "needsClassify" : ""}" data-record-id="${escapeHtml(rid)}" tabindex="0" role="button" aria-label="Klasifikovat: ${escapeHtml(r.title || r.predmet)}">
         <td class="selectCol"><input type="checkbox" class="recordSelect" data-record-id="${escapeHtml(rid)}" ${checked} aria-label="Vybrat záznam" /></td>
         <td>${escapeHtml(formatDate(getDateValue(r)))}</td>
@@ -425,7 +425,7 @@ function renderCard(r) {
   const excluded = isExcluded(r);
   const rid = getRecordId(r);
   const checked = isRecordSelected(rid) ? "checked" : "";
-  const needsClassify = !normalize(r.agenda) || lower(r.agenda) === "nezařazeno" || !normalize(r.shrnuti);
+  const needsClassify = isRecordUnclassified(r);
   const aiProposal = hasAiProposal(r);
   return `<article class="record record-clickable ${needsClassify ? "needsClassify" : ""} ${aiProposal ? "hasAiProposal" : ""}" data-record-id="${escapeHtml(rid)}" tabindex="0" role="button" aria-label="Klasifikovat: ${escapeHtml(r.title || r.predmet)}">
     <div class="recordHeader"><label class="recordSelectWrap"><input type="checkbox" class="recordSelect" data-record-id="${escapeHtml(rid)}" ${checked} aria-label="Vybrat záznam" /></label><div class="recordMain"><div class="recordTitle recordOpen">${escapeHtml(r.title || r.predmet)}</div><div class="meta">${escapeHtml(formatDate(getDateValue(r)))} · ${escapeHtml(r.odesilatel || "")}</div></div><div class="meta recordStatus">${escapeHtml(r.stav || "")}${aiProposal ? ' · <span class="openHint">AI návrh</span>' : needsClassify ? ' · <span class="openHint">k třídění</span>' : ""}</div></div>
@@ -471,6 +471,42 @@ function hasAiProposal(r) {
   return !!r?._aiProposal;
 }
 
+function isRecordUnclassified(r) {
+  if (!r) return false;
+  if (r._aiProposal) return true;
+  const agenda = lower(r.agenda);
+  const stav = lower(r.stav);
+  if (!normalize(r.shrnuti)) return true;
+  if (!agenda || agenda === "nezařazeno") return true;
+  if (["nové", "k roztřídění"].includes(stav)) return true;
+  return false;
+}
+
+function finalizeClassificationPayload(payload) {
+  const agenda = normalize(payload.agenda);
+  const shrnuti = normalize(payload.shrnuti);
+  const meeting = lower(payload.kam_patri);
+  let stav = normalize(payload.stav);
+  const hasCore = !!shrnuti && !!agenda && lower(agenda) !== "nezařazeno";
+
+  if (hasCore && ["nové", "k roztřídění", ""].includes(lower(stav))) {
+    if (meeting && !["nezařazeno", "archiv", ""].includes(meeting)) {
+      stav = "Připravit bod";
+    } else {
+      stav = "Zařazeno";
+    }
+  }
+
+  const result = { ...payload, stav };
+  if (hasCore) {
+    result.classified_at = new Date().toISOString();
+    delete result._aiProposal;
+  }
+  return result;
+}
+
+window.isRecordUnclassified = isRecordUnclassified;
+
 window.openRecord = function(id) {
   const r = findRecordById(id);
   if (!r) return;
@@ -502,7 +538,21 @@ window.saveRecord = function saveRecord(e) {
   const id = byId("editId").value;
   const idx = records.findIndex(x => getRecordId(x) === id);
   if (idx === -1) return;
-  records[idx] = { ...records[idx], agenda: byId("editAgenda").value, typ: byId("editType").value, kam_patri: byId("editMeeting").value, stav: byId("editStatus").value, priorita: byId("editPriority").value, termin: byId("editDeadline").value, shrnuti: byId("editSummary").value, ukol_dalsi_krok: byId("editNextStep").value, text: byId("editBody").value, vyrazeno: lower(byId("editStatus").value) === "vyřazeno", updated_at: new Date().toISOString() };
+  const payload = finalizeClassificationPayload({
+    ...records[idx],
+    agenda: byId("editAgenda").value,
+    typ: byId("editType").value,
+    kam_patri: byId("editMeeting").value,
+    stav: byId("editStatus").value,
+    priorita: byId("editPriority").value,
+    termin: byId("editDeadline").value,
+    shrnuti: byId("editSummary").value,
+    ukol_dalsi_krok: byId("editNextStep").value,
+    text: byId("editBody").value,
+    vyrazeno: lower(byId("editStatus").value) === "vyřazeno",
+    updated_at: new Date().toISOString()
+  });
+  records[idx] = payload;
   persist();
   populateFilters();
   render();
