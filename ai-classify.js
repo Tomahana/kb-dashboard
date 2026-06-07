@@ -79,12 +79,37 @@
     return (list || getRecords()).filter(needsClassification);
   }
 
+  const BODY_PLACEHOLDERS = new Set([
+    "",
+    "Načítám text e-mailu ze Supabase…",
+    "(prázdný text)"
+  ]);
+
+  function isRealBody(text) {
+    return !BODY_PLACEHOLDERS.has(n(text));
+  }
+
   async function ensureBody(record) {
-    if (n(record.text)) return record.text;
+    const recordId = getRecordId(record);
+    const editId = el("editId")?.value;
+
+    if (editId && editId === recordId) {
+      const formText = n(el("editBody")?.value);
+      if (isRealBody(formText)) {
+        record.text = formText;
+        return formText;
+      }
+    }
+
+    if (isRealBody(record.text)) return n(record.text);
+
     const kbId = record.kb_id || record.id || record.KB_ID;
     if (kbId && window.kbSupabase?.loadBody) {
+      const bodyBox = el("editBody");
+      if (bodyBox && editId === recordId) bodyBox.value = "Načítám text e-mailu ze Supabase…";
       const body = await window.kbSupabase.loadBody(kbId);
       record.text = body || "";
+      if (bodyBox && editId === recordId) bodyBox.value = record.text;
       return record.text;
     }
     return "";
@@ -191,7 +216,10 @@ ${text || "(prázdný text)"}`;
 
   async function classifyRecord(record, options = {}) {
     const copy = { ...record };
-    await ensureBody(copy);
+    const text = await ensureBody(copy);
+    if (!isRealBody(text)) {
+      throw new Error("Text e-mailu není načtený. Počkejte na načtení ze Supabase (nebo otevřete e-mail znovu) a zkuste Navrhnout AI.");
+    }
     const proposal = await callAiApi(copy);
     proposal._generated_at = new Date().toISOString();
     proposal._model = loadSettings().model || DEFAULTS.model;
@@ -354,8 +382,6 @@ ${text || "(prázdný text)"}`;
       const id = el("editId")?.value;
       const record = findRecord(id);
       if (!record) return;
-      record.shrnuti = el("editSummary")?.value || record.shrnuti;
-      record.text = el("editBody")?.value || record.text;
       suggestBtn.disabled = true;
       suggestBtn.textContent = "AI analyzuje…";
       try {
@@ -431,7 +457,7 @@ ${text || "(prázdný text)"}`;
     const original = window.openRecord;
     window.openRecord = async function aiEnhancedOpenRecord(id) {
       clearProposalFormStyles();
-      original(id);
+      await original(id);
       const record = findRecord(id);
       if (!record) return;
 
@@ -448,11 +474,11 @@ ${text || "(prázdný text)"}`;
           suggestBtn.textContent = "AI analyzuje…";
         }
         try {
-          await new Promise(r => setTimeout(r, 300));
-          const r = findRecord(id);
-          if (r) await classifyRecord(r, { applyToForm: true });
+          await classifyRecord(record, { applyToForm: true });
         } catch (error) {
           console.error(error);
+          const hint = el("recordDialogHint");
+          if (hint) hint.textContent = `AI klasifikace selhala: ${error.message || error}`;
         } finally {
           if (suggestBtn) {
             suggestBtn.disabled = !hasApiKey();

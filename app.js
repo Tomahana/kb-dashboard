@@ -455,6 +455,7 @@ window.openRecord = function(id) {
   const r = findRecordById(id);
   if (!r) return;
   byId("editId").value = getRecordId(r);
+  byId("editBody").value = normalize(r.text) || "";
   byId("dialogTitle").textContent = r.title || r.predmet || "Záznam";
   const hint = byId("recordDialogHint");
   if (hint) {

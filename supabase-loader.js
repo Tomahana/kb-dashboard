@@ -221,15 +221,24 @@
 
     window.openRecord = async function (id) {
       original(id);
-      const record = records.find(r => r.id === id || r.kb_id === id);
-      const kbId = record?.kb_id || record?.id;
+      const record = typeof findRecordById === "function"
+        ? findRecordById(id)
+        : records.find(r => r.id === id || r.kb_id === id || r.KB_ID === id);
+      const kbId = record?.kb_id || record?.id || record?.KB_ID;
       const bodyBox = document.getElementById("editBody");
       if (!kbId || !bodyBox) return;
-      if (bodyBox.value && bodyBox.value !== "Načítám text e-mailu ze Supabase…") return;
+
+      const cached = n(record?.text);
+      if (cached && cached !== "Načítám text e-mailu ze Supabase…") {
+        bodyBox.value = cached;
+        return;
+      }
+
       bodyBox.value = "Načítám text e-mailu ze Supabase…";
       const body = await loadBody(kbId);
       bodyBox.value = body || "";
       if (record) record.text = body || "";
+      document.dispatchEvent(new CustomEvent("kb:body-loaded", { detail: { id: kbId, recordId: id } }));
     };
 
     window.openRecord.__supabaseEnhanced = true;
