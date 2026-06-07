@@ -105,19 +105,46 @@
 
       <div class="grid2">
         <label>Agenda
-          <input id="editAgenda" list="agendaList" />
+          <select id="editAgenda">
+            <option value="">— vyberte —</option>
+            <option>Nezařazeno</option><option>Věda a výzkum</option><option>Interní granty</option><option>Prestige</option>
+            <option>ReGa</option><option>Connect</option><option>Návraty</option><option>DKRVO</option>
+            <option>Bezpečnost výzkumu</option><option>Open Science</option><option>Doktorské studium</option>
+            <option>Mezinárodní projekty</option><option>Transfer znalostí</option><option>Univerzitní knihovna</option>
+            <option>Kolegium / vedení</option><option>Personální agenda</option><option>Projekty OP JAK</option>
+            <option>Smlouvy / právní agenda</option><option>Rizika a konflikty</option><option>Ostatní</option>
+          </select>
         </label>
         <label>Typ záznamu
-          <input id="editType" list="typeList" />
+          <select id="editType">
+            <option value="">— vyberte —</option>
+            <option>Informace</option><option>Riziko</option><option>Rozhodnutí</option><option>Podklad</option>
+            <option>Úkol</option><option>Námět na jednání</option><option>Konflikt / problém</option>
+            <option>Termín</option><option>Finance</option><option>Personální věc</option><option>Strategická poznámka</option>
+          </select>
         </label>
         <label>Kam patří
-          <input id="editMeeting" list="meetingList" />
+          <select id="editMeeting">
+            <option value="">— vyberte —</option>
+            <option>Nezařazeno</option><option>Kolegium rektora</option><option>Úzké kolegium</option>
+            <option>Porada OVV</option><option>Proděkani pro vědu</option><option>Jednání s rektorem</option>
+            <option>Jednání s kvestorem</option><option>Jednání s děkany</option><option>Porada oddělení</option>
+            <option>Individuální řešení</option><option>Archiv</option>
+          </select>
         </label>
         <label>Stav
-          <input id="editStatus" list="statusList" />
+          <select id="editStatus">
+            <option value="">— vyberte —</option>
+            <option>Nové</option><option>K roztřídění</option><option>Připravit bod</option>
+            <option>Zařazeno na jednání</option><option>Projednáno</option><option>Čeká na odpověď</option>
+            <option>Uzavřeno</option><option>Archiv</option><option>Vyřazeno</option>
+          </select>
         </label>
         <label>Priorita
-          <input id="editPriority" list="priorityList" />
+          <select id="editPriority">
+            <option value="">— vyberte —</option>
+            <option>Nízká</option><option>Běžná</option><option>Vysoká</option><option>Kritická</option>
+          </select>
         </label>
         <label>Termín
           <input id="editDeadline" type="date" />

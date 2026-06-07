@@ -447,6 +447,24 @@ function findRecordById(id) {
   return records.find(x => x.id === id || x.kb_id === id || x.KB_ID === id);
 }
 
+function setSelectField(selectId, value) {
+  const select = byId(selectId);
+  if (!select) return;
+  const v = normalize(value);
+  if (!v) {
+    select.value = "";
+    return;
+  }
+  const match = [...select.options].find(o => normalize(o.value) === v || normalize(o.textContent) === v);
+  if (match) {
+    select.value = match.value || match.textContent;
+    return;
+  }
+  const custom = new Option(`${v} (vlastní)`, v);
+  select.add(custom);
+  select.value = v;
+}
+
 function hasAiProposal(r) {
   return !!r?._aiProposal;
 }
@@ -461,11 +479,11 @@ window.openRecord = function(id) {
   if (hint) {
     hint.textContent = `${formatDate(getDateValue(r))} · ${r.odesilatel || ""} — upravte metadata ručně nebo použijte AI klasifikaci.`;
   }
-  byId("editAgenda").value = r.agenda || "";
-  byId("editType").value = r.typ || "";
-  byId("editMeeting").value = r.kam_patri || "";
-  byId("editStatus").value = r.stav || "";
-  byId("editPriority").value = r.priorita || "";
+  setSelectField("editAgenda", r.agenda);
+  setSelectField("editType", r.typ);
+  setSelectField("editMeeting", r.kam_patri);
+  setSelectField("editStatus", r.stav);
+  setSelectField("editPriority", r.priorita);
   byId("editDeadline").value = r.termin || "";
   byId("editSummary").value = r.shrnuti || "";
   byId("editNextStep").value = r.ukol_dalsi_krok || "";

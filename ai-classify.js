@@ -39,10 +39,25 @@
     return !!n(loadSettings().apiKey);
   }
 
+  const SELECT_BY_LIST = {
+    agendaList: "editAgenda",
+    typeList: "editType",
+    meetingList: "editMeeting",
+    statusList: "editStatus",
+    priorityList: "editPriority"
+  };
+
   function getDatalistOptions(listId) {
+    const selectId = SELECT_BY_LIST[listId];
+    const select = selectId ? el(selectId) : null;
+    if (select) {
+      return [...select.options]
+        .map(o => n(o.value || o.textContent))
+        .filter(v => v && !v.startsWith("—") && !v.includes("(vlastní)"));
+    }
     const list = el(listId);
     if (!list) return [];
-    return [...list.querySelectorAll("option")].map(o => n(o.value)).filter(Boolean);
+    return [...list.querySelectorAll("option")].map(o => n(o.value || o.textContent)).filter(Boolean);
   }
 
   function getRecordId(r) {
@@ -242,7 +257,12 @@ ${text || "(prázdný text)"}`;
     Object.entries(FIELD_IDS).forEach(([key, id]) => {
       const input = el(id);
       if (!input) return;
-      input.value = proposal[key] || "";
+      const value = proposal[key] || "";
+      if (input.tagName === "SELECT" && typeof setSelectField === "function") {
+        setSelectField(id, value);
+      } else {
+        input.value = value;
+      }
       input.classList.add("ai-filled");
     });
     showProposalBanner(true);

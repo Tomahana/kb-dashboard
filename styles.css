@@ -66,6 +66,14 @@ select, input, textarea {
   background: white;
   color: var(--text);
 }
+select {
+  cursor: pointer;
+  appearance: auto;
+}
+select.ai-filled {
+  background: #fffbeb !important;
+  border-color: #f59e0b !important;
+}
 textarea { resize: vertical; }
 .button {
   border: 0;

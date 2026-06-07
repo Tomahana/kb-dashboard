@@ -188,7 +188,8 @@
     el("topicEditId").value = topic?.id || "";
     el("topicDialogTitle").textContent = topic ? `Téma: ${topic.name}` : "Nové téma";
     el("topicName").value = topic?.name || "";
-    el("topicAgenda").value = topic?.agenda || "";
+    if (typeof setSelectField === "function") setSelectField("topicAgenda", topic?.agenda);
+    else el("topicAgenda").value = topic?.agenda || "";
     el("topicDescription").value = topic?.description || "";
     el("topicAiSummary").value = topic?.ai_summary || "";
     renderTopicRecordsList(topic?.id);
@@ -319,7 +320,15 @@
           <input id="topicName" required placeholder="např. Prestige 2026 – komunikace výsledků" />
         </label>
         <label>Navázaná agenda
-          <input id="topicAgenda" list="agendaList" placeholder="Volitelné" />
+          <select id="topicAgenda">
+            <option value="">— vyberte —</option>
+            <option>Nezařazeno</option><option>Věda a výzkum</option><option>Interní granty</option><option>Prestige</option>
+            <option>ReGa</option><option>Connect</option><option>Návraty</option><option>DKRVO</option>
+            <option>Bezpečnost výzkumu</option><option>Open Science</option><option>Doktorské studium</option>
+            <option>Mezinárodní projekty</option><option>Transfer znalostí</option><option>Univerzitní knihovna</option>
+            <option>Kolegium / vedení</option><option>Personální agenda</option><option>Projekty OP JAK</option>
+            <option>Smlouvy / právní agenda</option><option>Rizika a konflikty</option><option>Ostatní</option>
+          </select>
         </label>
         <label>Popis / kontext tématu
           <textarea id="topicDescription" rows="3" placeholder="Krátký kontext pro AI a tým…"></textarea>
