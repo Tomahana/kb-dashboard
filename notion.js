@@ -134,10 +134,12 @@
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (isProxyMissingError(data, res.status)) {
-        throw new Error(
-          "Notion proxy není nasazená v Supabase. Spusťte v terminálu:\n" +
-          "npx supabase functions deploy notion-proxy --project-ref xrgdfghiwjyrdckpjzdj"
-        );
+          throw new Error(
+            "Notion proxy není nasazená v Supabase.\n\n" +
+            "NE v SQL Editoru — použijte Supabase Dashboard → Edge Functions → vytvořit notion-proxy\n" +
+            "(viz NOTION.md), nebo v terminálu počítače:\n" +
+            "npx supabase functions deploy notion-proxy --project-ref xrgdfghiwjyrdckpjzdj"
+          );
       }
       throw new Error(parseNotionError(data, res.status));
     }
@@ -691,7 +693,11 @@
           <h2>Notion — nastavení</h2>
           <button class="iconButton" value="cancel">×</button>
         </div>
-        <p class="hint">Vytvořte integraci na <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener">notion.so/my-integrations</a>, sdílejte databázi se zápisy s integrací (Connections), a nasajte proxy: <code>scripts/deploy-notion-proxy.sh</code> (kvůli CORS z prohlížeče).</p>
+        <div class="notionDeployWarning">
+          <strong>Proxy se nenasazuje v SQL Editoru.</strong>
+          <p class="hint">V Supabase Dashboard → <a href="https://supabase.com/dashboard/project/xrgdfghiwjyrdckpjzdj/functions" target="_blank" rel="noopener">Edge Functions</a> vytvořte funkci <code>notion-proxy</code> a vložte kód ze souboru <code>supabase/functions/notion-proxy/index.ts</code>. Podrobně: <code>NOTION.md</code>.</p>
+        </div>
+        <p class="hint">Notion integrace: <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener">notion.so/my-integrations</a> → token <code>secret_…</code> → u databáze zápisů přidejte Connection k integraci.</p>
         <label>Integration token
           <input id="notionToken" type="password" placeholder="secret_…" autocomplete="off" />
         </label>
@@ -791,7 +797,7 @@
     panel.innerHTML = `
       <h2>Notion — zápisy ze schůzek</h2>
       <p id="notionKeyStatus" class="notionKeyStatus hint">Kontroluji nastavení…</p>
-      <p class="hint">Propojte e-maily se zápisy schůzek v Notion. Vyhledání, odkaz na zápis, přidání shrnutí e-mailu do stránky.</p>
+      <p class="hint">Propojte e-maily se zápisy schůzek v Notion. Nejdříve nasajte Edge Function <code>notion-proxy</code> (ne SQL Editor — viz NOTION.md).</p>
       <div class="settingsActions">
         <button id="notionSettingsPageBtn" type="button" class="button secondary">Nastavení Notion</button>
       </div>

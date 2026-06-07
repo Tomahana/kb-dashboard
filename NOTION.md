@@ -1,52 +1,79 @@
 # Notion — propojení zápisů ze schůzek
 
-## Proč selhává přímo z prohlížeče
+## ⚠️ Důležité: co kam patří
 
-Notion API **nepovoluje volání z GitHub Pages** (CORS). Proto KB Dashboard používá **Supabase Edge Function** `notion-proxy` jako most.
+| Kde | Co se tam spouští |
+|-----|-------------------|
+| **Supabase → SQL Editor** | Jen soubory `.sql` (`security-rls.sql`, `topics-schema.sql`) |
+| **Terminál v počítači** | `npx supabase functions deploy …` (nasazení proxy) |
+| **Supabase → Edge Functions** | Ruční vytvoření funkce v prohlížeči (bez terminálu) |
 
-## Postup nastavení
+Příkaz `npx supabase functions deploy …` **NEPATŘÍ do SQL Editoru** — proto vznikla chyba `syntax error at or near "npx"`.
 
-### 1. Notion integrace
+---
 
-1. [notion.so/my-integrations](https://www.notion.so/my-integrations) → **New integration**
-2. Zkopírujte **Internal Integration Secret** (`secret_…`)
-3. V Notion u databáze zápisů: **⋯ → Connections** → přidejte integraci
+## Proč je potřeba proxy
 
-### 2. Nasazení proxy (jednorázově)
+Notion API nefunguje přímo z GitHub Pages (CORS). KB Dashboard proto volá **Supabase Edge Function** `notion-proxy`.
+
+---
+
+## Varianta A — Supabase Dashboard (bez terminálu)
+
+1. Otevřete [Supabase Dashboard → Edge Functions](https://supabase.com/dashboard/project/xrgdfghiwjyrdckpjzdj/functions)
+2. **Deploy a new function** / **Create function**
+3. Název funkce: **`notion-proxy`** (přesně tak)
+4. Zkopírujte celý obsah souboru `supabase/functions/notion-proxy/index.ts` z repozitáře
+5. Vložte do editoru a klikněte **Deploy**
+6. Ověřte, že funkce běží na adrese:  
+   `https://xrgdfghiwjyrdckpjzdj.supabase.co/functions/v1/notion-proxy`
+
+---
+
+## Varianta B — Terminál v počítači
+
+Na **svém počítači** (PowerShell, Terminal, bash) — ne v SQL Editoru:
 
 ```bash
-# Supabase CLI
-npm install -g supabase
-supabase login
-
-# z kořene repozitáře
-chmod +x scripts/deploy-notion-proxy.sh
-./scripts/deploy-notion-proxy.sh
-```
-
-Nebo ručně:
-
-```bash
+npx supabase login
 npx supabase functions deploy notion-proxy --project-ref xrgdfghiwjyrdckpjzdj
 ```
 
-### 3. V KB Dashboardu
+Nebo ze složky repozitáře:
 
-1. **Přihlaste se** (Supabase Auth — proxy vyžaduje session)
-2. **Nastavení → Nastavení Notion**
-3. Token + odkaz/ID databáze schůzek
-4. **Otestovat Notion** — mělo by ukázat název databáze a sloupce
+```bash
+./scripts/deploy-notion-proxy.sh
+```
+
+---
+
+## Notion integrace
+
+1. [notion.so/my-integrations](https://www.notion.so/my-integrations) → **New integration**
+2. Zkopírujte token `secret_…`
+3. V Notion u databáze zápisů: **⋯ → Connections** → přidejte integraci
+
+---
+
+## V KB Dashboardu
+
+1. Tvrdý refresh (`Ctrl+Shift+R`)
+2. **Přihlásit se** (proxy vyžaduje Supabase session)
+3. **Nastavení → Nastavení Notion** → token + odkaz/ID databáze
+4. **Otestovat Notion**
+
+---
 
 ## Časté chyby
 
 | Chyba | Řešení |
 |-------|--------|
-| `proxy není nasazená` | Spusťte `deploy-notion-proxy.sh` |
+| `syntax error at or near "npx"` | Příkaz jste vložili do SQL Editoru — použijte terminál nebo Edge Functions |
+| `proxy není nasazená` | Nasajte funkci `notion-proxy` (varianta A nebo B) |
 | `Nejdříve přihlaste se` | Přihlášení v KB Dashboardu |
-| `nemá přístup` / 403 | Přidejte Connection k integraci u databáze v Notion |
-| `nenalezena` / 404 | Špatné ID databáze — vložte celý odkaz z Notion |
-| `Invalid token` | Zkontrolujte `secret_…` token |
+| 403 v Notion | Přidejte Connection k integraci u databáze |
+| 404 v Notion | Špatné ID databáze — vložte celý odkaz z Notion |
 
 ## ID databáze
 
-Z URL `https://www.notion.so/…/XXXXXXXX?v=…` — použijte 32 znaků před `?v=`, nebo vložte celý odkaz.
+Z URL `https://www.notion.so/…/XXXXXXXX?v=…` použijte 32 znaků před `?v=`, nebo vložte celý odkaz.

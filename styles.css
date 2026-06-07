@@ -176,6 +176,15 @@ body {
 }
 .notionMeetingCard:hover { border-color: #a8a29e; background: #fafaf9; }
 .notionMeetingCard strong { display: block; margin-bottom: .2rem; }
+.notionDeployWarning {
+  margin: .65rem 0;
+  padding: .65rem .75rem;
+  border-radius: 10px;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+}
+.notionDeployWarning strong { display: block; margin-bottom: .25rem; }
+.notionDeployWarning p { margin: 0; }
 .hint.ok { color: var(--ok); font-weight: 650; }
 .hint.danger { color: var(--danger); font-weight: 650; white-space: pre-line; }
 
