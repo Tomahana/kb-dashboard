@@ -91,17 +91,14 @@ select { cursor: pointer; }
   cursor: pointer;
   font: inherit;
   text-align: left;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .kb-picker-btn:hover { border-color: #b7c2d5; background: #fbfcff; }
 .kb-picker-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .kb-picker-chevron { color: var(--muted); font-size: .9rem; flex-shrink: 0; }
 .kb-picker-menu {
-  position: absolute;
-  z-index: 2000;
-  left: 0;
-  right: 0;
-  top: calc(100% + 4px);
-  max-height: 260px;
+  max-height: 280px;
   overflow-y: auto;
   background: white;
   border: 1px solid var(--line);
@@ -110,6 +107,9 @@ select { cursor: pointer; }
   list-style: none;
   margin: 0;
   padding: .3rem 0;
+}
+.kb-picker-menu:not([hidden]) {
+  display: block;
 }
 .kb-picker-option {
   padding: .52rem .75rem;

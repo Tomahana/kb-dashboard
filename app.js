@@ -489,6 +489,7 @@ window.openRecord = function(id) {
   byId("editSummary").value = r.shrnuti || "";
   byId("editNextStep").value = r.ukol_dalsi_krok || "";
   byId("editBody").value = r.text || "";
+  if (window.kbPickers?.closeOpenMenu) window.kbPickers.closeOpenMenu();
   byId("recordDialog").showModal();
   if (window.kbPickers?.refresh) {
     ["editAgenda", "editType", "editMeeting", "editStatus", "editPriority"].forEach(window.kbPickers.refresh);
