@@ -66,6 +66,8 @@ body {
 }
 .navBadgeAi { background: #38bdf8; color: #0c4a6e; }
 .sidebarFoot { margin-top: auto; font-size: .78rem; color: #94a3b8; }
+.appVersion { margin-top: .5rem; font-weight: 700; color: #64748b; }
+.aiKeyStatus.ok { color: var(--ok); font-weight: 650; }
 .appMain {
   display: flex;
   flex-direction: column;

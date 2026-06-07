@@ -33,6 +33,31 @@
 
   function saveSettings(settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    updateAiKeyStatus();
+  }
+
+  function maskApiKey(key) {
+    const k = n(key);
+    if (!k) return "";
+    if (k.length <= 8) return "••••••••";
+    return `${k.slice(0, 4)}…${k.slice(-4)}`;
+  }
+
+  function updateAiKeyStatus() {
+    const box = el("aiKeyStatus");
+    if (!box) return;
+    const s = loadSettings();
+    if (n(s.apiKey)) {
+      box.innerHTML = `<strong>API klíč uložen</strong> v prohlížeči (${maskApiKey(s.apiKey)}). Model: ${htmlEscape(s.model || DEFAULTS.model)}`;
+      box.classList.add("ok");
+    } else {
+      box.textContent = "API klíč není uložen — klikněte na AI nastavení a zadejte ho (zůstane v localStorage).";
+      box.classList.remove("ok");
+    }
+  }
+
+  function htmlEscape(s) {
+    return n(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;" }[c]));
   }
 
   function hasApiKey() {
@@ -339,6 +364,7 @@ ${text || "(prázdný text)"}`;
       localStorage.setItem(AUTO_ON_OPEN_KEY, el("aiAutoOnOpen").checked ? "true" : "false");
       dialog.close();
       updateAutoClassifyButton();
+      updateAiKeyStatus();
     });
   }
 
@@ -554,11 +580,13 @@ ${text || "(prázdný text)"}`;
     injectSettingsDialog();
     injectTopbarButtons();
     injectRecordButtons();
+    updateAiKeyStatus();
     setTimeout(() => {
       enhanceOpenRecord();
       enhanceSaveRecord();
       injectRecordButtons();
       updateAutoClassifyButton();
+      updateAiKeyStatus();
     }, 120);
 
     document.addEventListener("input", () => setTimeout(updateAutoClassifyButton, 50));
@@ -570,7 +598,8 @@ ${text || "(prázdný text)"}`;
     hasAiProposal,
     classifyRecord,
     pendingReviewRecords,
-    updateAutoClassifyButton
+    updateAutoClassifyButton,
+    updateAiKeyStatus
   };
 
   document.addEventListener("DOMContentLoaded", init);
