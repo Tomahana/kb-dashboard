@@ -228,7 +228,7 @@ function updateSelectionToolbar() {
 
 function injectSelectionToolbar() {
   if (byId("selectionToolbar")) return;
-  const sectionHeader = document.querySelector(".panel .sectionHeader");
+  const sectionHeader = byId("recordsSectionHeader");
   if (!sectionHeader) return;
   const bar = document.createElement("div");
   bar.id = "selectionToolbar";
@@ -270,6 +270,7 @@ function render() {
   }
   container.innerHTML = groupedView ? renderGrouped(data) : renderTable(data);
   if (window.kbAiClassify?.updateAutoClassifyButton) window.kbAiClassify.updateAutoClassifyButton();
+  if (window.kbLayout?.updateBadges) window.kbLayout.updateBadges();
 }
 
 function renderExcludedInfo(allForPeriod) {
@@ -288,8 +289,8 @@ function renderExcludedInfo(allForPeriod) {
 
 function injectAnalyticsPanel() {
   if (byId("agendaAnalytics")) return;
-  const cards = document.querySelector(".cards");
-  if (!cards) return;
+  const root = byId("analyticsAgendaRoot");
+  if (!root) return;
   const section = document.createElement("section");
   section.className = "panel analyticsPanel";
   section.innerHTML = `
@@ -301,7 +302,7 @@ function injectAnalyticsPanel() {
       <button id="clearAgendaQuickFilter" class="button small secondary">Zrušit filtr agendy</button>
     </div>
     <div id="agendaAnalytics"></div>`;
-  cards.insertAdjacentElement("afterend", section);
+  root.appendChild(section);
   byId("clearAgendaQuickFilter").addEventListener("click", () => { byId("agendaFilter").value = ""; render(); });
   injectAnalyticsStyles();
 }

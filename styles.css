@@ -19,23 +19,155 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+.sidebar {
+  background: #101828;
+  color: #e2e8f0;
+  padding: 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.brand strong { display: block; font-size: 1.1rem; color: white; }
+.brand span { display: block; margin-top: .2rem; font-size: .78rem; color: #94a3b8; }
+.sidebarNav { display: grid; gap: .35rem; }
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .62rem .75rem;
+  border-radius: 10px;
+  color: #cbd5e1;
+  text-decoration: none;
+  font-weight: 650;
+}
+.navItem:hover { background: rgba(255,255,255,.06); color: white; }
+.navItem.active { background: var(--accent); color: white; }
+.navBadge {
+  margin-left: auto;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 .35rem;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #111827;
+  font-size: .72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.navBadgeAi { background: #38bdf8; color: #0c4a6e; }
+.sidebarFoot { margin-top: auto; font-size: .78rem; color: #94a3b8; }
+.appMain {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 .topbar {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.25rem 1.5rem;
-  background: #101828;
-  color: white;
+  padding: 1rem 1.25rem;
+  background: white;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.pageHead h1 { margin: 0; font-size: 1.35rem; }
+.pageHead p { margin: .2rem 0 0; color: var(--muted); font-size: .9rem; }
+.actions, .settingsActions, .inlineActions, .pageToolbar {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
   align-items: center;
 }
-.topbar h1 { margin: 0; font-size: 1.5rem; }
-.topbar p { margin: .25rem 0 0; color: #cbd5e1; }
-.actions { display: flex; gap: .5rem; flex-wrap: wrap; }
-.layout {
+.page { display: none; padding: 1rem 1.25rem 1.5rem; }
+.page.active { display: block; }
+.inboxLayout {
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 1rem;
-  padding: 1rem;
+  align-items: start;
+}
+.inboxFilters { position: sticky; top: 5.5rem; }
+.inboxMain { min-width: 0; }
+.overviewGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.overviewMetric span { font-size: 2rem; font-weight: 800; }
+.workflowList { margin: .5rem 0 1rem; padding-left: 1.2rem; line-height: 1.7; }
+.overviewActions { display: flex; gap: .6rem; flex-wrap: wrap; }
+.linkish {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.topicsPageRoot { max-width: 1100px; }
+.topicsHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+  margin-bottom: 1rem;
+}
+.topicsHeaderActions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.topicsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: .85rem;
+}
+.topicCard {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  overflow: hidden;
+}
+.topicCard.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.topicCardMain {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: .85rem;
+  cursor: pointer;
+}
+.topicCardMain:hover { background: #f8fafc; }
+.topicCardDesc, .topicCardSummary {
+  margin: .45rem 0 0;
+  font-size: .85rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.topicCardActions {
+  display: flex;
+  gap: .45rem;
+  padding: 0 .85rem .85rem;
+  flex-wrap: wrap;
+}
+.sectionActions {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  align-items: center;
 }
 .panel {
   background: var(--panel);
@@ -376,9 +508,11 @@ dialog form { padding: 1rem; }
 .button.danger { background: #fee4e2; color: #b42318; }
 .button.danger:hover { background: #fecdca; }
 @media (max-width: 900px) {
-  .layout { grid-template-columns: 1fr; }
-  .filters { position: static; }
-  .cards { grid-template-columns: 1fr 1fr; }
+  .app-shell { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; }
+  .inboxLayout { grid-template-columns: 1fr; }
+  .inboxFilters { position: static; }
+  .cards, .overviewGrid { grid-template-columns: 1fr 1fr; }
   .topbar { align-items: flex-start; flex-direction: column; }
   .grid2 { grid-template-columns: 1fr; }
 }

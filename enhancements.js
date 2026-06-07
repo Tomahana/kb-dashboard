@@ -77,8 +77,8 @@
 
   function injectPanels() {
     if (el(PANEL_ID)) return;
-    const recordsPanel = el("records")?.closest(".panel");
-    if (!recordsPanel) return;
+    const root = el("analyticsAdvancedRoot");
+    if (!root) return;
     const section = document.createElement("section");
     section.id = PANEL_ID;
     section.className = "advancedWrap";
@@ -102,7 +102,7 @@
         <div class="mindMapBox"><div id="mindTree" class="mindTree"></div><textarea id="mermaidMindmap" class="mermaidText" readonly></textarea></div>
       </section>
     `;
-    recordsPanel.insertAdjacentElement("beforebegin", section);
+    root.appendChild(section);
     el("refreshTrend").addEventListener("click", renderAdvancedPanels);
     el("refreshForgotten").addEventListener("click", renderAdvancedPanels);
     el("timelineAgenda").addEventListener("change", renderTimeline);

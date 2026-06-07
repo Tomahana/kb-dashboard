@@ -244,22 +244,36 @@
     list.innerHTML = topics.map(t => {
       const count = topicRecordCount(t);
       const hasSummary = !!n(t.ai_summary);
-      return `<button type="button" class="topicChip ${el("topicFilter")?.value === t.id ? "active" : ""}" data-topic-id="${html(t.id)}" title="${html(t.description || "")}">
-        <span class="topicChipName">${html(t.name)}</span>
-        <span class="topicChipMeta">${count} e-mailů${hasSummary ? " · shrnuto" : ""}</span>
-      </button>`;
+      return `<article class="topicCard ${el("topicFilter")?.value === t.id ? "active" : ""}" data-topic-id="${html(t.id)}">
+        <button type="button" class="topicCardMain" data-topic-open="${html(t.id)}" title="${html(t.description || "")}">
+          <strong class="topicChipName">${html(t.name)}</strong>
+          <span class="topicChipMeta">${count} e-mailů${hasSummary ? " · shrnuto" : ""}</span>
+          ${t.description ? `<p class="topicCardDesc">${html(t.description)}</p>` : ""}
+          ${t.ai_summary ? `<p class="topicCardSummary">${html(t.ai_summary.slice(0, 160))}${t.ai_summary.length > 160 ? "…" : ""}</p>` : ""}
+        </button>
+        <div class="topicCardActions">
+          <button type="button" class="button small secondary" data-topic-filter="${html(t.id)}">Filtrovat e-maily</button>
+          <button type="button" class="button small" data-topic-edit="${html(t.id)}">Upravit</button>
+        </div>
+      </article>`;
     }).join("");
-    list.querySelectorAll("[data-topic-id]").forEach(btn => {
+    list.querySelectorAll("[data-topic-filter]").forEach(btn => {
       btn.addEventListener("click", () => {
-        const id = btn.dataset.topicId;
+        const id = btn.dataset.topicFilter;
         const select = el("topicFilter");
         if (!select) return;
-        select.value = select.value === id ? "" : id;
-        localStorage.setItem(TOPIC_FILTER_KEY, select.value);
+        select.value = id;
+        localStorage.setItem(TOPIC_FILTER_KEY, id);
         renderTopicsPanel();
         if (typeof render === "function") render();
+        if (window.kbLayout?.setActivePage) window.kbLayout.setActivePage("emaily");
       });
-      btn.addEventListener("dblclick", () => openTopicDialog(btn.dataset.topicId));
+    });
+    list.querySelectorAll("[data-topic-edit]").forEach(btn => {
+      btn.addEventListener("click", () => openTopicDialog(btn.dataset.topicEdit));
+    });
+    list.querySelectorAll("[data-topic-open]").forEach(btn => {
+      btn.addEventListener("click", () => openTopicDialog(btn.dataset.topicOpen));
     });
     populateTopicFilter();
   }
@@ -276,33 +290,32 @@
 
   function injectTopicsPanel() {
     if (el("topicsPanel")) return;
-    const filters = document.querySelector(".filters");
-    const reset = el("resetBtn");
-    if (!filters || !reset) return;
+    const root = el("topicsPageRoot");
+    if (!root) return;
 
     const section = document.createElement("section");
     section.id = "topicsPanel";
-    section.className = "topicsPanel";
+    section.className = "topicsPage panel";
     section.innerHTML = `
       <div class="topicsHeader">
-        <h2>Témata</h2>
-        <button id="newTopicBtn" type="button" class="button small accent">+ Nové</button>
+        <div>
+          <h2>Témata</h2>
+          <p id="topicsStorageHint" class="hint">Seskupujte e-maily do témat, generujte AI shrnutí a ukládejte je k tématu.</p>
+        </div>
+        <div class="topicsHeaderActions">
+          <button id="reloadTopicsBtn" type="button" class="button small secondary">Obnovit témata</button>
+          <button id="newTopicBtn" type="button" class="button accent">+ Nové téma</button>
+        </div>
       </div>
-      <p id="topicsStorageHint" class="hint">Seskupujte e-maily do témat, generujte AI shrnutí a ukládejte je k tématu.</p>
-      <button id="reloadTopicsBtn" type="button" class="button small secondary full">Obnovit témata</button>
-      <label>Téma ve filtru
-        <select id="topicFilter"><option value="">Vše</option></select>
-      </label>
-      <div id="topicsList" class="topicsList"></div>
+      <p class="hint">Filtr podle tématu je v sekci <button type="button" class="linkish" data-goto="emaily">E-maily</button>.</p>
+      <div id="topicsList" class="topicsList topicsGrid"></div>
     `;
-    filters.insertBefore(section, reset);
+    root.appendChild(section);
+    section.querySelector('[data-goto="emaily"]')?.addEventListener("click", () => {
+      if (window.kbLayout?.setActivePage) window.kbLayout.setActivePage("emaily");
+    });
     el("newTopicBtn").addEventListener("click", () => openTopicDialog());
     el("reloadTopicsBtn").addEventListener("click", () => loadTopics());
-    el("topicFilter").addEventListener("change", (e) => {
-      localStorage.setItem(TOPIC_FILTER_KEY, e.target.value);
-      renderTopicsPanel();
-      if (typeof render === "function") render();
-    });
   }
 
   function injectTopicDialog() {
@@ -635,6 +648,11 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
     injectRecordAiButton();
     patchFilteredRecords();
     bindToolbarButtons();
+    el("topicFilter")?.addEventListener("change", (e) => {
+      localStorage.setItem(TOPIC_FILTER_KEY, e.target.value);
+      renderTopicsPanel();
+      if (typeof render === "function") render();
+    });
     await loadTopics();
     updateTopicsStorageHint();
     setTimeout(() => {

@@ -3,93 +3,193 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>KB Dashboard – Agenda k jednání</title>
+  <title>KB Dashboard – Znalostní báze</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
-  <header class="topbar">
-    <div>
-      <h1>KB Dashboard</h1>
-      <p>Znalostní báze e-mailů a podkladů k jednáním</p>
+<body class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <strong>KB Dashboard</strong>
+      <span>Interní znalostní báze</span>
     </div>
-    <div class="actions">
-      <label class="button secondary">
-        Import JSON
-        <input id="importFile" type="file" accept=".json,application/json" hidden />
-      </label>
-      <button id="exportBtn" class="button">Export JSON</button>
-      <button id="aiPromptBtn" class="button accent">AI prompt</button>
+    <nav class="sidebarNav" aria-label="Hlavní navigace">
+      <a href="#prehled" class="navItem" data-page="prehled">Přehled</a>
+      <a href="#emaily" class="navItem" data-page="emaily">
+        E-maily
+        <span id="navBadgeNew" class="navBadge" hidden></span>
+        <span id="navBadgeAi" class="navBadge navBadgeAi" hidden></span>
+      </a>
+      <a href="#temata" class="navItem" data-page="temata">Témata</a>
+      <a href="#analyza" class="navItem" data-page="analyza">Analýza</a>
+      <a href="#nastaveni" class="navItem" data-page="nastaveni">Nastavení</a>
+    </nav>
+    <div class="sidebarFoot">
+      <p class="hint">Workflow: načíst → třídit → témata → analýza</p>
     </div>
-  </header>
+  </aside>
 
-  <main class="layout">
-    <section class="panel filters">
-      <h2>Filtry</h2>
+  <div class="appMain">
+    <header class="topbar">
+      <div class="pageHead">
+        <h1 id="pageTitle">E-maily</h1>
+        <p id="pageSubtitle">Třídění, klasifikace a práce se záznamy</p>
+      </div>
+      <div id="topbarActions" class="actions pageActions"></div>
+    </header>
 
-      <label>Období
-        <select id="periodFilter">
-          <option value="7">Posledních 7 dní</option>
-          <option value="30" selected>Posledních 30 dní</option>
-          <option value="90">Posledních 90 dní</option>
-          <option value="all">Vše</option>
-        </select>
-      </label>
-
-      <label>Agenda
-        <select id="agendaFilter"><option value="">Vše</option></select>
-      </label>
-
-      <label>Kam patří
-        <select id="meetingFilter"><option value="">Vše</option></select>
-      </label>
-
-      <label>Stav
-        <select id="statusFilter"><option value="">Vše</option></select>
-      </label>
-
-      <label>Typ záznamu
-        <select id="typeFilter"><option value="">Vše</option></select>
-      </label>
-
-      <label>Fulltext
-        <input id="searchInput" type="search" placeholder="Hledat v názvu, shrnutí, textu…" />
-      </label>
-
-      <button id="resetBtn" class="button secondary full">Vymazat filtry</button>
-    </section>
-
-    <section class="content">
-      <section class="cards">
-        <div class="metric">
-          <span id="countAll">0</span>
-          <small>záznamů ve výběru</small>
-        </div>
-        <div class="metric">
-          <span id="countNew">0</span>
-          <small>nové / k roztřídění</small>
-        </div>
-        <div class="metric">
-          <span id="countRisks">0</span>
-          <small>rizika / problémy</small>
-        </div>
-        <div class="metric">
-          <span id="countMeetings">0</span>
+    <!-- PŘEHLED -->
+    <section id="page-prehled" class="page">
+      <div class="overviewGrid">
+        <article class="metric overviewMetric">
+          <span id="ovTotal">0</span>
+          <small>záznamů ve filtru</small>
+        </article>
+        <article class="metric overviewMetric">
+          <span id="ovNewCount">0</span>
+          <small>nové / k třídění</small>
+        </article>
+        <article class="metric overviewMetric">
+          <span id="ovAiCount">0</span>
+          <small>AI návrhy ke kontrole</small>
+        </article>
+        <article class="metric overviewMetric">
+          <span id="ovRisks">0</span>
+          <small>rizika</small>
+        </article>
+        <article class="metric overviewMetric">
+          <span id="ovMeetings">0</span>
           <small>k jednání</small>
-        </div>
-      </section>
+        </article>
+      </div>
 
       <section class="panel">
-        <div class="sectionHeader">
-          <h2>Záznamy</h2>
-          <div>
-            <button id="viewGrouped" class="button small secondary">Seskupit podle agendy</button>
-            <button id="viewFlat" class="button small secondary">Tabulka</button>
-          </div>
+        <h2>Rychlý postup</h2>
+        <ol class="workflowList">
+          <li><button type="button" class="linkish" data-goto="nastaveni">Nastavení</button> — načtěte data ze Supabase a nastavte AI klíč</li>
+          <li><button type="button" class="linkish" data-goto="emaily">E-maily</button> — auto-klasifikace, kontrola a potvrzení</li>
+          <li><button type="button" class="linkish" data-goto="temata">Témata</button> — seskupení a AI shrnutí k tématu</li>
+          <li><button type="button" class="linkish" data-goto="analyza">Analýza</button> — přehled agend a rizik</li>
+        </ol>
+        <div class="overviewActions">
+          <button type="button" class="button accent" data-goto="emaily">Přejít na e-maily</button>
+          <button type="button" class="button secondary" data-goto="nastaveni">Načíst / nastavit</button>
         </div>
-        <div id="records"></div>
       </section>
     </section>
-  </main>
+
+    <!-- E-Maily -->
+    <section id="page-emaily" class="page active">
+      <div class="inboxLayout">
+        <aside class="panel filters inboxFilters">
+          <h2>Filtry</h2>
+          <label>Období
+            <select id="periodFilter">
+              <option value="7">Posledních 7 dní</option>
+              <option value="30" selected>Posledních 30 dní</option>
+              <option value="90">Posledních 90 dní</option>
+              <option value="all">Vše</option>
+            </select>
+          </label>
+          <label>Agenda
+            <select id="agendaFilter"><option value="">Vše</option></select>
+          </label>
+          <label>Kam patří
+            <select id="meetingFilter"><option value="">Vše</option></select>
+          </label>
+          <label>Stav
+            <select id="statusFilter"><option value="">Vše</option></select>
+          </label>
+          <label>Typ záznamu
+            <select id="typeFilter"><option value="">Vše</option></select>
+          </label>
+          <label>Téma
+            <select id="topicFilter"><option value="">Vše</option></select>
+          </label>
+          <label>Fulltext
+            <input id="searchInput" type="search" placeholder="Hledat v názvu, shrnutí, textu…" />
+          </label>
+          <button id="resetBtn" class="button secondary full">Vymazat filtry</button>
+        </aside>
+
+        <div class="inboxMain">
+          <section class="cards inboxCards">
+            <div class="metric">
+              <span id="countAll">0</span>
+              <small>záznamů ve výběru</small>
+            </div>
+            <div class="metric">
+              <span id="countNew">0</span>
+              <small>nové / k roztřídění</small>
+            </div>
+            <div class="metric">
+              <span id="countRisks">0</span>
+              <small>rizika / problémy</small>
+            </div>
+            <div class="metric">
+              <span id="countMeetings">0</span>
+              <small>k jednání</small>
+            </div>
+          </section>
+
+          <section class="panel recordsPanel">
+            <div class="sectionHeader" id="recordsSectionHeader">
+              <h2>Záznamy</h2>
+              <div class="sectionActions">
+                <div id="actionsInbox" class="inlineActions"></div>
+                <button id="viewGrouped" class="button small secondary">Seskupit podle agendy</button>
+                <button id="viewFlat" class="button small secondary">Tabulka</button>
+              </div>
+            </div>
+            <div id="records"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <!-- TÉMATA -->
+    <section id="page-temata" class="page">
+      <div id="topicsPageRoot" class="topicsPageRoot"></div>
+    </section>
+
+    <!-- ANALÝZA -->
+    <section id="page-analyza" class="page">
+      <div id="actionsAnalytics" class="panel pageToolbar"></div>
+      <div id="analyticsAgendaRoot"></div>
+      <div id="analyticsAdvancedRoot"></div>
+    </section>
+
+    <!-- NASTAVENÍ -->
+    <section id="page-nastaveni" class="page">
+      <section class="panel">
+        <h2>Data a připojení</h2>
+        <p class="hint">Načtení e-mailů ze Supabase a správa lokální kopie v prohlížeči.</p>
+        <div id="actionsData" class="settingsActions"></div>
+      </section>
+      <section class="panel">
+        <h2>AI klasifikace</h2>
+        <p class="hint">API klíč zůstává pouze v tomto prohlížeči. Podporováno OpenAI API a kompatibilní služby.</p>
+        <div id="actionsSettings" class="settingsActions"></div>
+      </section>
+      <section class="panel">
+        <h2>Témata v Supabase</h2>
+        <p class="hint">Pro trvalá témata spusťte SQL schéma <code>supabase/topics-schema.sql</code> v Supabase SQL Editoru.</p>
+      </section>
+    </section>
+  </div>
+
+  <!-- Skryté / globální akce (layout.js je přesune na správné stránky) -->
+  <div id="globalActionPool" hidden>
+    <button id="loadSupabaseBtn" class="button accent" type="button">Načíst Supabase</button>
+    <button id="autoClassifyBtn" class="button accent" type="button">Auto-klasifikovat</button>
+    <button id="reviewAiBtn" class="button secondary" type="button">Ke kontrole</button>
+    <button id="aiSettingsBtn" class="button secondary" type="button">AI nastavení</button>
+    <button id="exportBtn" class="button secondary" type="button">Export JSON</button>
+    <label class="button secondary">
+      Import JSON
+      <input id="importFile" type="file" accept=".json,application/json" hidden />
+    </label>
+    <button id="aiPromptBtn" class="button accent" type="button">AI prompt</button>
+  </div>
 
   <dialog id="recordDialog">
     <form method="dialog" id="recordForm">
@@ -100,9 +200,7 @@
         </div>
         <button class="iconButton" value="cancel">×</button>
       </div>
-
       <input type="hidden" id="editId" />
-
       <div class="grid2">
         <label>Agenda
           <select id="editAgenda">
@@ -150,19 +248,15 @@
           <input id="editDeadline" type="date" />
         </label>
       </div>
-
       <label>Shrnutí
         <textarea id="editSummary" rows="4"></textarea>
       </label>
-
       <label>Úkol / další krok
         <textarea id="editNextStep" rows="3"></textarea>
       </label>
-
       <label>Text e-mailu / podkladu
         <textarea id="editBody" rows="10"></textarea>
       </label>
-
       <div class="dialogActions">
         <button value="cancel" class="button secondary">Zavřít</button>
         <button id="saveRecordBtn" value="default" class="button accent">Uložit klasifikaci</button>
@@ -216,6 +310,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="form-pickers.js"></script>
+  <script src="layout.js"></script>
   <script src="app.js"></script>
   <script src="enhancements.js"></script>
   <script src="supabase-loader.js"></script>
