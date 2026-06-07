@@ -101,6 +101,8 @@ body {
   font-weight: 650;
 }
 .badge.taskExported { background: #eef2ff; color: #4338ca; }
+.hint.ok { color: var(--ok); font-weight: 650; }
+.hint.danger { color: var(--danger); font-weight: 650; white-space: pre-line; }
 .appMain {
   display: flex;
   flex-direction: column;

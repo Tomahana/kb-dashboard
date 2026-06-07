@@ -173,6 +173,83 @@
     await navigator.clipboard.writeText(text);
   }
 
+  function formatClickUpAuth(token) {
+    const t = n(token);
+    if (!t) return "";
+    if (/^bearer\s+/i.test(t)) return t;
+    if (t.startsWith("pk_")) return t;
+    return `Bearer ${t}`;
+  }
+
+  function parseClickUpListId(raw) {
+    const input = n(raw);
+    if (!input) return "";
+
+    const fromPath = input.match(/\/v\/l[i]?\/(\d+)/i);
+    if (fromPath) return fromPath[1];
+
+    const customList = input.match(/\d+-(\d+)-\d+/);
+    if (customList && /clickup\.com/i.test(input)) return customList[1];
+
+    if (/^\d+$/.test(input)) return input;
+
+    const trailingDigits = input.match(/(\d{6,})\s*$/);
+    if (trailingDigits) return trailingDigits[1];
+
+    return input.replace(/[^\d]/g, "") || "";
+  }
+
+  function clickUpHeaders(token) {
+    return {
+      "Content-Type": "application/json",
+      Authorization: formatClickUpAuth(token)
+    };
+  }
+
+  async function parseClickUpError(res) {
+    const data = await res.json().catch(() => ({}));
+    const code = data.ECODE || data.err || "";
+    const msg = data.err || data.message || `HTTP ${res.status}`;
+    return { code, msg, data };
+  }
+
+  function clickUp404Help(listId, rawInput) {
+    const parsed = parseClickUpListId(rawInput || listId);
+    const teamFromUrl = n(rawInput).match(/clickup\.com\/(\d+)/i)?.[1];
+    const maybeTeamConfusion = teamFromUrl && parsed === teamFromUrl;
+    return [
+      "ClickUp vrátil 404 — seznam (list) nebyl nalezen.",
+      maybeTeamConfusion
+        ? "Zadané ID vypadá jako Team/Workspace ID (první číslo v URL), ne List ID."
+        : "Zkontrolujte, že používáte List ID ze segmentu /li/ v URL seznamu.",
+      "",
+      "Postup:",
+      "1. Otevřete konkrétní seznam v ClickUp (ne space, ne folder).",
+      "2. Z URL https://app.clickup.com/TEAM/v/li/LIST_ID zkopírujte LIST_ID (za /li/).",
+      "3. Nebo vložte celý odkaz seznamu — aplikace ID doparsuje.",
+      parsed ? `\nPoužité List ID: ${parsed}` : ""
+    ].filter(Boolean).join("\n");
+  }
+
+  async function verifyClickUpList(token, listId) {
+    const res = await fetch(`https://api.clickup.com/api/v2/list/${encodeURIComponent(listId)}`, {
+      method: "GET",
+      headers: clickUpHeaders(token)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, name: data.name || "", id: String(data.id || listId) };
+    }
+    const err = await parseClickUpError(res);
+    if (res.status === 401) {
+      throw new Error("ClickUp: neplatný API token. Zkontrolujte token v Settings → Apps (formát pk_…).");
+    }
+    if (res.status === 404) {
+      throw new Error(clickUp404Help(listId));
+    }
+    throw new Error(`ClickUp: ${err.msg}${err.code ? ` (${err.code})` : ""}`);
+  }
+
   async function postWebhook(url, payload) {
     const body = JSON.stringify(payload);
     try {
@@ -193,36 +270,36 @@
 
   async function exportToClickUp(task, settings) {
     const token = n(settings.clickup?.apiToken);
-    const listId = n(settings.clickup?.listId);
+    const rawListId = n(settings.clickup?.listId);
+    const listId = parseClickUpListId(rawListId);
     if (!token || !listId) {
-      throw new Error("V Nastavení doplňte ClickUp API token a ID seznamu (list).");
+      throw new Error("V Nastavení doplňte ClickUp API token a ID seznamu (list) nebo celý odkaz na seznam.");
     }
 
     const body = {
       name: task.title.slice(0, 500),
-      description: task.description,
-      tags: ["KB Dashboard", ...task.tags].filter(Boolean).slice(0, 5)
+      markdown_description: task.description
     };
     if (task.dueDateMs) body.due_date = task.dueDateMs;
     if (task.priority?.clickup) body.priority = task.priority.clickup;
 
     try {
-      const res = await fetch(`https://api.clickup.com/api/v2/list/${encodeURIComponent(listId)}/task`, {
+      const listInfo = await verifyClickUpList(token, listId);
+      const res = await fetch(`https://api.clickup.com/api/v2/list/${encodeURIComponent(listInfo.id || listId)}/task`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token
-        },
+        headers: clickUpHeaders(token),
         body: JSON.stringify(body)
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.err || err.ECODE || `ClickUp HTTP ${res.status}`);
+        const err = await parseClickUpError(res);
+        if (res.status === 404) throw new Error(clickUp404Help(listId, rawListId));
+        if (res.status === 401) throw new Error("ClickUp: neplatný API token.");
+        throw new Error(`ClickUp: ${err.msg}${err.code ? ` (${err.code})` : ""}`);
       }
       const data = await res.json();
       return {
         ok: true,
-        message: "Úkol vytvořen v ClickUp.",
+        message: `Úkol vytvořen v ClickUp${listInfo.name ? ` (seznam „${listInfo.name}“)` : ""}.`,
         externalId: data.id,
         url: data.url || `https://app.clickup.com/t/${data.id}`
       };
@@ -238,6 +315,17 @@
       }
       throw error;
     }
+  }
+
+  async function testClickUpConnection(settings) {
+    const token = n(settings?.clickup?.apiToken);
+    const rawListId = n(settings?.clickup?.listId);
+    const listId = parseClickUpListId(rawListId);
+    if (!token || !listId) {
+      throw new Error("Vyplňte API token a List ID (nebo celý odkaz na seznam).");
+    }
+    const info = await verifyClickUpList(token, listId);
+    return `ClickUp OK — seznam „${info.name || listId}“ (ID ${info.id}) je dostupný.`;
   }
 
   async function exportToMicrosoft(task, settings, providerId) {
@@ -467,10 +555,11 @@
           <label>API token
             <input id="teClickupToken" type="password" placeholder="pk_…" autocomplete="off" />
           </label>
-          <label>ID seznamu (list ID)
-            <input id="teClickupListId" placeholder="123456789" />
+          <label>List ID nebo odkaz na seznam
+            <input id="teClickupListId" placeholder="https://app.clickup.com/…/v/li/123456789" />
           </label>
-          <p class="hint">ClickUp → seznam → ⋮ → Copy link — ID je číslo v URL. Token: Settings → Apps → API Token.</p>
+          <p id="teClickupHint" class="hint">Z URL <code>…/v/li/LIST_ID</code> použijte číslo za <code>/li/</code> (ne první číslo za clickup.com — to je Team ID). Token: Settings → Apps → API Token (<code>pk_…</code>).</p>
+          <button id="teClickupTestBtn" type="button" class="button secondary">Otestovat ClickUp</button>
         </details>
 
         <details class="taskExportDetails">
@@ -517,10 +606,43 @@
 
     el("teDefaultProvider").innerHTML = PROVIDERS.map(p => `<option value="${p.id}">${p.label}</option>`).join("");
 
+    el("teClickupTestBtn").addEventListener("click", async () => {
+      const btn = el("teClickupTestBtn");
+      const hint = el("teClickupHint");
+      const prev = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Testuji…";
+      try {
+        const msg = await testClickUpConnection({
+          clickup: {
+            apiToken: el("teClickupToken").value,
+            listId: el("teClickupListId").value
+          }
+        });
+        if (hint) {
+          hint.textContent = msg;
+          hint.className = "hint ok";
+        } else {
+          alert(msg);
+        }
+      } catch (error) {
+        const message = error.message || String(error);
+        if (hint) {
+          hint.textContent = message;
+          hint.className = "hint danger";
+        } else {
+          alert(message);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prev;
+      }
+    });
+
     el("saveTaskExportSettingsBtn").addEventListener("click", () => {
       const s = loadSettings();
       s.clickup.apiToken = el("teClickupToken").value;
-      s.clickup.listId = el("teClickupListId").value;
+      s.clickup.listId = parseClickUpListId(el("teClickupListId").value) || el("teClickupListId").value;
       s.microsoftTodo.webhookUrl = el("teTodoWebhook").value;
       s.microsoftTodo.openUrl = n(el("teTodoOpenUrl").value) || DEFAULTS.microsoftTodo.openUrl;
       s.microsoftPlanner.webhookUrl = el("tePlannerWebhook").value;
@@ -622,7 +744,9 @@
     getExportBadge,
     providerLabel,
     openSettingsDialog,
-    updateTaskExportPanel
+    updateTaskExportPanel,
+    parseClickUpListId,
+    testClickUpConnection
   };
 
   document.addEventListener("DOMContentLoaded", () => {
