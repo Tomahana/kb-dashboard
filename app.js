@@ -454,11 +454,13 @@ function setSelectField(selectId, value) {
   const v = normalize(value);
   if (!v) {
     select.value = "";
+    if (window.kbPickers?.syncPicker) window.kbPickers.syncPicker(select);
     return;
   }
   const match = [...select.options].find(o => normalize(o.value) === v || normalize(o.textContent) === v);
   if (match) {
     select.value = match.value || match.textContent;
+    if (window.kbPickers?.syncPicker) window.kbPickers.syncPicker(select);
     return;
   }
   const custom = new Option(`${v} (vlastní)`, v);

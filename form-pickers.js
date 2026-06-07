@@ -12,6 +12,18 @@
     return (s || "").toString().trim();
   }
 
+  function getMenuPortal(wrap) {
+    // Menu musí zůstat v top-layer dialogu – na body by bylo za backdrop a nešlo by kliknout.
+    return wrap.closest("dialog") || document.body;
+  }
+
+  function findMenu(select) {
+    const wrap = select?.closest(".kb-picker");
+    if (!wrap) return null;
+    if (openMenuState?.select === select) return openMenuState.menu;
+    return wrap.querySelector(".kb-picker-menu");
+  }
+
   function closeOpenMenu() {
     if (!openMenuState) return;
     const { menu, wrap, btn } = openMenuState;
@@ -28,11 +40,24 @@
 
   function positionMenu(btn, menu) {
     const rect = btn.getBoundingClientRect();
+    const maxHeight = 280;
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+    const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+
     menu.style.position = "fixed";
     menu.style.left = `${rect.left}px`;
-    menu.style.top = `${rect.bottom + 4}px`;
     menu.style.width = `${rect.width}px`;
     menu.style.zIndex = "10000";
+    menu.style.maxHeight = `${Math.min(maxHeight, openUp ? spaceAbove : spaceBelow)}px`;
+
+    if (openUp) {
+      menu.style.top = "auto";
+      menu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+    } else {
+      menu.style.bottom = "";
+      menu.style.top = `${rect.bottom + 4}px`;
+    }
   }
 
   function chooseOption(select, menu, index) {
@@ -52,7 +77,11 @@
       li.dataset.index = String(index);
       li.textContent = opt.textContent;
 
-      li.addEventListener("pointerdown", (e) => {
+      li.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+      });
+
+      li.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
         chooseOption(select, menu, index);
@@ -67,7 +96,7 @@
     if (!wrap) return;
     const btn = wrap.querySelector(".kb-picker-btn");
     const valueEl = wrap.querySelector(".kb-picker-value");
-    const menu = wrap.querySelector(".kb-picker-menu");
+    const menu = findMenu(select);
     const opt = select.options[select.selectedIndex];
     const label = opt && n(opt.textContent) ? opt.textContent : "— vyberte —";
     if (valueEl) valueEl.textContent = label;
@@ -83,7 +112,7 @@
 
   function openMenu(wrap, select, menu, btn) {
     closeOpenMenu();
-    document.body.appendChild(menu);
+    getMenuPortal(wrap).appendChild(menu);
     positionMenu(btn, menu);
     menu.hidden = false;
     btn.setAttribute("aria-expanded", "true");
@@ -91,6 +120,14 @@
 
     const selected = menu.querySelector(".kb-picker-option.selected");
     (selected || menu.firstElementChild)?.scrollIntoView({ block: "nearest" });
+  }
+
+  function toggleMenu(wrap, select, menu, btn) {
+    if (openMenuState?.btn === btn) {
+      closeOpenMenu();
+      return;
+    }
+    openMenu(wrap, select, menu, btn);
   }
 
   function enhanceSelect(select) {
@@ -120,19 +157,10 @@
     wrap.appendChild(menu);
     buildMenu(select, menu);
 
-    btn.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (openMenuState?.btn === btn) {
-        closeOpenMenu();
-        return;
-      }
-      openMenu(wrap, select, menu, btn);
+      toggleMenu(wrap, select, menu, btn);
     });
 
     select.addEventListener("change", () => syncPicker(select));
@@ -150,12 +178,13 @@
       enhanceSelect(select);
       return;
     }
-    const menu = select.closest(".kb-picker")?.querySelector(".kb-picker-menu");
+    if (openMenuState?.select === select) closeOpenMenu();
+    const menu = findMenu(select) || select.closest(".kb-picker")?.querySelector(".kb-picker-menu");
     if (menu) buildMenu(select, menu);
     syncPicker(select);
   }
 
-  document.addEventListener("pointerdown", (e) => {
+  document.addEventListener("click", (e) => {
     if (!openMenuState) return;
     if (e.target.closest(".kb-picker-menu") || e.target.closest(".kb-picker-btn")) return;
     closeOpenMenu();
@@ -166,7 +195,11 @@
   });
 
   window.addEventListener("resize", closeOpenMenu);
-  window.addEventListener("scroll", closeOpenMenu, true);
+  document.addEventListener("scroll", (e) => {
+    if (!openMenuState) return;
+    if (e.target.closest?.(".kb-picker-menu")) return;
+    closeOpenMenu();
+  }, true);
 
   window.kbPickers = { enhanceAll, refresh, syncPicker, closeOpenMenu };
 

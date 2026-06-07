@@ -242,6 +242,9 @@ select { cursor: pointer; }
   margin: 0;
   padding: .3rem 0;
 }
+.kb-picker-menu[hidden] {
+  display: none !important;
+}
 .kb-picker-menu:not([hidden]) {
   display: block;
 }
