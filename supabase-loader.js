@@ -37,6 +37,43 @@
     return null;
   }
 
+  function toSupabaseArray(value) {
+    const text = normalizeChoice(value);
+    if (!text) return null;
+    if (text.includes(", ")) return text.split(", ").map(s => s.trim()).filter(Boolean);
+    return [text];
+  }
+
+  function mapRecordToSupabase(record) {
+    return {
+      "Agenda": toSupabaseArray(record.agenda),
+      "Typ záznamu": record.typ || null,
+      "Kam patří": record.kam_patri || null,
+      "Priorita": record.priorita || null,
+      "Stav": record.stav || null,
+      "Shrnutí": record.shrnuti || null,
+      "Navržený bod jednání": record.navrzeny_bod || null,
+      "Úkol / další krok": record.ukol_dalsi_krok || null,
+      "Termín": record.termin || null,
+      "Odpovědná osoba": record.odpovedna_osoba || null,
+      "Poznámka": record.poznamka || null,
+      "KB_SYNC": new Date().toISOString()
+    };
+  }
+
+  async function saveRecordToSupabase(record) {
+    const kbId = record?.kb_id || record?.id || record?.KB_ID;
+    if (!kbId) throw new Error("Záznam nemá KB_ID.");
+    const supa = getClient();
+    const payload = mapRecordToSupabase(record);
+    const { error } = await supa
+      .from("kb_records")
+      .update(payload)
+      .eq("KB_ID", kbId);
+    if (error) throw error;
+    return true;
+  }
+
   function mapRecord(row) {
     const kbId = firstDefined(row, ["KB_ID", "kb_id", "id"]);
     return {
@@ -101,6 +138,7 @@
       if (typeof render === "function") render();
       document.dispatchEvent(new Event("input"));
 
+      document.dispatchEvent(new CustomEvent("kb:records-loaded"));
       alert("Načteno ze Supabase: " + records.length + " záznamů.");
     } catch (error) {
       console.error(error);
@@ -142,6 +180,41 @@
     actions.insertBefore(btn, actions.firstChild);
   }
 
+  function enhanceSaveRecord() {
+    if (!window.saveRecord || window.saveRecord.__supabaseEnhanced) return;
+    const original = window.saveRecord;
+    window.saveRecord = async function enhancedSaveRecord(e) {
+      const id = document.getElementById("editId")?.value;
+      const idx = Array.isArray(records) ? records.findIndex(x => x.id === id || x.kb_id === id) : -1;
+      const before = idx >= 0 ? { ...records[idx] } : null;
+      original(e);
+      const after = idx >= 0 ? records[idx] : null;
+      if (!after || after.__source !== "supabase") return;
+      const btn = document.getElementById("saveRecordBtn");
+      const prevText = btn?.textContent;
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "Ukládám do Supabase…";
+        }
+        await saveRecordToSupabase(after);
+        if (btn) btn.textContent = "Uloženo v Supabase";
+      } catch (error) {
+        console.error(error);
+        if (before && idx >= 0) records[idx] = before;
+        if (typeof persist === "function") persist();
+        alert("Lokální změny zůstaly, ale Supabase se nepodařilo uložit: " + (error.message || error));
+        if (btn) btn.textContent = prevText || "Uložit v prohlížeči";
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          setTimeout(() => { btn.textContent = prevText || "Uložit v prohlížeči"; }, 1500);
+        }
+      }
+    };
+    window.saveRecord.__supabaseEnhanced = true;
+  }
+
   function enhanceOpenRecord() {
     if (!window.openRecord || window.openRecord.__supabaseEnhanced) return;
     const original = window.openRecord;
@@ -162,8 +235,19 @@
     window.openRecord.__supabaseEnhanced = true;
   }
 
+  window.kbSupabase = {
+    getClient,
+    loadBody,
+    saveRecordToSupabase,
+    mapRecordToSupabase,
+    loadFromSupabase
+  };
+
   document.addEventListener("DOMContentLoaded", () => {
     injectButton();
-    setTimeout(enhanceOpenRecord, 50);
+    setTimeout(() => {
+      enhanceOpenRecord();
+      enhanceSaveRecord();
+    }, 50);
   });
 })();
