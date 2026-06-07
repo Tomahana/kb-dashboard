@@ -101,6 +101,81 @@ body {
   font-weight: 650;
 }
 .badge.taskExported { background: #eef2ff; color: #4338ca; }
+.badge.notionLinked {
+  background: #f5f5f4;
+  color: #44403c;
+  text-decoration: none;
+}
+.badge.notionLinked:hover { background: #e7e5e4; }
+.notionKeyStatus.ok { color: var(--ok); font-weight: 650; }
+.notionPanel {
+  margin-top: 1rem;
+  padding: .85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fafaf9;
+}
+.notionPanel h3 { margin: 0 0 .25rem; font-size: 1rem; }
+.notionLinkedBox {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  align-items: center;
+  margin: .65rem 0;
+}
+.notionSearchRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: .55rem;
+  align-items: end;
+  margin-top: .55rem;
+}
+.notionSearchResults {
+  list-style: none;
+  margin: .55rem 0 0;
+  padding: 0;
+  max-height: 200px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+}
+.notionSearchItem + .notionSearchItem { border-top: 1px solid var(--line); }
+.notionSearchPick {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: .55rem .7rem;
+  cursor: pointer;
+  font: inherit;
+}
+.notionSearchPick:hover { background: #f8fafc; }
+.notionSearchPick strong { display: block; }
+.notionSearchEmpty { padding: .65rem .75rem; color: var(--muted); }
+.notionExportRow {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-top: .75rem;
+}
+.notionMeetingsList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: .55rem;
+  margin-top: .65rem;
+}
+.notionMeetingCard {
+  display: block;
+  padding: .65rem .75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  text-decoration: none;
+  color: inherit;
+}
+.notionMeetingCard:hover { border-color: #a8a29e; background: #fafaf9; }
+.notionMeetingCard strong { display: block; margin-bottom: .2rem; }
 .hint.ok { color: var(--ok); font-weight: 650; }
 .hint.danger { color: var(--danger); font-weight: 650; white-space: pre-line; }
 
