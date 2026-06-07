@@ -237,6 +237,7 @@
 
   window.kbSupabase = {
     getClient,
+    loadBody,
     saveRecordToSupabase,
     mapRecordToSupabase,
     loadFromSupabase

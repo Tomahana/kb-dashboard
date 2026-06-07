@@ -269,6 +269,7 @@ function render() {
     return;
   }
   container.innerHTML = groupedView ? renderGrouped(data) : renderTable(data);
+  if (window.kbAiClassify?.updateAutoClassifyButton) window.kbAiClassify.updateAutoClassifyButton();
 }
 
 function renderExcludedInfo(allForPeriod) {
@@ -424,9 +425,10 @@ function renderCard(r) {
   const rid = getRecordId(r);
   const checked = isRecordSelected(rid) ? "checked" : "";
   const needsClassify = !normalize(r.agenda) || lower(r.agenda) === "nezařazeno" || !normalize(r.shrnuti);
-  return `<article class="record record-clickable ${needsClassify ? "needsClassify" : ""}" data-record-id="${escapeHtml(rid)}" tabindex="0" role="button" aria-label="Klasifikovat: ${escapeHtml(r.title || r.predmet)}">
-    <div class="recordHeader"><label class="recordSelectWrap"><input type="checkbox" class="recordSelect" data-record-id="${escapeHtml(rid)}" ${checked} aria-label="Vybrat záznam" /></label><div class="recordMain"><div class="recordTitle recordOpen">${escapeHtml(r.title || r.predmet)}</div><div class="meta">${escapeHtml(formatDate(getDateValue(r)))} · ${escapeHtml(r.odesilatel || "")}</div></div><div class="meta recordStatus">${escapeHtml(r.stav || "")}${needsClassify ? ' · <span class="openHint">k třídění</span>' : ""}</div></div>
-    <div class="badges">${excluded ? `<span class="badge excluded">Vyřazeno</span>` : ""}${needsClassify ? `<span class="badge classify">K roztřídění</span>` : ""}${r.typ ? `<span class="badge ${risk ? "risk" : ""}">${escapeHtml(r.typ)}</span>` : ""}${r.kam_patri ? `<span class="badge ${meeting ? "meeting" : ""}">${escapeHtml(r.kam_patri)}</span>` : ""}${r.priorita ? `<span class="badge priority">${escapeHtml(r.priorita)}</span>` : ""}</div>
+  const aiProposal = hasAiProposal(r);
+  return `<article class="record record-clickable ${needsClassify ? "needsClassify" : ""} ${aiProposal ? "hasAiProposal" : ""}" data-record-id="${escapeHtml(rid)}" tabindex="0" role="button" aria-label="Klasifikovat: ${escapeHtml(r.title || r.predmet)}">
+    <div class="recordHeader"><label class="recordSelectWrap"><input type="checkbox" class="recordSelect" data-record-id="${escapeHtml(rid)}" ${checked} aria-label="Vybrat záznam" /></label><div class="recordMain"><div class="recordTitle recordOpen">${escapeHtml(r.title || r.predmet)}</div><div class="meta">${escapeHtml(formatDate(getDateValue(r)))} · ${escapeHtml(r.odesilatel || "")}</div></div><div class="meta recordStatus">${escapeHtml(r.stav || "")}${aiProposal ? ' · <span class="openHint">AI návrh</span>' : needsClassify ? ' · <span class="openHint">k třídění</span>' : ""}</div></div>
+    <div class="badges">${excluded ? `<span class="badge excluded">Vyřazeno</span>` : ""}${aiProposal ? `<span class="badge aiProposal">Ke kontrole AI</span>` : needsClassify ? `<span class="badge classify">K roztřídění</span>` : ""}${r.typ ? `<span class="badge ${risk ? "risk" : ""}">${escapeHtml(r.typ)}</span>` : ""}${r.kam_patri ? `<span class="badge ${meeting ? "meeting" : ""}">${escapeHtml(r.kam_patri)}</span>` : ""}${r.priorita ? `<span class="badge priority">${escapeHtml(r.priorita)}</span>` : ""}</div>
     <div class="summary recordOpen">${escapeHtml(r.shrnuti || firstWords(r.text, 45) || "Klikněte pro klasifikaci a shrnutí…")}</div>
     <div class="recordActions"><span class="openHint">Klikněte pro ruční nebo AI klasifikaci →</span></div>
   </article>`;
@@ -443,6 +445,10 @@ function escapeHtml(s) {
 
 function findRecordById(id) {
   return records.find(x => x.id === id || x.kb_id === id || x.KB_ID === id);
+}
+
+function hasAiProposal(r) {
+  return !!r?._aiProposal;
 }
 
 window.openRecord = function(id) {

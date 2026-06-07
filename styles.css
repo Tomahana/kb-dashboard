@@ -139,6 +139,9 @@ textarea { resize: vertical; }
 .recordRow.needsClassify {
   border-left: 4px solid #f59e0b;
 }
+.record.hasAiProposal {
+  border-left: 4px solid #315be8;
+}
 .badge.classify { background: #fffaeb; color: #b54708; }
 .openHint {
   color: var(--accent);

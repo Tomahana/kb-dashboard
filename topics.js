@@ -573,7 +573,7 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
 
   function injectRecordAiButton() {
     const actions = document.querySelector("#recordForm .dialogActions");
-    if (!actions || el("singleRecordAiBtn")) return;
+    if (!actions || el("singleRecordAiBtn") || el("suggestAiBtn")) return;
     const btn = document.createElement("button");
     btn.id = "singleRecordAiBtn";
     btn.type = "button";
