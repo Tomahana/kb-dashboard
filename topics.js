@@ -672,6 +672,7 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
   };
 
   document.addEventListener("DOMContentLoaded", init);
+  document.addEventListener("kb:auth-ready", () => loadTopics());
   document.addEventListener("kb:records-loaded", () => {
     renderTopicsPanel();
     populateTopicFilter();

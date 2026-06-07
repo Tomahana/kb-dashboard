@@ -103,6 +103,49 @@ body {
 .badge.taskExported { background: #eef2ff; color: #4338ca; }
 .hint.ok { color: var(--ok); font-weight: 650; }
 .hint.danger { color: var(--danger); font-weight: 650; white-space: pre-line; }
+
+/* Auth brána */
+body.auth-locked .sidebar,
+body.auth-locked .appMain {
+  filter: blur(6px);
+  pointer-events: none;
+  user-select: none;
+}
+.authOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, .72);
+  backdrop-filter: blur(4px);
+}
+.authOverlay[hidden] { display: none !important; }
+.authCard {
+  width: min(420px, 96vw);
+  background: white;
+  border-radius: 18px;
+  padding: 1.25rem 1.35rem 1.35rem;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, .28);
+}
+.authCard h2 { margin: 0 0 .35rem; }
+.authForm { display: grid; gap: .75rem; margin-top: 1rem; }
+.authError {
+  color: var(--danger);
+  font-size: .9rem;
+  margin: 0;
+}
+.authLinks { margin-top: .75rem; text-align: center; }
+.authUserLabel {
+  font-size: .8rem;
+  color: var(--muted);
+  margin: 0 0 .45rem;
+  word-break: break-all;
+}
+.authLogoutBtn { margin-bottom: .55rem; }
+.button.full { width: 100%; }
 .appMain {
   display: flex;
   flex-direction: column;

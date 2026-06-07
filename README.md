@@ -24,9 +24,17 @@ Statický dashboard pro GitHub Pages nad JSON znalostní bází e-mailů a podkl
 4. Nastavte `Deploy from a branch`, branch `main`, folder `/root`.
 5. Web bude typicky na adrese `https://<uzivatel>.github.io/kb-dashboard/`.
 
-## Bezpečnostní poznámka
+## Zabezpečení
 
-Nevkládejte plné pracovní e-maily do veřejného repozitáře. Pro ostré nasazení použijte soukromý repozitář / interní úložiště a zvažte, zda se mají na webu zobrazovat plné texty, nebo jen anonymizované/extrahované záznamy.
+Aplikace vyžaduje **přihlášení** (Supabase Auth) a doporučuje **Row Level Security** v databázi.
+
+1. Vytvořte uživatele v Supabase → Authentication → Users
+2. Spusťte `supabase/security-rls.sql` v SQL Editoru
+3. Nastavte `supabase-config.js` (vzor: `supabase-config.example.js`)
+
+Podrobný postup: **[SECURITY.md](SECURITY.md)**
+
+Nevkládejte plné pracovní e-maily do veřejného repozitáře. Repozitář držte privátní, pokud je to možné.
 
 ## Formát dat
 

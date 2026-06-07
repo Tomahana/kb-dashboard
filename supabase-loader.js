@@ -5,6 +5,7 @@
   let client = null;
 
   function getClient() {
+    if (window.kbAuth?.getClient) return window.kbAuth.getClient();
     if (client) return client;
     if (!window.KB_SUPABASE?.url || !window.KB_SUPABASE?.anonKey) {
       throw new Error("Chybí supabase-config.js s Project URL a publishable key.");
@@ -62,6 +63,7 @@
   }
 
   async function saveRecordToSupabase(record) {
+    if (!(await ensureAuthenticated())) throw new Error("Nejste přihlášeni.");
     const kbId = record?.kb_id || record?.id || record?.KB_ID;
     if (!kbId) throw new Error("Záznam nemá KB_ID.");
     const supa = getClient();
@@ -123,9 +125,18 @@
     return all;
   }
 
+  async function ensureAuthenticated() {
+    if (!window.kbAuth?.requireAuth?.()) return true;
+    const session = await window.kbAuth.getSession();
+    if (session) return true;
+    alert("Pro přístup ke Supabase se nejdříve přihlaste.");
+    return false;
+  }
+
   async function loadFromSupabase() {
     const button = document.getElementById("loadSupabaseBtn");
     try {
+      if (!(await ensureAuthenticated())) return;
       if (button) {
         button.disabled = true;
         button.textContent = "Načítám…";
@@ -153,6 +164,10 @@
 
   async function loadBody(kbId) {
     if (!kbId) return "";
+    if (window.kbAuth?.requireAuth?.()) {
+      const session = await window.kbAuth.getSession();
+      if (!session) return "";
+    }
     const supa = getClient();
     const { data, error } = await supa
       .from("kb_record_bodies")
@@ -228,7 +243,7 @@
       const bodyBox = document.getElementById("editBody");
       if (!kbId || !bodyBox) return;
 
-      const cached = n(record?.text);
+      const cached = (record?.text || "").toString().trim();
       if (cached && cached !== "Načítám text e-mailu ze Supabase…") {
         bodyBox.value = cached;
         return;

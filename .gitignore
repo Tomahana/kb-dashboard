@@ -1,0 +1,14 @@
+# Lokální Supabase konfigurace (obsahuje project URL a klíč)
+supabase-config.js
+supabase-config.local.js
+
+# Exporty a citlivá data
+kb-export-*.json
+*.local.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

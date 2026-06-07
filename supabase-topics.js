@@ -7,6 +7,7 @@
   let tablesAvailable = null;
 
   function getClient() {
+    if (window.kbAuth?.getClient) return window.kbAuth.getClient();
     if (client) return client;
     if (window.kbSupabase?.getClient) return window.kbSupabase.getClient();
     if (!window.KB_SUPABASE?.url || !window.KB_SUPABASE?.anonKey) {

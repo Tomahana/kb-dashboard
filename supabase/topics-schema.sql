@@ -69,33 +69,33 @@ grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on public.kb_topics to anon, authenticated;
 grant select, insert, update, delete on public.kb_topic_records to anon, authenticated;
 
--- 5) Row Level Security
+-- 5) Row Level Security — viz také supabase/security-rls.sql pro kompletní zabezpečení
 alter table public.kb_topics enable row level security;
 alter table public.kb_topic_records enable row level security;
 
-drop policy if exists "kb_topics anon read" on public.kb_topics;
-create policy "kb_topics anon read"
+drop policy if exists "kb_topics authenticated read" on public.kb_topics;
+create policy "kb_topics authenticated read"
   on public.kb_topics for select
-  to anon, authenticated
+  to authenticated
   using (true);
 
-drop policy if exists "kb_topics anon write" on public.kb_topics;
-create policy "kb_topics anon write"
+drop policy if exists "kb_topics authenticated write" on public.kb_topics;
+create policy "kb_topics authenticated write"
   on public.kb_topics for all
-  to anon, authenticated
+  to authenticated
   using (true)
   with check (true);
 
-drop policy if exists "kb_topic_records anon read" on public.kb_topic_records;
-create policy "kb_topic_records anon read"
+drop policy if exists "kb_topic_records authenticated read" on public.kb_topic_records;
+create policy "kb_topic_records authenticated read"
   on public.kb_topic_records for select
-  to anon, authenticated
+  to authenticated
   using (true);
 
-drop policy if exists "kb_topic_records anon write" on public.kb_topic_records;
-create policy "kb_topic_records anon write"
+drop policy if exists "kb_topic_records authenticated write" on public.kb_topic_records;
+create policy "kb_topic_records authenticated write"
   on public.kb_topic_records for all
-  to anon, authenticated
+  to authenticated
   using (true)
   with check (true);
 
