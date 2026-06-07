@@ -111,54 +111,57 @@
     return `Notion HTTP ${status}`;
   }
 
-  async function notionFetchViaProxy(path, options, notionToken, accessToken) {
-    const supabaseUrl = n(window.KB_SUPABASE?.url);
-    const anonKey = n(window.KB_SUPABASE?.anonKey);
-    if (!supabaseUrl || !anonKey) {
-      throw new Error("Chybí Supabase konfigurace pro Notion proxy.");
-    }
+  function proxyNotDeployedMessage() {
+    return (
+      "Notion proxy (Edge Function) není nasazená.\n\n" +
+      "1. Otevřete Supabase Dashboard → Edge Functions\n" +
+      "   https://supabase.com/dashboard/project/xrgdfghiwjyrdckpjzdj/functions\n" +
+      "2. Vytvořte funkci notion-proxy a vložte kód z NOTION.md\n" +
+      "3. Deploy → znovu Otestovat Notion\n\n" +
+      "Do té doby použijte „Ruční propojení odkazem“ v dialogu e-mailu."
+    );
+  }
+
+  async function notionFetchViaProxy(path, options, notionToken) {
+    const client = window.kbAuth?.getClient?.();
+    if (!client) throw new Error("Chybí Supabase klient — přihlaste se znovu.");
 
     const method = options.method || (options.body ? "POST" : "GET");
     const body = options.body ? JSON.parse(options.body) : null;
 
-    const res = await fetch(`${supabaseUrl}/functions/v1/notion-proxy`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        apikey: anonKey,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ notionToken, path, method, body })
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (isProxyMissingError(data, res.status)) {
-          throw new Error(
-            "Notion proxy není nasazená v Supabase.\n\n" +
-            "NE v SQL Editoru — použijte Supabase Dashboard → Edge Functions → vytvořit notion-proxy\n" +
-            "(viz NOTION.md), nebo v terminálu počítače:\n" +
-            "npx supabase functions deploy notion-proxy --project-ref xrgdfghiwjyrdckpjzdj"
-          );
-      }
-      throw new Error(parseNotionError(data, res.status));
+    let data = null;
+    let error = null;
+    try {
+      const result = await client.functions.invoke("notion-proxy", {
+        body: { notionToken, path, method, body }
+      });
+      data = result.data;
+      error = result.error;
+    } catch (invokeError) {
+      if (isCorsError(invokeError)) throw new Error(proxyNotDeployedMessage());
+      throw invokeError;
     }
-    return data;
-  }
 
-  async function notionFetchDirect(path, options, notionToken) {
-    const res = await fetch(`https://api.notion.com/v1${path}`, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${notionToken}`,
-        "Notion-Version": NOTION_VERSION,
-        "Content-Type": "application/json",
-        ...(options.headers || {})
+    if (error) {
+      const ctx = error.context;
+      let status = 0;
+      let payload = {};
+      if (ctx && typeof ctx.json === "function") {
+        try {
+          payload = await ctx.json();
+          status = ctx.status || 0;
+        } catch (_) {}
       }
-    });
+      const msg = (payload?.error || payload?.message || error.message || "").toString();
+      if (isProxyMissingError({ message: msg }, status) || /failed to fetch/i.test(msg)) {
+        throw new Error(proxyNotDeployedMessage());
+      }
+      throw new Error(parseNotionError(payload, status) || msg);
+    }
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(parseNotionError(data, res.status));
+    if (data?.error) {
+      throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
+    }
     return data;
   }
 
@@ -167,28 +170,34 @@
     const notionToken = n(settings.integrationToken);
     if (!notionToken) throw new Error("V Nastavení doplňte Notion Integration Token.");
 
-    const accessToken = await getSupabaseAccessToken();
-    if (!accessToken) {
+    if (!(await getSupabaseAccessToken())) {
       throw new Error("Pro Notion se nejdříve přihlaste do KB Dashboardu (Supabase Auth).");
     }
 
     try {
-      return await notionFetchViaProxy(path, options, notionToken, accessToken);
+      return await notionFetchViaProxy(path, options, notionToken);
     } catch (error) {
-      if (!isCorsError(error) && !isProxyMissingError(error)) throw error;
-      try {
-        return await notionFetchDirect(path, options, notionToken);
-      } catch (directError) {
-        if (isCorsError(directError) || isProxyMissingError(error)) {
-          throw new Error(
-            (error.message || "") +
-            "\n\nNotion API nejde volat přímo z prohlížeče. Nasajte proxy:\n" +
-            "scripts/deploy-notion-proxy.sh"
-          );
-        }
-        throw directError;
+      if (isCorsError(error) || isProxyMissingError(error) || /proxy.*není nasazen/i.test(error.message || "")) {
+        throw new Error(error.message || proxyNotDeployedMessage());
       }
+      throw error;
     }
+  }
+
+  function linkManualNotionUrl(rawUrl, titleHint) {
+    const url = n(rawUrl);
+    const pageId = parseNotionId(url);
+    if (!pageId) throw new Error("Vložte platný odkaz na stránku Notion (https://www.notion.so/…).");
+    const record = getCurrentRecord();
+    if (!record) throw new Error("Nejdříve otevřete e-mail.");
+    const finalUrl = /^https?:\/\//i.test(url) ? url.split("?")[0] : notionPageUrl(pageId);
+    stampNotionLink(record, {
+      pageId,
+      url: finalUrl,
+      title: n(titleHint) || "Zápis Notion"
+    });
+    updateNotionPanel();
+    return finalUrl;
   }
 
   function detectPropertiesFromSchema(schema) {
@@ -552,8 +561,18 @@
         <button id="notionOpenBtn" type="button" class="button small secondary">Otevřít</button>
         <button id="notionAppendBtn" type="button" class="button small accent">Přidat e-mail do zápisu</button>
       </div>
+      <div class="notionManualBox">
+        <strong>Ruční propojení (funguje hned, bez proxy)</strong>
+        <div class="notionManualRow">
+          <label>Odkaz na zápis v Notion
+            <input id="notionManualUrl" type="url" placeholder="https://www.notion.so/…" />
+          </label>
+          <button id="notionManualLinkBtn" type="button" class="button accent">Propojit</button>
+        </div>
+        <button id="notionCopyMdBtn" type="button" class="button secondary">Kopírovat shrnutí pro Notion</button>
+      </div>
       <div class="notionSearchRow">
-        <label>Hledat zápis
+        <label>Hledat zápis (vyžaduje nasazenou proxy)
           <input id="notionSearchInput" type="search" placeholder="např. Kolegium, OVV, porada…" />
         </label>
         <button id="notionSearchBtn" type="button" class="button secondary">Hledat</button>
@@ -616,6 +635,27 @@
       }
     }
 
+    el("notionManualLinkBtn").addEventListener("click", () => {
+      try {
+        const url = linkManualNotionUrl(el("notionManualUrl").value);
+        alert("Propojeno s Notion:\n" + url);
+      } catch (error) {
+        alert(error.message || error);
+      }
+    });
+
+    el("notionCopyMdBtn").addEventListener("click", async () => {
+      const record = buildRecordFromForm(getCurrentRecord());
+      const text = buildRecordMarkdown(record);
+      try {
+        await navigator.clipboard.writeText(text);
+        el("notionCopyMdBtn").textContent = "Zkopírováno ✓";
+        setTimeout(() => { el("notionCopyMdBtn").textContent = "Kopírovat shrnutí pro Notion"; }, 1500);
+      } catch (_) {
+        alert("Nepodařilo se zkopírovat — označte text ze Shrnutí ručně.");
+      }
+    });
+
     el("notionSearchBtn").addEventListener("click", runSearch);
     el("notionSearchInput").addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); runSearch(); }
@@ -667,16 +707,12 @@
 
   async function handleNotionError(error, record) {
     const msg = error?.message || String(error);
-    if (isCorsError(error) || /proxy není nasazen/i.test(msg)) {
-      const text = buildRecordMarkdown(record || buildRecordFromForm(getCurrentRecord()));
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch (_) {}
+    if (isCorsError(error) || /proxy|failed to fetch/i.test(msg)) {
       alert(
         msg + "\n\n" +
-        (isCorsError(error)
-          ? "Text byl zkopírován do schránky pro ruční vložení do Notion."
-          : "Po nasazení proxy znovu klikněte Otestovat Notion.")
+        "Zatím použijte v dialogu e-mailu:\n" +
+        "• Ruční propojení odkazem (vložte URL zápisu)\n" +
+        "• Kopírovat shrnutí pro Notion"
       );
       return;
     }
@@ -723,7 +759,13 @@
           </label>
         </details>
         <p id="notionTestHint" class="hint">Z URL databáze použijte 32 znaků ID, nebo vložte celý odkaz.</p>
-        <button id="notionTestBtn" type="button" class="button secondary">Otestovat Notion</button>
+        <button id="notionTestBtn" type="button" class="button secondary">Otestovat Notion API</button>
+        <p class="hint">Bez nasazené proxy funguje <strong>ruční propojení odkazem</strong> v dialogu e-mailu — API test není nutný.</p>
+        <details class="taskExportDetails">
+          <summary>Kód pro Edge Function notion-proxy (kopírovat do Supabase)</summary>
+          <textarea id="notionProxyCode" class="notionProxyCode" readonly rows="14"></textarea>
+          <button id="notionCopyProxyBtn" type="button" class="button secondary">Kopírovat kód proxy</button>
+        </details>
         <div class="dialogActions">
           <button value="cancel" class="button secondary">Zavřít</button>
           <button id="saveNotionSettingsBtn" type="button" class="button accent">Uložit</button>
@@ -731,6 +773,59 @@
       </form>
     `;
     document.body.appendChild(dialog);
+
+    const proxyCode = `import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const NOTION_VERSION = "2022-06-28";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS"
+};
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return json({ error: "Chybí Authorization" }, 401);
+    const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+      global: { headers: { Authorization: authHeader } }
+    });
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData?.user) return json({ error: "Neplatná session" }, 401);
+    const payload = await req.json();
+    const notionToken = (payload.notionToken || "").toString().trim();
+    const path = (payload.path || "").toString().trim();
+    const method = (payload.method || "GET").toString().toUpperCase();
+    const body = payload.body ?? null;
+    if (!notionToken || !path?.startsWith("/")) return json({ error: "Chybí notionToken nebo path" }, 400);
+    const notionRes = await fetch(\`https://api.notion.com/v1\${path}\`, {
+      method,
+      headers: { Authorization: \`Bearer \${notionToken}\`, "Notion-Version": NOTION_VERSION, "Content-Type": "application/json" },
+      body: body != null ? JSON.stringify(body) : undefined
+    });
+    const text = await notionRes.text();
+    let parsed = {};
+    try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { message: text }; }
+    return new Response(JSON.stringify(parsed), { status: notionRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  } catch (error) {
+    return json({ error: error?.message || "Proxy error" }, 500);
+  }
+});
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}`;
+    const codeBox = el("notionProxyCode");
+    if (codeBox) codeBox.value = proxyCode;
+    el("notionCopyProxyBtn")?.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(proxyCode);
+        el("notionCopyProxyBtn").textContent = "Zkopírováno ✓";
+        setTimeout(() => { el("notionCopyProxyBtn").textContent = "Kopírovat kód proxy"; }, 1500);
+      } catch (_) {
+        codeBox?.select();
+        document.execCommand("copy");
+      }
+    });
 
     el("notionTestBtn").addEventListener("click", async () => {
       const btn = el("notionTestBtn");
@@ -886,7 +981,9 @@
     getNotionBadge,
     stampNotionLink,
     openSettingsDialog,
-    parseNotionId
+    parseNotionId,
+    linkManualNotionUrl,
+    proxyNotDeployedMessage
   };
 
   document.addEventListener("DOMContentLoaded", () => {

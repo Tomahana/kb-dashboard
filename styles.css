@@ -185,6 +185,26 @@ body {
 }
 .notionDeployWarning strong { display: block; margin-bottom: .25rem; }
 .notionDeployWarning p { margin: 0; }
+.notionManualBox {
+  margin: .75rem 0;
+  padding: .7rem .8rem;
+  border-radius: 10px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+}
+.notionManualBox strong { display: block; margin-bottom: .45rem; }
+.notionManualRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: .5rem;
+  align-items: end;
+}
+.notionProxyCode {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+  font-size: .72rem;
+  margin-top: .5rem;
+}
 .hint.ok { color: var(--ok); font-weight: 650; }
 .hint.danger { color: var(--danger); font-weight: 650; white-space: pre-line; }
 
