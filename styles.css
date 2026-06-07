@@ -208,6 +208,80 @@ dialog form { padding: 1rem; }
   margin-top: 1rem;
 }
 .hint { color: var(--muted); }
+.selectionToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .55rem;
+  margin-bottom: .85rem;
+  padding: .65rem .75rem;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.selectionToolbar .checkboxLine { margin: 0; }
+.selectionCount {
+  font-weight: 700;
+  color: var(--text);
+  font-size: .88rem;
+}
+.recordSelectWrap { display: flex; align-items: start; margin-right: .35rem; }
+.recordSelectWrap input, .selectCol input { width: auto; margin: .15rem 0 0; }
+.selectCol { width: 2rem; }
+.topicsPanel {
+  margin: 1rem 0;
+  padding-top: .5rem;
+  border-top: 1px solid var(--line);
+}
+.topicsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  margin-bottom: .35rem;
+}
+.topicsHeader h2 { margin: 0; }
+.topicsList {
+  display: grid;
+  gap: .45rem;
+  margin-top: .65rem;
+}
+.topicChip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .15rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: .55rem .65rem;
+  background: white;
+  cursor: pointer;
+}
+.topicChip:hover { border-color: #b7c2d5; background: #f8fafc; }
+.topicChip.active {
+  border-color: var(--accent);
+  background: var(--soft);
+}
+.topicChipName { font-weight: 800; color: var(--text); }
+.topicChipMeta { font-size: .78rem; color: var(--muted); }
+.topicRecords { display: grid; gap: .55rem; max-height: 220px; overflow: auto; }
+.topicRecordItem {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: .55rem .65rem;
+  background: white;
+}
+.sectionHeader.compact { margin-top: .5rem; }
+.sectionHeader.compact h3 { margin: 0; font-size: .95rem; }
+.smallMuted { color: var(--muted); font-size: .82rem; }
+.button.danger { background: #fee4e2; color: #b42318; }
+.button.danger:hover { background: #fecdca; }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
   .filters { position: static; }

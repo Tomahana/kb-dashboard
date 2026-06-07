@@ -1,5 +1,6 @@
 let records = [];
 let groupedView = true;
+const selectedIds = new Set();
 
 const byId = (id) => document.getElementById(id);
 const storageKey = "kb-dashboard-records-v1";
@@ -178,9 +179,83 @@ function filteredRecords(options = {}) {
     .sort((a,b) => (parseDate(getDateValue(b)) || 0) - (parseDate(getDateValue(a)) || 0));
 }
 
+function getRecordId(r) {
+  return r?.id || r?.kb_id || r?.KB_ID || "";
+}
+
+function isRecordSelected(id) {
+  return selectedIds.has(id);
+}
+
+function toggleRecordSelection(id, checked) {
+  if (!id) return;
+  if (checked) selectedIds.add(id);
+  else selectedIds.delete(id);
+  updateSelectionToolbar();
+}
+
+function selectAllVisibleRecords() {
+  filteredRecords().forEach(r => {
+    const id = getRecordId(r);
+    if (id) selectedIds.add(id);
+  });
+  render();
+}
+
+function clearRecordSelection() {
+  selectedIds.clear();
+  render();
+}
+
+function getSelectedRecords() {
+  const ids = new Set(selectedIds);
+  return records.filter(r => ids.has(getRecordId(r)));
+}
+
+function updateSelectionToolbar() {
+  const countEl = byId("selectionCount");
+  const selectAllEl = byId("selectAllVisible");
+  if (!countEl) return;
+  const visible = filteredRecords();
+  const visibleIds = visible.map(getRecordId).filter(Boolean);
+  const selectedVisible = visibleIds.filter(id => selectedIds.has(id)).length;
+  countEl.textContent = `${selectedIds.size} vybráno`;
+  if (selectAllEl) {
+    selectAllEl.checked = visibleIds.length > 0 && selectedVisible === visibleIds.length;
+    selectAllEl.indeterminate = selectedVisible > 0 && selectedVisible < visibleIds.length;
+  }
+}
+
+function injectSelectionToolbar() {
+  if (byId("selectionToolbar")) return;
+  const sectionHeader = document.querySelector(".panel .sectionHeader");
+  if (!sectionHeader) return;
+  const bar = document.createElement("div");
+  bar.id = "selectionToolbar";
+  bar.className = "selectionToolbar";
+  bar.innerHTML = `
+    <label class="checkboxLine selectionAll">
+      <input id="selectAllVisible" type="checkbox" />
+      Vybrat vše ve filtru
+    </label>
+    <span id="selectionCount" class="selectionCount">0 vybráno</span>
+    <button id="clearSelectionBtn" type="button" class="button small secondary">Vymazat výběr</button>
+    <button id="addToTopicBtn" type="button" class="button small">Přidat k tématu</button>
+    <button id="aiSelectionBtn" type="button" class="button small accent">AI shrnutí výběru</button>
+  `;
+  sectionHeader.insertAdjacentElement("afterend", bar);
+  byId("selectAllVisible").addEventListener("change", (e) => {
+    if (e.target.checked) selectAllVisibleRecords();
+    else clearRecordSelection();
+  });
+  byId("clearSelectionBtn").addEventListener("click", clearRecordSelection);
+}
+
 function render() {
   const data = filteredRecords();
   const allForPeriod = filteredRecords({ includeExcluded: true });
+  injectSelectionToolbar();
+  updateSelectionToolbar();
   byId("countAll").textContent = data.length;
   byId("countNew").textContent = data.filter(r => ["nové","k roztřídění"].includes(lower(r.stav))).length;
   byId("countRisks").textContent = data.filter(r => ["riziko","konflikt / problém"].includes(lower(r.typ)) || lower(r.agenda).includes("rizik")).length;
@@ -322,16 +397,21 @@ function renderGrouped(data) {
 
 function renderTable(data) {
   return `<table>
-    <thead><tr><th>Datum</th><th>Název</th><th>Agenda</th><th>Kam patří</th><th>Stav</th><th></th></tr></thead>
+    <thead><tr><th class="selectCol"></th><th>Datum</th><th>Název</th><th>Agenda</th><th>Kam patří</th><th>Stav</th><th></th></tr></thead>
     <tbody>
-      ${data.map(r => `<tr>
+      ${data.map(r => {
+        const rid = getRecordId(r);
+        const checked = isRecordSelected(rid) ? "checked" : "";
+        return `<tr>
+        <td class="selectCol"><input type="checkbox" class="recordSelect" data-record-id="${escapeHtml(rid)}" ${checked} aria-label="Vybrat záznam" /></td>
         <td>${escapeHtml(formatDate(getDateValue(r)))}</td>
         <td><strong>${escapeHtml(r.title || r.predmet)}</strong><br><span class="meta">${escapeHtml(r.odesilatel || "")}</span></td>
         <td>${escapeHtml(r.agenda || "")}</td>
         <td>${escapeHtml(r.kam_patri || "")}</td>
         <td>${escapeHtml(r.stav || "")}</td>
         <td><button class="button small secondary" onclick="openRecord('${r.id}')">Otevřít</button></td>
-      </tr>`).join("")}
+      </tr>`;
+      }).join("")}
     </tbody>
   </table>`;
 }
@@ -340,8 +420,10 @@ function renderCard(r) {
   const risk = ["riziko", "konflikt / problém"].includes(lower(r.typ));
   const meeting = normalize(r.kam_patri) && !["nezařazeno", "archiv"].includes(lower(r.kam_patri));
   const excluded = isExcluded(r);
+  const rid = getRecordId(r);
+  const checked = isRecordSelected(rid) ? "checked" : "";
   return `<article class="record">
-    <div class="recordHeader"><div><div class="recordTitle">${escapeHtml(r.title || r.predmet)}</div><div class="meta">${escapeHtml(formatDate(getDateValue(r)))} · ${escapeHtml(r.odesilatel || "")}</div></div><div class="meta">${escapeHtml(r.stav || "")}</div></div>
+    <div class="recordHeader"><label class="recordSelectWrap"><input type="checkbox" class="recordSelect" data-record-id="${escapeHtml(rid)}" ${checked} aria-label="Vybrat záznam" /></label><div><div class="recordTitle">${escapeHtml(r.title || r.predmet)}</div><div class="meta">${escapeHtml(formatDate(getDateValue(r)))} · ${escapeHtml(r.odesilatel || "")}</div></div><div class="meta">${escapeHtml(r.stav || "")}</div></div>
     <div class="badges">${excluded ? `<span class="badge excluded">Vyřazeno</span>` : ""}${r.typ ? `<span class="badge ${risk ? "risk" : ""}">${escapeHtml(r.typ)}</span>` : ""}${r.kam_patri ? `<span class="badge ${meeting ? "meeting" : ""}">${escapeHtml(r.kam_patri)}</span>` : ""}${r.priorita ? `<span class="badge priority">${escapeHtml(r.priorita)}</span>` : ""}</div>
     <div class="summary">${escapeHtml(r.shrnuti || firstWords(r.text, 45) || "Bez shrnutí")}</div>
     <div class="recordActions"><button class="button small secondary" onclick="openRecord('${r.id}')">Otevřít / třídit</button></div>
@@ -374,7 +456,7 @@ window.openRecord = function(id) {
   byId("recordDialog").showModal();
 }
 
-function saveRecord(e) {
+window.saveRecord = function saveRecord(e) {
   e.preventDefault();
   const id = byId("editId").value;
   const idx = records.findIndex(x => x.id === id);
@@ -460,8 +542,29 @@ function resetFilters() {
   render();
 }
 
+function bindRecordSelectionEvents() {
+  const container = byId("records");
+  if (!container || container.__selectionBound) return;
+  container.addEventListener("change", (e) => {
+    const box = e.target.closest?.(".recordSelect");
+    if (!box) return;
+    toggleRecordSelection(box.dataset.recordId, box.checked);
+  });
+  container.__selectionBound = true;
+}
+
+window.kbSelection = {
+  get selectedIds() { return selectedIds; },
+  getSelectedRecords,
+  selectAllVisibleRecords,
+  clearRecordSelection,
+  getRecordId
+};
+
 document.addEventListener("DOMContentLoaded", () => {
   loadInitialData();
+  injectSelectionToolbar();
+  bindRecordSelectionEvents();
   ["periodFilter","agendaFilter","meetingFilter","statusFilter","typeFilter","searchInput"].forEach(id => byId(id).addEventListener("input", render));
   byId("resetBtn").addEventListener("click", resetFilters);
   byId("viewGrouped").addEventListener("click", () => { groupedView = true; render(); });
