@@ -2,47 +2,70 @@
 
 (function () {
   const PAGES = {
-    prehled: { title: "Přehled", subtitle: "Stav znalostní báze a rychlé akce" },
-    emaily: { title: "E-maily", subtitle: "Třídění, klasifikace a práce se záznamy" },
+    prehled: { title: "Přehled", subtitle: "Moduly a oblasti práce OVV" },
+    emaily: { title: "Znalostní báze z e-mailů", subtitle: "Třídění, klasifikace a práce se záznamy" },
     temata: { title: "Témata", subtitle: "Seskupení e-mailů a AI shrnutí" },
     analyza: { title: "Analýza", subtitle: "Přehled agend, rizik a vývoje v čase" },
     terminy: { title: "Termíny", subtitle: "Termíny sběrů dat a odesílání na úřady" },
-    nastaveni: { title: "Nastavení", subtitle: "Supabase, AI, import a export" }
+    nastaveni: { title: "Nastavení", subtitle: "Supabase, AI, import a export" },
+    modul: { title: "Modul", subtitle: "Oblast v přípravě" }
   };
 
-  const DEFAULT_PAGE = "emaily";
+  const DEFAULT_PAGE = "prehled";
 
   function el(id) {
     return document.getElementById(id);
   }
 
-  function normalizePage(hash) {
+  function resolveRoute(hash) {
     const raw = (hash || "").replace(/^#\/?/, "").trim().toLowerCase();
-    return PAGES[raw] ? raw : DEFAULT_PAGE;
+    if (PAGES[raw]) return { page: raw, moduleSlug: null };
+    if (/^modul-/.test(raw)) return { page: "modul", moduleSlug: raw };
+    return { page: DEFAULT_PAGE, moduleSlug: null };
   }
 
   function getPage() {
-    return normalizePage(location.hash);
+    return resolveRoute(location.hash).page;
   }
 
-  function setActivePage(pageId) {
-    const page = normalizePage(pageId);
+  function setActivePage(pageId, options = {}) {
+    const raw = (pageId || "").replace(/^#\/?/, "").trim().toLowerCase();
+    const route = options.isModule && /^modul-/.test(raw)
+      ? { page: "modul", moduleSlug: raw }
+      : resolveRoute(raw);
+
     document.querySelectorAll(".page").forEach(node => {
-      node.classList.toggle("active", node.id === `page-${page}`);
+      node.classList.toggle("active", node.id === `page-${route.page}`);
     });
     document.querySelectorAll(".navItem").forEach(link => {
-      const active = link.dataset.page === page;
+      const active = link.dataset.page === route.page;
       link.classList.toggle("active", active);
       if (active) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
     });
-    const meta = PAGES[page];
-    if (el("pageTitle")) el("pageTitle").textContent = meta.title;
-    if (el("pageSubtitle")) el("pageSubtitle").textContent = meta.subtitle;
-    if (location.hash.replace(/^#\/?/, "") !== page) {
-      history.replaceState(null, "", `#${page}`);
+
+    let title = PAGES[route.page]?.title || "KB Dashboard";
+    let subtitle = PAGES[route.page]?.subtitle || "";
+
+    if (route.page === "modul" && route.moduleSlug && window.kbModules?.getModule) {
+      const mod = window.kbModules.getModule(route.moduleSlug);
+      if (mod) {
+        title = mod.title;
+        subtitle = mod.status === "planned" ? "Modul v přípravě" : mod.description;
+      }
     }
-    document.dispatchEvent(new CustomEvent("kb:page-changed", { detail: { page } }));
+
+    if (el("pageTitle")) el("pageTitle").textContent = title;
+    if (el("pageSubtitle")) el("pageSubtitle").textContent = subtitle;
+
+    const hashTarget = route.page === "modul" ? route.moduleSlug : route.page;
+    if (location.hash.replace(/^#\/?/, "").toLowerCase() !== hashTarget) {
+      history.replaceState(null, "", `#${hashTarget}`);
+    }
+
+    document.dispatchEvent(new CustomEvent("kb:page-changed", {
+      detail: { page: route.page, moduleSlug: route.moduleSlug }
+    }));
   }
 
   function updateBadges() {
@@ -68,19 +91,8 @@
     setBadge("navBadgeNew", newCount);
     setBadge("navBadgeAi", pendingAi);
 
-    if (el("ovTotal")) el("ovTotal").textContent = data.length;
-    if (el("ovNewCount")) el("ovNewCount").textContent = newCount;
-    if (el("ovAiCount")) el("ovAiCount").textContent = pendingAi;
-    if (el("ovRisks")) {
-      el("ovRisks").textContent = data.filter(r =>
-        ["riziko", "konflikt / problém"].includes(lower(r.typ)) || lower(r.agenda).includes("rizik")
-      ).length;
-    }
-    if (el("ovMeetings")) {
-      el("ovMeetings").textContent = data.filter(r => {
-        const m = lower(r.kam_patri);
-        return m && !["nezařazeno", "archiv"].includes(m);
-      }).length;
+    if (window.kbModules?.renderModulesGrid) {
+      setTimeout(() => window.kbModules.renderModulesGrid(), 0);
     }
   }
 
@@ -91,7 +103,12 @@
         setActivePage(link.dataset.page);
       });
     });
-    window.addEventListener("hashchange", () => setActivePage(getPage()));
+    window.addEventListener("hashchange", () => {
+      const route = resolveRoute(location.hash);
+      setActivePage(route.page === "modul" ? route.moduleSlug : route.page, {
+        isModule: route.page === "modul"
+      });
+    });
   }
 
   function mountTopbarActions() {
@@ -115,15 +132,21 @@
   }
 
   function bindOverviewLinks() {
-    document.querySelectorAll("[data-goto]").forEach(btn => {
-      btn.addEventListener("click", () => setActivePage(btn.dataset.goto));
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest?.("[data-goto]");
+      if (!btn) return;
+      setActivePage(btn.dataset.goto);
     });
   }
 
   function init() {
     bindNav();
     bindOverviewLinks();
-    setActivePage(getPage() || DEFAULT_PAGE);
+    const route = resolveRoute(location.hash);
+    setActivePage(
+      route.page === "modul" ? route.moduleSlug : (route.page || DEFAULT_PAGE),
+      { isModule: route.page === "modul" }
+    );
     setTimeout(() => {
       mountTopbarActions();
       updateBadges();
@@ -135,7 +158,7 @@
     });
   }
 
-  window.kbLayout = { setActivePage, updateBadges, getPage };
+  window.kbLayout = { setActivePage, updateBadges, getPage, resolveRoute };
 
   document.addEventListener("DOMContentLoaded", init);
 })();

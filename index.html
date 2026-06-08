@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>KB Dashboard – Znalostní báze</title>
-  <link rel="stylesheet" href="styles.css?v=13" />
+  <link rel="stylesheet" href="styles.css?v=14" />
 </head>
 <body class="app-shell">
   <aside class="sidebar">
@@ -13,7 +13,7 @@
       <span>Interní znalostní báze</span>
     </div>
     <nav class="sidebarNav" aria-label="Hlavní navigace">
-      <a href="#prehled" class="navItem" data-page="prehled">Přehled</a>
+      <a href="#prehled" class="navItem" data-page="prehled">Přehled modulů</a>
       <a href="#emaily" class="navItem" data-page="emaily">
         E-maily
         <span id="navBadgeNew" class="navBadge" hidden></span>
@@ -28,63 +28,36 @@
       <a href="#nastaveni" class="navItem" data-page="nastaveni">Nastavení</a>
     </nav>
     <div class="sidebarFoot">
-      <p class="hint">Workflow: načíst → třídit → témata → analýza</p>
-      <p class="appVersion" id="appVersion">Verze 3.5</p>
+      <p class="hint">Vyberte modul v přehledu</p>
+      <p class="appVersion" id="appVersion">Verze 3.6</p>
     </div>
   </aside>
 
   <div class="appMain">
     <header class="topbar">
       <div class="pageHead">
-        <h1 id="pageTitle">E-maily</h1>
-        <p id="pageSubtitle">Třídění, klasifikace a práce se záznamy</p>
+        <h1 id="pageTitle">Přehled</h1>
+        <p id="pageSubtitle">Moduly a oblasti práce OVV</p>
       </div>
       <div id="topbarActions" class="actions pageActions"></div>
     </header>
 
-    <!-- PŘEHLED -->
-    <section id="page-prehled" class="page">
-      <div class="overviewGrid">
-        <article class="metric overviewMetric">
-          <span id="ovTotal">0</span>
-          <small>záznamů ve filtru</small>
-        </article>
-        <article class="metric overviewMetric">
-          <span id="ovNewCount">0</span>
-          <small>nové / k třídění</small>
-        </article>
-        <article class="metric overviewMetric">
-          <span id="ovAiCount">0</span>
-          <small>AI návrhy ke kontrole</small>
-        </article>
-        <article class="metric overviewMetric">
-          <span id="ovRisks">0</span>
-          <small>rizika</small>
-        </article>
-        <article class="metric overviewMetric">
-          <span id="ovMeetings">0</span>
-          <small>k jednání</small>
-        </article>
-      </div>
-
+    <!-- PŘEHLED MODULŮ -->
+    <section id="page-prehled" class="page active">
       <section class="panel">
-        <h2>Rychlý postup</h2>
-        <ol class="workflowList">
-          <li><button type="button" class="linkish" data-goto="nastaveni">Nastavení</button> — načtěte data ze Supabase a nastavte AI klíč</li>
-          <li><button type="button" class="linkish" data-goto="emaily">E-maily</button> — auto-klasifikace, kontrola a potvrzení</li>
-          <li><button type="button" class="linkish" data-goto="temata">Témata</button> — seskupení a AI shrnutí k tématu</li>
-          <li><button type="button" class="linkish" data-goto="terminy">Termíny</button> — sběry dat a odesílání na úřady</li>
-          <li><button type="button" class="linkish" data-goto="analyza">Analýza</button> — přehled agend a rizik</li>
-        </ol>
-        <div class="overviewActions">
-          <button type="button" class="button accent" data-goto="emaily">Přejít na e-maily</button>
-          <button type="button" class="button secondary" data-goto="nastaveni">Načíst / nastavit</button>
-        </div>
+        <h2>Moduly</h2>
+        <p class="hint">Klikněte na modul pro otevření příslušné části aplikace. Plánované moduly budeme doplňovat postupně.</p>
+        <div id="modulesGrid"></div>
       </section>
     </section>
 
+    <!-- PLACEHOLDER PRO PLÁNOVANÉ MODULY -->
+    <section id="page-modul" class="page">
+      <div id="modulePlaceholderRoot"></div>
+    </section>
+
     <!-- E-Maily -->
-    <section id="page-emaily" class="page active">
+    <section id="page-emaily" class="page">
       <div class="inboxLayout">
         <aside class="panel filters inboxFilters">
           <h2>Filtry</h2>
@@ -490,20 +463,21 @@
   </datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=13"></script>
-  <script src="auth.js?v=13"></script>
-  <script src="form-pickers.js?v=13"></script>
-  <script src="layout.js?v=13"></script>
-  <script src="app.js?v=13"></script>
-  <script src="enhancements.js?v=13"></script>
-  <script src="supabase-loader.js?v=13"></script>
-  <script src="ai-classify.js?v=13"></script>
-  <script src="task-export.js?v=13"></script>
-  <script src="notion.js?v=13"></script>
-  <script src="supabase-topics.js?v=13"></script>
-  <script src="topics.js?v=13"></script>
-  <script src="supabase-deadlines.js?v=13"></script>
-  <script src="record-click-fix.js?v=13"></script>
-  <script src="deadlines.js?v=13"></script>
+  <script src="supabase-config.js?v=14"></script>
+  <script src="auth.js?v=14"></script>
+  <script src="form-pickers.js?v=14"></script>
+  <script src="layout.js?v=14"></script>
+  <script src="modules.js?v=14"></script>
+  <script src="app.js?v=14"></script>
+  <script src="enhancements.js?v=14"></script>
+  <script src="supabase-loader.js?v=14"></script>
+  <script src="ai-classify.js?v=14"></script>
+  <script src="task-export.js?v=14"></script>
+  <script src="notion.js?v=14"></script>
+  <script src="supabase-topics.js?v=14"></script>
+  <script src="topics.js?v=14"></script>
+  <script src="supabase-deadlines.js?v=14"></script>
+  <script src="record-click-fix.js?v=14"></script>
+  <script src="deadlines.js?v=14"></script>
 </body>
 </html>
