@@ -52,6 +52,7 @@ grant select on public.kb_record_bodies to authenticated;
 -- ---------------------------------------------------------------------------
 alter table if exists public.kb_topics enable row level security;
 alter table if exists public.kb_topic_records enable row level security;
+alter table if exists public.kb_topic_deadlines enable row level security;
 
 drop policy if exists "kb_topics anon read" on public.kb_topics;
 drop policy if exists "kb_topics anon write" on public.kb_topics;
@@ -120,5 +121,5 @@ grant select, insert, update, delete on public.kb_deadlines to authenticated;
 select schemaname, tablename, policyname, roles, cmd
 from pg_policies
 where schemaname = 'public'
-  and tablename in ('kb_records', 'kb_record_bodies', 'kb_topics', 'kb_topic_records', 'kb_deadlines')
+  and tablename in ('kb_records', 'kb_record_bodies', 'kb_topics', 'kb_topic_records', 'kb_topic_deadlines', 'kb_deadlines')
 order by tablename, policyname;

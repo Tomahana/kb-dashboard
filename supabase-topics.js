@@ -1,10 +1,11 @@
-// Supabase persistence for KB topics and topic-record links.
+// Supabase persistence for KB topics, topic-record and topic-deadline links.
 
 (function () {
   const TOPICS_KEY = "kb-dashboard-topics-v1";
   const MIGRATED_KEY = "kb-dashboard-topics-migrated-v1";
   let client = null;
   let tablesAvailable = null;
+  let deadlineLinksAvailable = null;
 
   function getClient() {
     if (window.kbAuth?.getClient) return window.kbAuth.getClient();
@@ -20,7 +21,7 @@
     return client;
   }
 
-  function mapTopicRow(row, recordIds) {
+  function mapTopicRow(row, recordIds, deadlineIds) {
     return {
       id: row.id,
       name: row.name || "Bez názvu",
@@ -28,6 +29,7 @@
       description: row.description || "",
       ai_summary: row.ai_summary || "",
       recordIds: recordIds || [],
+      deadlineIds: deadlineIds || [],
       created_at: row.created_at,
       updated_at: row.updated_at,
       ai_summary_updated_at: row.ai_summary_updated_at || null,
@@ -46,6 +48,19 @@
       tablesAvailable = false;
     }
     return tablesAvailable;
+  }
+
+  async function probeDeadlineLinks() {
+    if (deadlineLinksAvailable !== null) return deadlineLinksAvailable;
+    try {
+      const supa = getClient();
+      const { error } = await supa.from("kb_topic_deadlines").select("id").limit(1);
+      deadlineLinksAvailable = !error || error.code !== "PGRST205";
+      if (error && error.code === "PGRST205") deadlineLinksAvailable = false;
+    } catch (_) {
+      deadlineLinksAvailable = false;
+    }
+    return deadlineLinksAvailable;
   }
 
   async function loadTopicsFromSupabase() {
@@ -67,7 +82,20 @@
       linksByTopic[row.topic_id].push(row.kb_id);
     });
 
-    return (topicRows || []).map(row => mapTopicRow(row, linksByTopic[row.id] || []));
+    const deadlinesByTopic = {};
+    if (await probeDeadlineLinks()) {
+      const { data: dlRows, error: dlError } = await supa
+        .from("kb_topic_deadlines")
+        .select("topic_id, deadline_id");
+      if (!dlError) {
+        (dlRows || []).forEach(row => {
+          deadlinesByTopic[row.topic_id] ||= [];
+          deadlinesByTopic[row.topic_id].push(row.deadline_id);
+        });
+      }
+    }
+
+    return (topicRows || []).map(row => mapTopicRow(row, linksByTopic[row.id] || [], deadlinesByTopic[row.id] || []));
   }
 
   async function upsertTopic(topic) {
@@ -90,7 +118,7 @@
       .select("*")
       .single();
     if (error) throw error;
-    return mapTopicRow(data, topic.recordIds || []);
+    return mapTopicRow(data, topic.recordIds || [], topic.deadlineIds || []);
   }
 
   async function deleteTopicFromSupabase(topicId) {
@@ -131,10 +159,44 @@
     }
   }
 
+  async function syncTopicDeadlines(topicId, deadlineIds) {
+    if (!(await probeDeadlineLinks())) return;
+    const supa = getClient();
+    const uniqueIds = [...new Set((deadlineIds || []).filter(Boolean))];
+
+    const { data: existing, error: readError } = await supa
+      .from("kb_topic_deadlines")
+      .select("deadline_id")
+      .eq("topic_id", topicId);
+    if (readError) throw readError;
+
+    const existingSet = new Set((existing || []).map(r => r.deadline_id));
+    const desiredSet = new Set(uniqueIds);
+    const toAdd = uniqueIds.filter(id => !existingSet.has(id));
+    const toRemove = [...existingSet].filter(id => !desiredSet.has(id));
+
+    if (toRemove.length) {
+      const { error } = await supa
+        .from("kb_topic_deadlines")
+        .delete()
+        .eq("topic_id", topicId)
+        .in("deadline_id", toRemove);
+      if (error) throw error;
+    }
+
+    if (toAdd.length) {
+      const { error } = await supa
+        .from("kb_topic_deadlines")
+        .insert(toAdd.map(deadline_id => ({ topic_id: topicId, deadline_id })));
+      if (error) throw error;
+    }
+  }
+
   async function saveTopicToSupabase(topic) {
     const saved = await upsertTopic(topic);
     await syncTopicRecords(saved.id, topic.recordIds || []);
-    return { ...saved, recordIds: topic.recordIds || [] };
+    await syncTopicDeadlines(saved.id, topic.deadlineIds || []);
+    return { ...saved, recordIds: topic.recordIds || [], deadlineIds: topic.deadlineIds || [] };
   }
 
   function loadLocalTopics() {
@@ -162,10 +224,12 @@
 
   window.kbSupabaseTopics = {
     probeTables,
+    probeDeadlineLinks,
     loadTopicsFromSupabase,
     saveTopicToSupabase,
     deleteTopicFromSupabase,
     syncTopicRecords,
+    syncTopicDeadlines,
     migrateLocalTopicsIfNeeded
   };
 })();

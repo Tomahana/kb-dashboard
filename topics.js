@@ -26,6 +26,25 @@
     return [];
   }
 
+  function getDeadlines() {
+    return window.kbDeadlines?.getDeadlines?.() || [];
+  }
+
+  function formatDeadlineDate(d) {
+    const raw = d?.termin_interni || d?.termin_odeslani || d?.termin_sberu;
+    if (!raw) return "";
+    const date = new Date(raw);
+    return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("cs-CZ");
+  }
+
+  function deadlineLabel(d) {
+    const date = formatDeadlineDate(d);
+    const parts = [d?.nazev || "Bez názvu"];
+    if (d?.oblast) parts.push(d.oblast);
+    if (date) parts.push(date);
+    return parts.join(" · ");
+  }
+
   let topicsUseSupabase = false;
   let topicsLoading = false;
 
@@ -85,6 +104,18 @@
     return (topic?.recordIds || []).filter(id => getRecords().some(r => getRecordId(r) === id)).length;
   }
 
+  function topicDeadlineCount(topic) {
+    const ids = new Set(topic?.deadlineIds || []);
+    return getDeadlines().filter(d => ids.has(d.id)).length;
+  }
+
+  function deadlinesForTopic(topicId) {
+    const topic = getTopic(topicId);
+    if (!topic) return [];
+    const ids = new Set(topic.deadlineIds || []);
+    return getDeadlines().filter(d => ids.has(d.id));
+  }
+
   function recordsForTopic(topicId) {
     const topic = getTopic(topicId);
     if (!topic) return [];
@@ -117,6 +148,31 @@
     if (idx >= 0) topics[idx] = { ...topics[idx], ...saved };
   }
 
+  async function addDeadlineToTopic(topicId, deadlineId) {
+    const topic = getTopic(topicId);
+    if (!topic || !deadlineId) return false;
+    const set = new Set(topic.deadlineIds || []);
+    set.add(deadlineId);
+    topic.deadlineIds = [...set];
+    topic.updated_at = new Date().toISOString();
+    topic.__existing = true;
+    const saved = await persistTopic(topic);
+    const idx = topics.findIndex(t => t.id === topicId);
+    if (idx >= 0) topics[idx] = { ...topics[idx], ...saved };
+    return true;
+  }
+
+  async function removeDeadlineFromTopic(topicId, deadlineId) {
+    const topic = getTopic(topicId);
+    if (!topic) return;
+    topic.deadlineIds = (topic.deadlineIds || []).filter(id => id !== deadlineId);
+    topic.updated_at = new Date().toISOString();
+    topic.__existing = true;
+    const saved = await persistTopic(topic);
+    const idx = topics.findIndex(t => t.id === topicId);
+    if (idx >= 0) topics[idx] = { ...topics[idx], ...saved };
+  }
+
   async function saveTopicForm() {
     const id = el("topicEditId").value || uuid();
     const existing = getTopic(id);
@@ -127,6 +183,7 @@
       description: n(el("topicDescription").value),
       ai_summary: n(el("topicAiSummary").value),
       recordIds: existing?.recordIds || [],
+      deadlineIds: existing?.deadlineIds || [],
       created_at: existing?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
       ai_summary_updated_at: existing?.ai_summary_updated_at || null,
@@ -149,6 +206,8 @@
       el("topicEditId").value = saved.id;
       renderTopicsPanel();
       renderTopicRecordsList(saved.id);
+      renderTopicDeadlinesList(saved.id);
+      populateTopicDeadlineSelect(saved.id);
       if (typeof render === "function") render();
     } catch (error) {
       console.error(error);
@@ -183,7 +242,10 @@
     }
   }
 
-  function openTopicDialog(topicId) {
+  async function openTopicDialog(topicId) {
+    if (window.kbDeadlines?.loadDeadlines) {
+      try { await window.kbDeadlines.loadDeadlines(); } catch (_) {}
+    }
     const topic = topicId ? getTopic(topicId) : null;
     el("topicEditId").value = topic?.id || "";
     el("topicDialogTitle").textContent = topic ? `Téma: ${topic.name}` : "Nové téma";
@@ -193,7 +255,62 @@
     el("topicDescription").value = topic?.description || "";
     el("topicAiSummary").value = topic?.ai_summary || "";
     renderTopicRecordsList(topic?.id);
+    renderTopicDeadlinesList(topic?.id);
+    populateTopicDeadlineSelect(topic?.id);
     el("topicDialog").showModal();
+  }
+
+  function populateTopicDeadlineSelect(topicId) {
+    const select = el("topicDeadlineSelect");
+    if (!select) return;
+    const linked = new Set((getTopic(topicId)?.deadlineIds) || []);
+    const available = getDeadlines().filter(d => !linked.has(d.id));
+    select.innerHTML = `<option value="">— vyberte termín —</option>` +
+      available.map(d => `<option value="${html(d.id)}">${html(deadlineLabel(d))}</option>`).join("");
+    if (!getDeadlines().length) {
+      select.innerHTML = `<option value="">Nejdříve načtěte termíny (modul Termíny)</option>`;
+    }
+  }
+
+  function renderTopicDeadlinesList(topicId) {
+    const box = el("topicDeadlinesList");
+    if (!box) return;
+    if (!topicId) {
+      box.innerHTML = `<p class="hint">Po uložení tématu můžete propojit termíny z modulu Termíny.</p>`;
+      return;
+    }
+    const items = deadlinesForTopic(topicId);
+    if (!items.length) {
+      box.innerHTML = `<p class="hint">Téma zatím nemá propojené termíny. Vyberte termín níže a klikněte Propojit.</p>`;
+      return;
+    }
+    box.innerHTML = `<div class="topicRecords">${items.map(d => `
+      <div class="topicRecordItem">
+        <div>
+          <strong>${html(d.nazev)}</strong>
+          <div class="smallMuted">${html(d.oblast || "")}${formatDeadlineDate(d) ? ` · ${html(formatDeadlineDate(d))}` : ""}${d.odpovedna_osoba ? ` · ${html(d.odpovedna_osoba)}` : ""}</div>
+          ${d.popis ? `<div>${html(d.popis.slice(0, 120))}${d.popis.length > 120 ? "…" : ""}</div>` : ""}
+        </div>
+        <div class="topicRecordActions">
+          <button type="button" class="button small secondary" data-open-deadline="${html(d.id)}">Termíny →</button>
+          <button type="button" class="button small secondary" data-remove-topic-deadline="${html(d.id)}">Odebrat</button>
+        </div>
+      </div>
+    `).join("")}</div>`;
+    box.querySelectorAll("[data-remove-topic-deadline]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        await removeDeadlineFromTopic(topicId, btn.dataset.removeTopicDeadline);
+        renderTopicDeadlinesList(topicId);
+        populateTopicDeadlineSelect(topicId);
+        renderTopicsPanel();
+      });
+    });
+    box.querySelectorAll("[data-open-deadline]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        el("topicDialog").close();
+        if (window.kbLayout?.setActivePage) window.kbLayout.setActivePage("terminy");
+      });
+    });
   }
 
   function renderTopicRecordsList(topicId) {
@@ -243,11 +360,12 @@
     }
     list.innerHTML = topics.map(t => {
       const count = topicRecordCount(t);
+      const dlCount = topicDeadlineCount(t);
       const hasSummary = !!n(t.ai_summary);
       return `<article class="topicCard ${el("topicFilter")?.value === t.id ? "active" : ""}" data-topic-id="${html(t.id)}">
         <button type="button" class="topicCardMain" data-topic-open="${html(t.id)}" title="${html(t.description || "")}">
           <strong class="topicChipName">${html(t.name)}</strong>
-          <span class="topicChipMeta">${count} e-mailů${hasSummary ? " · shrnuto" : ""}</span>
+          <span class="topicChipMeta">${count} e-mailů${dlCount ? ` · ${dlCount} termínů` : ""}${hasSummary ? " · shrnuto" : ""}</span>
           ${t.description ? `<p class="topicCardDesc">${html(t.description)}</p>` : ""}
           ${t.ai_summary ? `<p class="topicCardSummary">${html(t.ai_summary.slice(0, 160))}${t.ai_summary.length > 160 ? "…" : ""}</p>` : ""}
         </button>
@@ -351,6 +469,17 @@
           <button id="assignAllVisibleToTopicBtn" type="button" class="button small secondary">Přidat vše z filtru</button>
         </div>
         <div id="topicRecordsList"></div>
+        <div class="sectionHeader compact">
+          <h3>Propojené termíny</h3>
+        </div>
+        <p class="hint topicDeadlineHint">Vyberte termín z modulu <button type="button" class="linkish" data-goto-deadlines>Termíny</button> a propojte ho s tímto tématem.</p>
+        <div class="topicDeadlineAdd">
+          <label>Termín z modulu Termíny
+            <select id="topicDeadlineSelect"><option value="">— vyberte —</option></select>
+          </label>
+          <button id="addTopicDeadlineBtn" type="button" class="button small accent">Propojit termín</button>
+        </div>
+        <div id="topicDeadlinesList"></div>
         <label>AI shrnutí tématu
           <textarea id="topicAiSummary" rows="8" placeholder="Sem vložte výstup z AI po zpracování promptu…"></textarea>
         </label>
@@ -377,6 +506,27 @@
         return;
       }
       showTopicAiPrompt(topicId);
+    });
+    dialog.querySelector('[data-goto-deadlines]')?.addEventListener("click", () => {
+      el("topicDialog").close();
+      if (window.kbLayout?.setActivePage) window.kbLayout.setActivePage("terminy");
+    });
+    el("addTopicDeadlineBtn").addEventListener("click", async () => {
+      const topicId = el("topicEditId").value;
+      const deadlineId = el("topicDeadlineSelect")?.value;
+      if (!topicId) {
+        alert("Nejdříve uložte téma.");
+        return;
+      }
+      if (!deadlineId) {
+        alert("Vyberte termín k propojení.");
+        return;
+      }
+      await addDeadlineToTopic(topicId, deadlineId);
+      renderTopicDeadlinesList(topicId);
+      populateTopicDeadlineSelect(topicId);
+      renderTopicsPanel();
+      el("topicDeadlineSelect").value = "";
     });
     el("assignAllVisibleToTopicBtn").addEventListener("click", async () => {
       const topicId = el("topicEditId").value;
@@ -471,19 +621,41 @@ ZÁZNAMY:
 ${lines}`;
   }
 
+  function buildDeadlinesPromptBlock(deadlineItems) {
+    if (!deadlineItems.length) return "";
+    const lines = deadlineItems.map((d, i) => `[T${i + 1}] ${d.nazev}
+Oblast: ${d.oblast || ""}
+Sběr fakulty: ${formatDeadlineDate(d) || d.termin_sberu || ""}
+Interní termín rek.: ${d.termin_interni || ""}
+Externí termín: ${d.termin_odeslani || ""}
+Hlídá na rektorátu: ${d.odpovedna_osoba || ""}
+Popis: ${d.popis || ""}
+Riziko: ${d.riziko || ""}`).join("\n---\n");
+    return `
+
+PROPOJENÉ TERMÍNY (z modulu Termíny):
+${lines}`;
+  }
+
   function buildTopicPrompt(topic) {
     const items = recordsForTopic(topic.id);
-    return buildRecordsPrompt(items, {
-      header: `Zpracuj e-maily k tématu „${topic.name}“. ${topic.description ? `Kontext: ${topic.description}` : ""}`,
-      tasks: [
-        "1. syntézu tématu v 5–8 větách",
-        "2. chronologii vývoje (pokud jde vyčíst z dat)",
-        "3. klíčová rozhodnutí a otevřené body",
-        "4. rizika, termíny a odpovědnosti",
-        "5. návrh dalších kroků a co zařadit na jednání",
-        "6. stručný text vhodný jako „AI shrnutí tématu“ do interní KB"
-      ]
-    });
+    const deadlines = deadlinesForTopic(topic.id);
+    const base = items.length
+      ? buildRecordsPrompt(items, {
+          header: `Zpracuj e-maily k tématu „${topic.name}“. ${topic.description ? `Kontext: ${topic.description}` : ""}`,
+          tasks: [
+            "1. syntézu tématu v 5–8 větách",
+            "2. chronologii vývoje (pokud jde vyčíst z dat)",
+            "3. klíčová rozhodnutí a otevřené body",
+            "4. rizika, termíny a odpovědnosti",
+            "5. návrh dalších kroků a co zařadit na jednání",
+            "6. stručný text vhodný jako „AI shrnutí tématu“ do interní KB"
+          ]
+        })
+      : `Zpracuj téma „${topic.name}“. ${topic.description ? `Kontext: ${topic.description}` : ""}
+
+Vytvoř syntézu, klíčové termíny, rizika a doporučené kroky.`;
+    return base + buildDeadlinesPromptBlock(deadlines);
   }
 
   function buildSelectionPrompt(recordsList) {
@@ -562,8 +734,9 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
     const topic = getTopic(topicId);
     if (!topic) return;
     const items = recordsForTopic(topicId);
-    if (!items.length) {
-      alert("Téma nemá přiřazené e-maily.");
+    const deadlines = deadlinesForTopic(topicId);
+    if (!items.length && !deadlines.length) {
+      alert("Téma nemá přiřazené e-maily ani propojené termíny.");
       return;
     }
     showPromptDialog(`AI prompt: ${topic.name}`, buildTopicPrompt(topic));
@@ -642,6 +815,7 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
   }
 
   async function init() {
+    injectTopicStyles();
     injectTopicsPanel();
     injectTopicDialog();
     injectAssignDialog();
@@ -678,4 +852,24 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
     populateTopicFilter();
     if (typeof render === "function") render();
   });
+  document.addEventListener("kb:page-changed", (e) => {
+    if (e.detail?.page === "temata" && el("topicDialog")?.open) {
+      const topicId = el("topicEditId")?.value;
+      populateTopicDeadlineSelect(topicId);
+      renderTopicDeadlinesList(topicId);
+    }
+  });
+
+  function injectTopicStyles() {
+    if (el("topicDeadlineStyles")) return;
+    const style = document.createElement("style");
+    style.id = "topicDeadlineStyles";
+    style.textContent = `
+      .topicDeadlineAdd { display: flex; gap: .5rem; align-items: end; flex-wrap: wrap; margin-bottom: .5rem; }
+      .topicDeadlineAdd label { flex: 1; min-width: 220px; margin: 0; }
+      .topicDeadlineHint { margin: -.25rem 0 .5rem; }
+      .topicRecordActions { display: flex; gap: .35rem; flex-shrink: 0; }
+    `;
+    document.head.appendChild(style);
+  }
 })();
