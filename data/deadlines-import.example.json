@@ -1,0 +1,27 @@
+[
+  {
+    "nazev": "DKRVO – roční výkaz výzkumu",
+    "urad": "MŠMT",
+    "agenda": "DKRVO",
+    "typ": "Výkaz",
+    "termin_sberu": "2026-03-15",
+    "termin_odeslani": "2026-03-31",
+    "periodicita": "Ročně",
+    "stav": "Aktivní",
+    "odpovedna_osoba": "OVV",
+    "poznamka": "Sběr od fakult, kontrola před odesláním",
+    "zdroj": "kolegové"
+  },
+  {
+    "nazev": "Registr výzkumných organizací – aktualizace",
+    "urad": "RVVI",
+    "agenda": "Věda a výzkum",
+    "typ": "Registr",
+    "termin_sberu": "2026-02-28",
+    "termin_odeslani": "2026-03-10",
+    "periodicita": "Ročně",
+    "stav": "Aktivní",
+    "odpovedna_osoba": "OVV",
+    "zdroj": "kolegové"
+  }
+]

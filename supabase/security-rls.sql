@@ -91,10 +91,34 @@ grant select, insert, update, delete on public.kb_topics to authenticated;
 grant select, insert, update, delete on public.kb_topic_records to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 3) Ověření
+-- 3) kb_deadlines (termíny sběrů)
+-- ---------------------------------------------------------------------------
+alter table if exists public.kb_deadlines enable row level security;
+
+drop policy if exists "kb_deadlines anon read" on public.kb_deadlines;
+drop policy if exists "kb_deadlines anon write" on public.kb_deadlines;
+drop policy if exists "kb_deadlines authenticated read" on public.kb_deadlines;
+drop policy if exists "kb_deadlines authenticated write" on public.kb_deadlines;
+
+create policy "kb_deadlines authenticated read"
+  on public.kb_deadlines for select
+  to authenticated
+  using (true);
+
+create policy "kb_deadlines authenticated write"
+  on public.kb_deadlines for all
+  to authenticated
+  using (true)
+  with check (true);
+
+revoke all on public.kb_deadlines from anon;
+grant select, insert, update, delete on public.kb_deadlines to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 4) Ověření
 -- ---------------------------------------------------------------------------
 select schemaname, tablename, policyname, roles, cmd
 from pg_policies
 where schemaname = 'public'
-  and tablename in ('kb_records', 'kb_record_bodies', 'kb_topics', 'kb_topic_records')
+  and tablename in ('kb_records', 'kb_record_bodies', 'kb_topics', 'kb_topic_records', 'kb_deadlines')
 order by tablename, policyname;

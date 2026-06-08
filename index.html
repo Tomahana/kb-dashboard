@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>KB Dashboard – Znalostní báze</title>
-  <link rel="stylesheet" href="styles.css?v=10" />
+  <link rel="stylesheet" href="styles.css?v=11" />
 </head>
 <body class="app-shell">
   <aside class="sidebar">
@@ -21,12 +21,15 @@
       </a>
       <a href="#temata" class="navItem" data-page="temata">Témata</a>
       <a href="#analyza" class="navItem" data-page="analyza">Analýza</a>
-      <a href="#terminy" class="navItem" data-page="terminy">Termíny</a>
+      <a href="#terminy" class="navItem" data-page="terminy">
+        Termíny
+        <span id="navBadgeDeadlines" class="navBadge navBadgeDeadline" hidden></span>
+      </a>
       <a href="#nastaveni" class="navItem" data-page="nastaveni">Nastavení</a>
     </nav>
     <div class="sidebarFoot">
       <p class="hint">Workflow: načíst → třídit → témata → analýza</p>
-      <p class="appVersion" id="appVersion">Verze 3.2</p>
+      <p class="appVersion" id="appVersion">Verze 3.3</p>
     </div>
   </aside>
 
@@ -70,6 +73,7 @@
           <li><button type="button" class="linkish" data-goto="nastaveni">Nastavení</button> — načtěte data ze Supabase a nastavte AI klíč</li>
           <li><button type="button" class="linkish" data-goto="emaily">E-maily</button> — auto-klasifikace, kontrola a potvrzení</li>
           <li><button type="button" class="linkish" data-goto="temata">Témata</button> — seskupení a AI shrnutí k tématu</li>
+          <li><button type="button" class="linkish" data-goto="terminy">Termíny</button> — sběry dat a odesílání na úřady</li>
           <li><button type="button" class="linkish" data-goto="analyza">Analýza</button> — přehled agend a rizik</li>
         </ol>
         <div class="overviewActions">
@@ -165,17 +169,29 @@
       <section class="panel">
         <div class="sectionHeader">
           <div>
-            <h2>Přehled termínů</h2>
-            <p class="hint">Sledování termínů sběrů dat a odesílání přehledů na úřady, vycházející z pole „Termín“ a typu „Termín“ v záznamech.</p>
-          </div>
-          <div class="sectionActions">
-            <button id="deadlinesCopyPromptBtn" class="button small secondary" type="button">AI přehled termínů</button>
+            <h2>Termíny sběrů a odesílání</h2>
+            <p class="hint">Evidence termínů v Supabase. Data od kolegů importujte jako JSON, vlastní termíny přidáte tlačítkem Nový termín.</p>
           </div>
         </div>
+        <div class="deadlinesToolbar">
+          <button id="deadlinesNewBtn" class="button accent" type="button">Nový termín</button>
+          <button id="deadlinesReloadBtn" class="button secondary" type="button">Načíst ze Supabase</button>
+          <label class="button secondary">
+            Import JSON
+            <input id="deadlinesImportFile" type="file" accept=".json,application/json" hidden />
+          </label>
+          <label class="checkboxLine">
+            <input id="deadlinesImportReplace" type="checkbox" />
+            Import nahradí stávající data
+          </label>
+          <button id="deadlinesExportBtn" class="button secondary" type="button">Export JSON</button>
+          <button id="deadlinesCopyPromptBtn" class="button secondary" type="button">AI přehled termínů</button>
+        </div>
+        <p id="deadlinesStatus" class="deadlinesStatus hint">Načítám…</p>
         <div class="deadlinesOverview">
           <article class="metric">
             <span id="deadlinesTotal">0</span>
-            <small>záznamů s termínem</small>
+            <small>termínů celkem</small>
           </article>
           <article class="metric">
             <span id="deadlinesUpcoming">0</span>
@@ -186,12 +202,26 @@
             <small>po termínu</small>
           </article>
         </div>
+        <div class="deadlinesFilters">
+          <label>Úřad
+            <select id="deadlinesUradFilter"><option value="">Vše</option></select>
+          </label>
+          <label>Agenda
+            <select id="deadlinesAgendaFilter"><option value="">Vše</option></select>
+          </label>
+          <label>Stav
+            <select id="deadlinesStavFilter"><option value="">Vše</option></select>
+          </label>
+          <label>Hledat
+            <input id="deadlinesSearch" type="search" placeholder="Název, úřad, poznámka…" />
+          </label>
+        </div>
       </section>
 
       <section class="panel">
         <div class="sectionHeader">
           <h2>Nadcházející termíny</h2>
-          <p class="hint">Seřazeno podle data termínu. Vychází z aktuálně vyfiltrovaných záznamů v modulu E-maily.</p>
+          <p class="hint">Do 30 dní od data odeslání (nebo sběru, pokud odeslání chybí).</p>
         </div>
         <div id="deadlinesUpcomingList"></div>
       </section>
@@ -199,15 +229,15 @@
       <section class="panel">
         <div class="sectionHeader">
           <h2>Termíny po splatnosti</h2>
-          <p class="hint">Termíny, které již proběhly a záznam není uzavřený.</p>
+          <p class="hint">Termíny v minulosti se stavem jiným než Odesláno / Uzavřeno.</p>
         </div>
         <div id="deadlinesOverdueList"></div>
       </section>
 
       <section class="panel">
         <div class="sectionHeader">
-          <h2>Všechny termíny ve výběru</h2>
-          <p class="hint">Tabulkový přehled všech záznamů s vyplněným termínem v rámci aktuálních filtrů.</p>
+          <h2>Všechny termíny</h2>
+          <p class="hint">Kliknutím na řádek upravíte záznam.</p>
         </div>
         <div id="deadlinesAllList"></div>
       </section>
@@ -234,6 +264,11 @@
       <section class="panel">
         <h2>Témata v Supabase</h2>
         <p class="hint">Pro trvalá témata spusťte SQL schéma <code>supabase/topics-schema.sql</code> v Supabase SQL Editoru.</p>
+      </section>
+      <section class="panel">
+        <h2>Termíny v Supabase</h2>
+        <p class="hint">Pro modul Termíny spusťte <code>supabase/deadlines-schema.sql</code> v SQL Editoru. Vzor importu od kolegů: <code>data/deadlines-import.example.json</code>.</p>
+        <p class="hint">Po spuštění schématu otevřete Termíny → Import JSON (data od kolegů) nebo Nový termín (vlastní záznam).</p>
       </section>
     </section>
   </div>
@@ -325,6 +360,79 @@
     </form>
   </dialog>
 
+  <dialog id="deadlineDialog">
+    <form method="dialog" id="deadlineForm">
+      <div class="dialogHeader">
+        <div>
+          <h2 id="deadlineDialogTitle">Nový termín</h2>
+          <p class="hint">Sběr dat u VŠ a odeslání na úřad / poskytovatele.</p>
+        </div>
+        <button class="iconButton" value="cancel">×</button>
+      </div>
+      <input type="hidden" id="deadlineEditId" />
+      <label>Název sběru / výkazu *
+        <input id="deadlineNazev" type="text" required placeholder="např. DKRVO – roční výkaz" />
+      </label>
+      <div class="grid2">
+        <label>Úřad / adresát
+          <input id="deadlineUrad" type="text" list="uradList" placeholder="MŠMT, RVVI…" />
+        </label>
+        <label>Agenda
+          <input id="deadlineAgenda" type="text" list="agendaList" />
+        </label>
+        <label>Typ
+          <select id="deadlineTyp">
+            <option value="">— vyberte —</option>
+            <option>Výkaz</option>
+            <option>Dotazník</option>
+            <option>Registr</option>
+            <option>Hlášení</option>
+            <option>Jiné</option>
+          </select>
+        </label>
+        <label>Periodicita
+          <select id="deadlinePeriodicita">
+            <option value="">— vyberte —</option>
+            <option>Ročně</option>
+            <option>Pololetně</option>
+            <option>Čtvrtletně</option>
+            <option>Měsíčně</option>
+            <option>Jednorázově</option>
+          </select>
+        </label>
+        <label>Termín sběru dat
+          <input id="deadlineSber" type="date" />
+        </label>
+        <label>Termín odeslání na úřad
+          <input id="deadlineOdeslani" type="date" />
+        </label>
+        <label>Stav
+          <select id="deadlineStav">
+            <option>Aktivní</option>
+            <option>Příprava</option>
+            <option>Odesláno</option>
+            <option>Uzavřeno</option>
+            <option>Zrušeno</option>
+          </select>
+        </label>
+        <label>Odpovědná osoba / oddělení
+          <input id="deadlineOdpovedna" type="text" placeholder="OVV, fakulta…" />
+        </label>
+        <label>Zdroj
+          <input id="deadlineZdroj" type="text" placeholder="kolegové, vlastní, import" />
+        </label>
+      </div>
+      <label>Poznámka
+        <textarea id="deadlinePoznamka" rows="3"></textarea>
+      </label>
+      <div class="dialogActions">
+        <button id="deleteDeadlineBtn" type="button" class="button danger" hidden>Smazat</button>
+        <button value="cancel" class="button secondary">Zavřít</button>
+        <button id="saveDeadlineBtn" type="button" class="button accent">Uložit</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="aiDialog">
     <form method="dialog">
       <div class="dialogHeader">
@@ -367,21 +475,26 @@
   <datalist id="priorityList">
     <option>Nízká</option><option>Běžná</option><option>Vysoká</option><option>Kritická</option>
   </datalist>
+  <datalist id="uradList">
+    <option>MŠMT</option><option>RVVI</option><option>NÚKIB</option><option>TA ČR</option>
+    <option>GA ČR</option><option>SFGP</option><option>Úřad práce</option><option>Jiný</option>
+  </datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=10"></script>
-  <script src="auth.js?v=10"></script>
-  <script src="form-pickers.js?v=10"></script>
-  <script src="layout.js?v=10"></script>
-  <script src="app.js?v=10"></script>
-  <script src="enhancements.js?v=10"></script>
-  <script src="supabase-loader.js?v=10"></script>
-  <script src="ai-classify.js?v=10"></script>
-  <script src="task-export.js?v=10"></script>
-  <script src="notion.js?v=10"></script>
-  <script src="supabase-topics.js?v=10"></script>
-  <script src="topics.js?v=10"></script>
-  <script src="record-click-fix.js?v=10"></script>
-  <script src="deadlines.js?v=10"></script>
+  <script src="supabase-config.js?v=11"></script>
+  <script src="auth.js?v=11"></script>
+  <script src="form-pickers.js?v=11"></script>
+  <script src="layout.js?v=11"></script>
+  <script src="app.js?v=11"></script>
+  <script src="enhancements.js?v=11"></script>
+  <script src="supabase-loader.js?v=11"></script>
+  <script src="ai-classify.js?v=11"></script>
+  <script src="task-export.js?v=11"></script>
+  <script src="notion.js?v=11"></script>
+  <script src="supabase-topics.js?v=11"></script>
+  <script src="topics.js?v=11"></script>
+  <script src="supabase-deadlines.js?v=11"></script>
+  <script src="record-click-fix.js?v=11"></script>
+  <script src="deadlines.js?v=11"></script>
 </body>
 </html>
