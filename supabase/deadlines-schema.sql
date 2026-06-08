@@ -9,26 +9,50 @@
 
 create table if not exists public.kb_deadlines (
   id uuid primary key default gen_random_uuid(),
+  id_polozky text,
+  oblast text,
   nazev text not null,
+  popis text,
+  odpovedna_osoba text,
+  potrebujeme_od text,
+  dodavatel_fakulta text,
+  kam_vyplnit text,
+  system_zdroj text,
+  termin_sberu date,
+  termin_interni date,
+  termin_odeslani date,
+  periodicita text,
+  ucel text,
+  navazny_proces text,
+  riziko text,
+  stav text not null default 'Aktivní',
+  poznamka text,
+  zdroj text,
   urad text,
   agenda text,
   typ text,
-  termin_sberu date,
-  termin_odeslani date,
-  periodicita text,
-  stav text not null default 'Aktivní',
-  poznamka text,
-  odpovedna_osoba text,
-  zdroj text,
   kb_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-comment on table public.kb_deadlines is 'Termíny sběrů dat a odesílání výkazů na úřady';
-comment on column public.kb_deadlines.termin_sberu is 'Termín uzavření sběru dat u VŠ';
-comment on column public.kb_deadlines.termin_odeslani is 'Termín odeslání na úřad / poskytovatele';
+comment on table public.kb_deadlines is 'Termíny sběrů dat a odesílání výkazů — struktura odpovídá tabulce kolegů';
+comment on column public.kb_deadlines.id_polozky is 'ID položky z evidence kolegů';
+comment on column public.kb_deadlines.oblast is 'Oblast';
+comment on column public.kb_deadlines.nazev is 'Co se hlídá / název indikátoru';
+comment on column public.kb_deadlines.popis is 'Stručný popis údaje';
+comment on column public.kb_deadlines.odpovedna_osoba is 'Kdo to hlídá na rektorátu';
+comment on column public.kb_deadlines.potrebujeme_od is 'Od koho potřebujeme data';
+comment on column public.kb_deadlines.dodavatel_fakulta is 'Kdo dodává data za fakultu / součást';
+comment on column public.kb_deadlines.kam_vyplnit is 'Kam se data vyplňují / zadávají';
+comment on column public.kb_deadlines.system_zdroj is 'Primární systém nebo zdroj dat';
+comment on column public.kb_deadlines.termin_sberu is 'Termín pro fakulty / součásti';
+comment on column public.kb_deadlines.termin_interni is 'Interní termín pro zpracování na rektorátu';
+comment on column public.kb_deadlines.termin_odeslani is 'Finální / externí termín';
 comment on column public.kb_deadlines.zdroj is 'Původ záznamu, např. kolegové, vlastní, import';
+
+-- Pokud tabulka už existuje z dřívější verze, doplňte sloupce:
+-- spusťte také supabase/deadlines-migrate-v2.sql
 
 create index if not exists kb_deadlines_termin_odeslani_idx
   on public.kb_deadlines (termin_odeslani);

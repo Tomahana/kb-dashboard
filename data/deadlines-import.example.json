@@ -1,27 +1,21 @@
 [
   {
-    "nazev": "DKRVO – roční výkaz výzkumu",
-    "urad": "MŠMT",
-    "agenda": "DKRVO",
-    "typ": "Výkaz",
-    "termin_sberu": "2026-03-15",
-    "termin_odeslani": "2026-03-31",
-    "periodicita": "Ročně",
-    "stav": "Aktivní",
-    "odpovedna_osoba": "OVV",
-    "poznamka": "Sběr od fakult, kontrola před odesláním",
-    "zdroj": "kolegové"
-  },
-  {
-    "nazev": "Registr výzkumných organizací – aktualizace",
-    "urad": "RVVI",
-    "agenda": "Věda a výzkum",
-    "typ": "Registr",
-    "termin_sberu": "2026-02-28",
-    "termin_odeslani": "2026-03-10",
-    "periodicita": "Ročně",
-    "stav": "Aktivní",
-    "odpovedna_osoba": "OVV",
-    "zdroj": "kolegové"
+    "ID položky": "DKRVO-01",
+    "Oblast": "DKRVO",
+    "Co se hlídá / název indikátoru": "DKRVO – roční výkaz",
+    "Stručný popis údaje": "Sběr výzkumných výstupů za kalendářní rok",
+    "Kdo to hlídá na rektorátu": "OVV",
+    "Od koho potřebujeme data": "Fakulty, ústavy",
+    "Kdo dodává data za fakultu / součást": "proděkani pro vědu",
+    "Kam se data vyplňují / zadávají": "Portál MŠMT",
+    "Primární systém nebo zdroj dat": "IS VaVaI",
+    "Termín pro fakulty / součásti": "15.03.2026",
+    "Interní termín pro zpracování na rek.": "25.03.2026",
+    "Finální / externí termín": "31.03.2026",
+    "Periodicita": "Ročně",
+    "K čemu údaj slouží": "Plnění zákonné povinnosti",
+    "Návazný proces / výstup": "Odeslání na MŠMT",
+    "Riziko při nedodání": "Sankce / neúplný výkaz",
+    "Poznámka": ""
   }
 ]

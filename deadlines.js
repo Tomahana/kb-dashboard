@@ -1,9 +1,35 @@
-// Modul Termíny – sběry dat a odesílání na úřady (Supabase + lokální záloha).
+// Modul Termíny – sběry dat a odesílání (struktura tabulky kolegů, Supabase + import CSV/JSON).
 
 (function () {
   const STORAGE_KEY = "kb-dashboard-deadlines-v1";
   const DAYS_UPCOMING = 30;
   const CLOSED_STATUSES = ["odesláno", "uzavřeno", "hotovo", "zrušeno", "archiv"];
+
+  const IMPORT_ALIASES = {
+    id_polozky: ["ID položky", "id položky", "id_polozky", "ID"],
+    oblast: ["Oblast", "oblast"],
+    nazev: ["Co se hlídá / název indikátoru", "Co se hlídá", "název indikátoru", "nazev", "Název", "name", "title"],
+    popis: ["Stručný popis údaje", "popis", "Popis"],
+    odpovedna_osoba: ["Kdo to hlídá na rektorátu", "odpovedna_osoba", "Odpovědná osoba"],
+    potrebujeme_od: ["Od koho potřebujeme data", "potrebujeme_od"],
+    dodavatel_fakulta: ["Kdo dodává data za fakultu / součást", "Kdo dodává data za fakultu", "dodavatel_fakulta"],
+    kam_vyplnit: ["Kam se data vyplňují / zadávají", "Kam se data vyplňují", "kam_vyplnit"],
+    system_zdroj: ["Primární systém nebo zdroj dat", "system_zdroj", "Systém"],
+    termin_sberu: ["Termín pro fakulty / součásti", "termin_sberu", "Termín sběru"],
+    termin_interni: ["Interní termín pro zpracování na rek.", "Interní termín", "termin_interni"],
+    termin_odeslani: ["Finální / externí termín", "Finální termín", "termin_odeslani", "Termín odeslání"],
+    periodicita: ["Periodicita", "periodicita"],
+    ucel: ["K čemu údaj slouží", "ucel"],
+    navazny_proces: ["Návazný proces / výstup", "Návazný proces", "navazny_proces"],
+    riziko: ["Riziko při nedodání", "riziko"],
+    poznamka: ["Poznámka", "poznamka", "note"],
+    stav: ["Stav", "stav"],
+    zdroj: ["Zdroj", "zdroj"],
+    urad: ["Úřad", "urad", "authority"],
+    agenda: ["Agenda", "agenda"],
+    typ: ["Typ", "typ", "type"],
+    kb_id: ["kb_id", "KB_ID"]
+  };
 
   let deadlines = [];
   let useSupabase = false;
@@ -21,13 +47,23 @@
     return Number.isNaN(d.getTime()) ? null : d;
   }
 
+  function parseImportDate(value) {
+    const v = n(value);
+    if (!v) return "";
+    if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+    const cz = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    if (cz) return `${cz[3]}-${cz[2].padStart(2, "0")}-${cz[1].padStart(2, "0")}`;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  }
+
   function formatDate(value) {
     const d = value instanceof Date ? value : parseDate(value);
     return d ? d.toLocaleDateString("cs-CZ") : "";
   }
 
   function effectiveDate(item) {
-    return parseDate(item.termin_odeslani) || parseDate(item.termin_sberu);
+    return parseDate(item.termin_interni) || parseDate(item.termin_odeslani) || parseDate(item.termin_sberu);
   }
 
   function isClosed(item) {
@@ -92,21 +128,84 @@
     }
   }
 
+  function getFieldFromRow(row, field) {
+    const aliases = IMPORT_ALIASES[field] || [field];
+    for (const key of aliases) {
+      if (row[key] != null && n(row[key])) return n(row[key]);
+    }
+    const normalized = {};
+    Object.entries(row).forEach(([k, v]) => {
+      normalized[n(k)] = v;
+    });
+    for (const key of aliases) {
+      if (normalized[key] != null && n(normalized[key])) return n(normalized[key]);
+    }
+    return "";
+  }
+
   function filteredDeadlines() {
-    const urad = n(el("deadlinesUradFilter")?.value);
-    const agenda = n(el("deadlinesAgendaFilter")?.value);
+    const oblast = n(el("deadlinesOblastFilter")?.value);
     const stav = n(el("deadlinesStavFilter")?.value);
     const q = l(el("deadlinesSearch")?.value);
     return deadlines.filter(item => {
-      if (urad && n(item.urad) !== urad) return false;
-      if (agenda && n(item.agenda) !== agenda) return false;
+      const itemOblast = n(item.oblast) || n(item.agenda);
+      if (oblast && itemOblast !== oblast) return false;
       if (stav && n(item.stav) !== stav) return false;
       if (q) {
-        const hay = l([item.nazev, item.urad, item.agenda, item.typ, item.stav, item.poznamka, item.odpovedna_osoba, item.zdroj].join(" "));
+        const hay = l([
+          item.id_polozky, item.oblast, item.nazev, item.popis, item.odpovedna_osoba,
+          item.potrebujeme_od, item.dodavatel_fakulta, item.kam_vyplnit, item.system_zdroj,
+          item.ucel, item.navazny_proces, item.riziko, item.poznamka, item.periodicita, item.stav
+        ].join(" "));
         if (!hay.includes(q)) return false;
       }
       return true;
     });
+  }
+
+  function splitDelimitedLine(line, delimiter) {
+    const out = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"';
+          i += 1;
+        } else inQuotes = !inQuotes;
+      } else if (ch === delimiter && !inQuotes) {
+        out.push(cur);
+        cur = "";
+      } else cur += ch;
+    }
+    out.push(cur);
+    return out.map(s => s.trim());
+  }
+
+  function detectDelimiter(headerLine) {
+    const counts = [
+      ["\t", (headerLine.match(/\t/g) || []).length],
+      [";", (headerLine.match(/;/g) || []).length],
+      [",", (headerLine.match(/,/g) || []).length]
+    ];
+    counts.sort((a, b) => b[1] - a[1]);
+    return counts[0][1] > 0 ? counts[0][0] : "\t";
+  }
+
+  function parseDelimitedTable(text) {
+    const lines = text.split(/\r?\n/).filter(line => n(line));
+    if (!lines.length) return [];
+    const delimiter = detectDelimiter(lines[0]);
+    const headers = splitDelimitedLine(lines[0], delimiter);
+    return lines.slice(1).map(line => {
+      const cols = splitDelimitedLine(line, delimiter);
+      const row = {};
+      headers.forEach((header, i) => {
+        row[header] = cols[i] ?? "";
+      });
+      return row;
+    }).filter(row => Object.values(row).some(v => n(v)));
   }
 
   function splitByStatus(items) {
@@ -125,8 +224,8 @@
     return { upcoming, overdue };
   }
 
-  function uniqueField(field) {
-    return [...new Set(deadlines.map(d => n(d[field])).filter(Boolean))].sort((a, b) => a.localeCompare(b, "cs"));
+  function uniqueOblast() {
+    return [...new Set(deadlines.map(d => n(d.oblast) || n(d.agenda)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "cs"));
   }
 
   function populateFilters() {
@@ -137,17 +236,16 @@
       select.innerHTML = '<option value="">Vše</option>' + values.map(v => `<option>${html(v)}</option>`).join("");
       select.value = current;
     };
-    fill("deadlinesUradFilter", uniqueField("urad"));
-    fill("deadlinesAgendaFilter", uniqueField("agenda"));
-    fill("deadlinesStavFilter", uniqueField("stav"));
+    fill("deadlinesOblastFilter", uniqueOblast());
+    fill("deadlinesStavFilter", [...new Set(deadlines.map(d => n(d.stav)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "cs")));
   }
 
   function renderOverview(all, upcoming, overdue) {
     if (el("deadlinesTotal")) el("deadlinesTotal").textContent = String(all.length);
     if (el("deadlinesUpcoming")) el("deadlinesUpcoming").textContent = String(upcoming.length);
     if (el("deadlinesOverdue")) el("deadlinesOverdue").textContent = String(overdue.length);
-    if (el("navBadgeDeadlines")) {
-      const badge = el("navBadgeDeadlines");
+    const badge = el("navBadgeDeadlines");
+    if (badge) {
       badge.textContent = overdue.length > 0 ? String(overdue.length) : "";
       badge.hidden = overdue.length <= 0;
     }
@@ -155,25 +253,27 @@
 
   function renderDeadlineCard({ item, deadline }) {
     const dateText = deadline ? formatDate(deadline) : "Bez termínu";
-  const sber = item.termin_sberu ? `Sběr: ${formatDate(item.termin_sberu)}` : "";
-    const odesl = item.termin_odeslani ? `Odeslání: ${formatDate(item.termin_odeslani)}` : "";
-    const dates = [sber, odesl].filter(Boolean).join(" · ");
+    const dates = [
+      item.termin_sberu ? `Fakulty: ${formatDate(item.termin_sberu)}` : "",
+      item.termin_interni ? `Interní: ${formatDate(item.termin_interni)}` : "",
+      item.termin_odeslani ? `Externí: ${formatDate(item.termin_odeslani)}` : ""
+    ].filter(Boolean).join(" · ");
     return `
       <article class="deadlineItem deadline-clickable" data-deadline-id="${html(item.id)}" tabindex="0" role="button">
         <header class="deadlineHeader">
           <div>
             <strong>${html(dateText)}</strong>
-            <span class="deadlineMeta">${html(item.urad || "—")} · ${html(item.agenda || "Nezařazeno")}</span>
+            <span class="deadlineMeta">${html(item.oblast || item.agenda || "—")}${item.id_polozky ? ` · ID ${html(item.id_polozky)}` : ""}</span>
             ${dates ? `<span class="deadlineMeta">${html(dates)}</span>` : ""}
           </div>
           <div class="deadlineTags">
-            ${item.typ ? `<span class="badge">${html(item.typ)}</span>` : ""}
+            ${item.periodicita ? `<span class="badge">${html(item.periodicita)}</span>` : ""}
             ${item.stav ? `<span class="badge">${html(item.stav)}</span>` : ""}
           </div>
         </header>
         <div class="deadlineTitle">${html(item.nazev)}</div>
-        ${item.odpovedna_osoba ? `<div class="deadlineMeta">Odpovědný: ${html(item.odpovedna_osoba)}</div>` : ""}
-        ${item.poznamka ? `<p class="deadlineSummary">${html(item.poznamka)}</p>` : ""}
+        ${item.odpovedna_osoba ? `<div class="deadlineMeta">Hlídá na rektorátu: ${html(item.odpovedna_osoba)}</div>` : ""}
+        ${item.popis ? `<p class="deadlineSummary">${html(item.popis)}</p>` : ""}
       </article>
     `;
   }
@@ -192,7 +292,7 @@
     const box = el("deadlinesAllList");
     if (!box) return;
     if (!all.length) {
-      box.innerHTML = `<p class="hint">Žádné termíny. Přidejte nový záznam nebo importujte JSON od kolegů.</p>`;
+      box.innerHTML = `<p class="hint">Žádné termíny. Importujte tabulku od kolegů (CSV/TSV) nebo přidejte nový záznam.</p>`;
       return;
     }
     const sorted = [...all].sort((a, b) => {
@@ -208,28 +308,28 @@
         <table class="deadlinesTable">
           <thead>
             <tr>
-              <th>Odeslání</th>
-              <th>Sběr</th>
-              <th>Název</th>
-              <th>Úřad</th>
-              <th>Agenda</th>
-              <th>Typ</th>
-              <th>Stav</th>
-              <th>Zdroj</th>
+              <th>ID</th>
+              <th>Oblast</th>
+              <th>Co se hlídá</th>
+              <th>Fakulty</th>
+              <th>Interní rek.</th>
+              <th>Externí</th>
+              <th>Hlídá rek.</th>
+              <th>Periodicita</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             ${sorted.map(item => `
               <tr class="deadline-clickable" data-deadline-id="${html(item.id)}" tabindex="0">
-                <td>${html(formatDate(item.termin_odeslani))}</td>
-                <td>${html(formatDate(item.termin_sberu))}</td>
+                <td>${html(item.id_polozky)}</td>
+                <td>${html(item.oblast || item.agenda)}</td>
                 <td><strong>${html(item.nazev)}</strong></td>
-                <td>${html(item.urad)}</td>
-                <td>${html(item.agenda)}</td>
-                <td>${html(item.typ)}</td>
-                <td>${html(item.stav)}</td>
-                <td>${html(item.zdroj)}</td>
+                <td>${html(formatDate(item.termin_sberu))}</td>
+                <td>${html(formatDate(item.termin_interni))}</td>
+                <td>${html(formatDate(item.termin_odeslani))}</td>
+                <td>${html(item.odpovedna_osoba)}</td>
+                <td>${html(item.periodicita)}</td>
                 <td><span class="openHint">Upravit →</span></td>
               </tr>
             `).join("")}
@@ -257,41 +357,43 @@
   }
 
   function normalizeImportRow(row, index) {
-    const get = (...keys) => {
-      for (const key of keys) {
-        if (row[key] != null && n(row[key])) return n(row[key]);
-      }
-      return "";
-    };
-    return {
+    const dateFields = ["termin_sberu", "termin_interni", "termin_odeslani"];
+    const item = {
       id: row.id || uuid(),
-      nazev: get("nazev", "Název", "name", "title") || `Import ${index + 1}`,
-      urad: get("urad", "Úřad", "authority"),
-      agenda: get("agenda", "Agenda"),
-      typ: get("typ", "Typ", "type"),
-      termin_sberu: get("termin_sberu", "termin_sběru", "Termín sběru", "sber"),
-      termin_odeslani: get("termin_odeslani", "termin_odeslání", "Termín odeslání", "odeslani"),
-      periodicita: get("periodicita", "Periodicita"),
-      stav: get("stav", "Stav") || "Aktivní",
-      poznamka: get("poznamka", "Poznámka", "note"),
-      odpovedna_osoba: get("odpovedna_osoba", "Odpovědná osoba", "responsible"),
-      zdroj: get("zdroj", "Zdroj") || "import",
-      kb_id: get("kb_id", "KB_ID"),
+      stav: getFieldFromRow(row, "stav") || "Aktivní",
+      zdroj: getFieldFromRow(row, "zdroj") || "kolegové",
       created_at: row.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+    Object.keys(IMPORT_ALIASES).forEach(field => {
+      if (dateFields.includes(field)) {
+        item[field] = parseImportDate(getFieldFromRow(row, field));
+      } else {
+        item[field] = getFieldFromRow(row, field);
+      }
+    });
+    if (!item.nazev) item.nazev = item.id_polozky ? `Položka ${item.id_polozky}` : `Import ${index + 1}`;
+    return item;
   }
 
-  async function importJsonFile(file, replace) {
-    const text = await file.text();
-    let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch (_) {
-      alert("Soubor není platný JSON.");
-      return;
+  function parseImportRows(text, fileName) {
+    const lower = (fileName || "").toLowerCase();
+    if (lower.endsWith(".json")) {
+      const parsed = JSON.parse(text);
+      return Array.isArray(parsed) ? parsed : parsed.deadlines || parsed.items || [];
     }
-    const rows = Array.isArray(parsed) ? parsed : parsed.deadlines || parsed.items || [];
+    if (lower.endsWith(".csv") || lower.endsWith(".tsv") || lower.endsWith(".txt") || text.includes("\t") || text.includes(";")) {
+      return parseDelimitedTable(text);
+    }
+    try {
+      const parsed = JSON.parse(text);
+      return Array.isArray(parsed) ? parsed : parsed.deadlines || parsed.items || [];
+    } catch (_) {
+      return parseDelimitedTable(text);
+    }
+  }
+
+  async function importRows(rows, replace) {
     if (!rows.length) {
       alert("V souboru nejsou žádné záznamy.");
       return;
@@ -308,18 +410,30 @@
           const inserted = await window.kbSupabaseDeadlines.insertDeadlines(normalized);
           deadlines = [...inserted, ...deadlines];
         }
-        setStatus(`Importováno do Supabase: ${normalized.length} termínů.`);
+        setStatus(`Importováno do Supabase: ${normalized.length} položek.`);
       } else {
         if (replace) deadlines = normalized;
         else deadlines = [...normalized, ...deadlines];
         persistLocal();
-        setStatus(`Importováno lokálně: ${normalized.length} termínů.`);
+        setStatus(`Importováno lokálně: ${normalized.length} položek.`);
       }
       render();
     } catch (error) {
       console.error(error);
       alert("Import se nepodařil: " + (error.message || error));
     }
+  }
+
+  async function importFile(file, replace) {
+    const text = await file.text();
+    let rows;
+    try {
+      rows = parseImportRows(text, file.name);
+    } catch (_) {
+      alert("Soubor se nepodařilo načíst. Podporované formáty: CSV, TSV, JSON.");
+      return;
+    }
+    await importRows(rows, replace);
   }
 
   function exportJson() {
@@ -331,21 +445,42 @@
     URL.revokeObjectURL(a.href);
   }
 
+  const FORM_FIELDS = [
+    ["deadlineIdPolozky", "id_polozky"],
+    ["deadlineOblast", "oblast"],
+    ["deadlineNazev", "nazev"],
+    ["deadlinePopis", "popis"],
+    ["deadlineOdpovedna", "odpovedna_osoba"],
+    ["deadlinePotrebujemeOd", "potrebujeme_od"],
+    ["deadlineDodavatelFakulta", "dodavatel_fakulta"],
+    ["deadlineKamVyplnit", "kam_vyplnit"],
+    ["deadlineSystemZdroj", "system_zdroj"],
+    ["deadlineSber", "termin_sberu"],
+    ["deadlineInterni", "termin_interni"],
+    ["deadlineOdeslani", "termin_odeslani"],
+    ["deadlinePeriodicita", "periodicita"],
+    ["deadlineUcel", "ucel"],
+    ["deadlineNavaznyProces", "navazny_proces"],
+    ["deadlineRiziko", "riziko"],
+    ["deadlineStav", "stav"],
+    ["deadlineZdroj", "zdroj"],
+    ["deadlinePoznamka", "poznamka"]
+  ];
+
   function openDialog(item) {
     const existing = item || null;
     el("deadlineEditId").value = existing?.id || "";
-    el("deadlineNazev").value = existing?.nazev || "";
-    el("deadlineUrad").value = existing?.urad || "";
-    el("deadlineAgenda").value = existing?.agenda || "";
-    el("deadlineTyp").value = existing?.typ || "";
-    el("deadlineSber").value = existing?.termin_sberu || "";
-    el("deadlineOdeslani").value = existing?.termin_odeslani || "";
-    el("deadlinePeriodicita").value = existing?.periodicita || "";
-    el("deadlineStav").value = existing?.stav || "Aktivní";
-    el("deadlineOdpovedna").value = existing?.odpovedna_osoba || "";
-    el("deadlineZdroj").value = existing?.zdroj || (existing ? "" : "vlastní");
-    el("deadlinePoznamka").value = existing?.poznamka || "";
-    el("deadlineDialogTitle").textContent = existing ? "Upravit termín" : "Nový termín";
+    FORM_FIELDS.forEach(([elementId, field]) => {
+      const node = el(elementId);
+      if (!node) return;
+      const raw = existing?.[field];
+      if (field.startsWith("termin_")) {
+        node.value = raw ? String(raw).slice(0, 10) : "";
+      } else {
+        node.value = raw || (field === "stav" && !existing ? "Aktivní" : field === "zdroj" && !existing ? "vlastní" : "");
+      }
+    });
+    el("deadlineDialogTitle").textContent = existing ? "Upravit položku" : "Nová položka";
     el("deleteDeadlineBtn").hidden = !existing;
     el("deadlineDialog").showModal();
   }
@@ -354,28 +489,32 @@
     return deadlines.find(d => d.id === id) || null;
   }
 
+  function readFormPayload(id, existing) {
+    const payload = {
+      id,
+      created_at: existing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      __existing: !!existing,
+      urad: existing?.urad || "",
+      agenda: existing?.agenda || "",
+      typ: existing?.typ || "",
+      kb_id: existing?.kb_id || ""
+    };
+    FORM_FIELDS.forEach(([elementId, field]) => {
+      const node = el(elementId);
+      if (!node) return;
+      payload[field] = field.startsWith("termin_") ? (node.value || "") : n(node.value);
+    });
+    if (!payload.nazev) payload.nazev = payload.id_polozky ? `Položka ${payload.id_polozky}` : "Bez názvu";
+    if (!payload.stav) payload.stav = "Aktivní";
+    return payload;
+  }
+
   async function saveDeadlineForm(e) {
     e.preventDefault();
     const id = el("deadlineEditId").value || uuid();
     const existing = getDeadline(id);
-    const payload = {
-      id,
-      nazev: n(el("deadlineNazev").value) || "Bez názvu",
-      urad: n(el("deadlineUrad").value),
-      agenda: n(el("deadlineAgenda").value),
-      typ: n(el("deadlineTyp").value),
-      termin_sberu: el("deadlineSber").value || "",
-      termin_odeslani: el("deadlineOdeslani").value || "",
-      periodicita: n(el("deadlinePeriodicita").value),
-      stav: n(el("deadlineStav").value) || "Aktivní",
-      odpovedna_osoba: n(el("deadlineOdpovedna").value),
-      zdroj: n(el("deadlineZdroj").value),
-      poznamka: n(el("deadlinePoznamka").value),
-      kb_id: existing?.kb_id || "",
-      created_at: existing?.created_at || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      __existing: !!existing
-    };
+    const payload = readFormPayload(id, existing);
     const btn = el("saveDeadlineBtn");
     const prev = btn?.textContent;
     try {
@@ -413,7 +552,7 @@
 
   async function deleteDeadline() {
     const id = el("deadlineEditId").value;
-    if (!id || !confirm("Opravdu smazat tento termín?")) return;
+    if (!id || !confirm("Opravdu smazat tuto položku?")) return;
     try {
       if (useSupabase && window.kbSupabaseDeadlines && await ensureAuth()) {
         await window.kbSupabaseDeadlines.deleteDeadlineFromSupabase(id);
@@ -421,7 +560,7 @@
       deadlines = deadlines.filter(d => d.id !== id);
       if (!useSupabase) persistLocal();
       el("deadlineDialog").close();
-      setStatus("Termín smazán.");
+      setStatus("Položka smazána.");
       render();
     } catch (error) {
       alert("Smazání se nepodařilo: " + (error.message || error));
@@ -430,37 +569,40 @@
 
   function buildAiPrompt(all) {
     if (!all.length) return "Žádné termíny k analýze.";
-    const lines = all.map((item, i) => {
-      const eff = effectiveDate(item);
-      return `[${i + 1}] ${item.nazev}
-Úřad: ${item.urad || ""}
-Agenda: ${item.agenda || ""}
-Typ: ${item.typ || ""}
-Sběr: ${formatDate(item.termin_sberu)}
-Odeslání: ${formatDate(item.termin_odeslani)}
-Hlavní termín: ${formatDate(eff)}
-Stav: ${item.stav || ""}
-Odpovědný: ${item.odpovedna_osoba || ""}
-Poznámka: ${item.poznamka || ""}`;
-    }).join("\n---\n");
-    return `Analyzuj termíny sběrů dat a odesílání výkazů na úřady.
+    const lines = all.map((item, i) => `[${i + 1}] ${item.nazev}
+ID: ${item.id_polozky || ""}
+Oblast: ${item.oblast || ""}
+Popis: ${item.popis || ""}
+Hlídá na rektorátu: ${item.odpovedna_osoba || ""}
+Potřebujeme od: ${item.potrebujeme_od || ""}
+Dodavatel za fakultu: ${item.dodavatel_fakulta || ""}
+Kam vyplnit: ${item.kam_vyplnit || ""}
+Systém: ${item.system_zdroj || ""}
+Termín fakulty: ${formatDate(item.termin_sberu)}
+Interní termín rek.: ${formatDate(item.termin_interni)}
+Externí termín: ${formatDate(item.termin_odeslani)}
+Periodicita: ${item.periodicita || ""}
+Účel: ${item.ucel || ""}
+Návazný proces: ${item.navazny_proces || ""}
+Riziko: ${item.riziko || ""}
+Poznámka: ${item.poznamka || ""}`).join("\n---\n");
+    return `Analyzuj termíny sběrů dat a odesílání výkazů na úřady podle evidence OVV.
 
 Vytvoř:
 1. seznam blížících se termínů (do ${DAYS_UPCOMING} dní) s doporučenými kroky,
 2. seznam zpožděných termínů a návrh nápravných kroků,
-3. přehled podle úřadů a agend,
+3. přehled podle oblastí a odpovědných osob na rektorátu,
 4. návrh ročního kalendáře hlavních sběrů.
 
 Nevymýšlej nové termíny mimo data níže.
 
-TERMÍNY:
+POLOŽKY:
 ${lines}`;
   }
 
   async function copyAiPrompt() {
-    const prompt = buildAiPrompt(filteredDeadlines());
     try {
-      await navigator.clipboard.writeText(prompt);
+      await navigator.clipboard.writeText(buildAiPrompt(filteredDeadlines()));
       const btn = el("deadlinesCopyPromptBtn");
       if (!btn) return;
       const original = btn.textContent;
@@ -476,16 +618,14 @@ ${lines}`;
       const host = e.target.closest?.("[data-deadline-id]");
       if (!host || !host.closest("#page-terminy")) return;
       if (e.target.closest("button, input, a, label")) return;
-      const id = host.dataset.deadlineId;
-      const item = getDeadline(id);
+      const item = getDeadline(host.dataset.deadlineId);
       if (item) openDialog(item);
     });
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
       const host = e.target.closest?.("[data-deadline-id]");
       if (!host || !host.closest("#page-terminy")) return;
-      const id = host.dataset.deadlineId;
-      const item = getDeadline(id);
+      const item = getDeadline(host.dataset.deadlineId);
       if (item) {
         e.preventDefault();
         openDialog(item);
@@ -500,7 +640,7 @@ ${lines}`;
     style.textContent = `
       .deadlinesOverview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .9rem; margin-bottom: .6rem; }
       .deadlinesToolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: .75rem; }
-      .deadlinesFilters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin-bottom: .5rem; }
+      .deadlinesFilters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-bottom: .5rem; }
       .deadlinesStatus { margin: .35rem 0 .75rem; font-size: .88rem; color: var(--muted); }
       .deadlinesStatusError { color: #b42318; }
       .deadlinesList { display: grid; gap: .6rem; }
@@ -512,12 +652,14 @@ ${lines}`;
       .deadlineTitle { font-weight: 600; margin-bottom: .2rem; }
       .deadlineSummary { font-size: .9rem; color: var(--muted); margin: .25rem 0 0; }
       .deadlinesTableWrap { overflow-x: auto; }
-      .deadlinesTable { width: 100%; border-collapse: collapse; }
+      .deadlinesTable { width: 100%; border-collapse: collapse; min-width: 960px; }
       .deadlinesTable th, .deadlinesTable td { padding: .45rem .5rem; border-bottom: 1px solid var(--line); text-align: left; font-size: .9rem; }
       .deadlinesTable th { font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
       .deadlinesTable tr.deadline-clickable { cursor: pointer; }
       .deadlinesTable tr.deadline-clickable:hover { background: #f8fafc; }
       .navBadgeDeadline { background: #fef0c7; color: #b54708; }
+      #deadlineDialog { max-width: 760px; }
+      #deadlineDialog form { max-height: 85vh; overflow-y: auto; }
       @media (max-width: 900px) {
         .deadlinesOverview, .deadlinesFilters { grid-template-columns: 1fr; }
       }
@@ -535,11 +677,10 @@ ${lines}`;
     el("deadlinesImportFile")?.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const replace = el("deadlinesImportReplace")?.checked;
-      await importJsonFile(file, replace);
+      await importFile(file, el("deadlinesImportReplace")?.checked);
       e.target.value = "";
     });
-    ["deadlinesUradFilter", "deadlinesAgendaFilter", "deadlinesStavFilter", "deadlinesSearch"].forEach(id => {
+    ["deadlinesOblastFilter", "deadlinesStavFilter", "deadlinesSearch"].forEach(id => {
       el(id)?.addEventListener("input", render);
     });
     document.addEventListener("kb:page-changed", (e) => {

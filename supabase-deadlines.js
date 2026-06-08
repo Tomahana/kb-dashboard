@@ -6,6 +6,13 @@
   let client = null;
   let tablesAvailable = null;
 
+  const FIELDS = [
+    "id_polozky", "oblast", "nazev", "popis", "odpovedna_osoba", "potrebujeme_od",
+    "dodavatel_fakulta", "kam_vyplnit", "system_zdroj", "termin_sberu", "termin_interni",
+    "termin_odeslani", "periodicita", "ucel", "navazny_proces", "riziko", "stav",
+    "poznamka", "zdroj", "urad", "agenda", "typ", "kb_id"
+  ];
+
   function getClient() {
     if (window.kbAuth?.getClient) return window.kbAuth.getClient();
     if (client) return client;
@@ -21,43 +28,33 @@
   }
 
   function mapRow(row) {
-    return {
+    const item = {
       id: row.id,
-      nazev: row.nazev || "Bez názvu",
-      urad: row.urad || "",
-      agenda: row.agenda || "",
-      typ: row.typ || "",
-      termin_sberu: row.termin_sberu || "",
-      termin_odeslani: row.termin_odeslani || "",
-      periodicita: row.periodicita || "",
-      stav: row.stav || "Aktivní",
-      poznamka: row.poznamka || "",
-      odpovedna_osoba: row.odpovedna_osoba || "",
-      zdroj: row.zdroj || "",
-      kb_id: row.kb_id || "",
       created_at: row.created_at,
       updated_at: row.updated_at,
       __source: "supabase"
     };
+    FIELDS.forEach(field => {
+      item[field] = row[field] ?? "";
+    });
+    if (!item.nazev) item.nazev = "Bez názvu";
+    if (!item.stav) item.stav = "Aktivní";
+    return item;
   }
 
   function toPayload(item) {
-    return {
+    const payload = {
       id: item.id,
       nazev: item.nazev || "Bez názvu",
-      urad: item.urad || null,
-      agenda: item.agenda || null,
-      typ: item.typ || null,
-      termin_sberu: item.termin_sberu || null,
-      termin_odeslani: item.termin_odeslani || null,
-      periodicita: item.periodicita || null,
       stav: item.stav || "Aktivní",
-      poznamka: item.poznamka || null,
-      odpovedna_osoba: item.odpovedna_osoba || null,
-      zdroj: item.zdroj || null,
-      kb_id: item.kb_id || null,
       updated_at: new Date().toISOString()
     };
+    FIELDS.forEach(field => {
+      if (field === "nazev" || field === "stav") return;
+      const value = item[field];
+      payload[field] = value ? value : null;
+    });
+    return payload;
   }
 
   async function probeTables() {
@@ -78,7 +75,7 @@
     const { data, error } = await supa
       .from("kb_deadlines")
       .select("*")
-      .order("termin_odeslani", { ascending: true, nullsFirst: false });
+      .order("termin_interni", { ascending: true, nullsFirst: false });
     if (error) throw error;
     return (data || []).map(mapRow);
   }
