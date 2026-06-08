@@ -47,12 +47,19 @@
     return Number.isNaN(d.getTime()) ? null : d;
   }
 
+  function excelSerialToIso(serial) {
+    const utc = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+    return Number.isNaN(utc.getTime()) ? "" : utc.toISOString().slice(0, 10);
+  }
+
   function parseImportDate(value) {
-    const v = n(value);
-    if (!v) return "";
+    const v = n(value).replace(/^"|"$/g, "");
+    if (!v || v === "-" || v === "—") return "";
     if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
-    const cz = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    const cz = v.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})/);
     if (cz) return `${cz[3]}-${cz[2].padStart(2, "0")}-${cz[1].padStart(2, "0")}`;
+    const num = Number(v.replace(",", "."));
+    if (Number.isFinite(num) && num > 1000 && num < 80000) return excelSerialToIso(num);
     const d = new Date(v);
     return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
   }
@@ -128,17 +135,33 @@
     }
   }
 
+  function normalizeHeaderKey(s) {
+    return n(s)
+      .replace(/^\uFEFF/, "")
+      .replace(/^"|"$/g, "")
+      .replace(/\s+/g, " ")
+      .toLowerCase();
+  }
+
   function getFieldFromRow(row, field) {
     const aliases = IMPORT_ALIASES[field] || [field];
     for (const key of aliases) {
       if (row[key] != null && n(row[key])) return n(row[key]);
     }
-    const normalized = {};
+    const byNorm = {};
     Object.entries(row).forEach(([k, v]) => {
-      normalized[n(k)] = v;
+      byNorm[normalizeHeaderKey(k)] = v;
     });
     for (const key of aliases) {
-      if (normalized[key] != null && n(normalized[key])) return n(normalized[key]);
+      const nk = normalizeHeaderKey(key);
+      if (byNorm[nk] != null && n(byNorm[nk])) return n(byNorm[nk]);
+    }
+    for (const [hdr, val] of Object.entries(byNorm)) {
+      if (!n(val)) continue;
+      for (const key of aliases) {
+        const nk = normalizeHeaderKey(key);
+        if (hdr === nk || hdr.includes(nk) || nk.includes(hdr)) return n(val);
+      }
     }
     return "";
   }
@@ -163,49 +186,110 @@
     });
   }
 
-  function splitDelimitedLine(line, delimiter) {
-    const out = [];
-    let cur = "";
+  function parseCsvRecords(text, delimiter) {
+    const records = [];
+    let row = [];
+    let field = "";
     let inQuotes = false;
-    for (let i = 0; i < line.length; i += 1) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          cur += '"';
-          i += 1;
-        } else inQuotes = !inQuotes;
-      } else if (ch === delimiter && !inQuotes) {
-        out.push(cur);
-        cur = "";
-      } else cur += ch;
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') {
+            field += '"';
+            i += 1;
+          } else inQuotes = false;
+        } else field += ch;
+      } else if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === delimiter) {
+        row.push(field);
+        field = "";
+      } else if (ch === "\n") {
+        row.push(field);
+        field = "";
+        if (row.some(cell => n(cell))) records.push(row);
+        row = [];
+      } else if (ch === "\r") {
+        if (text[i + 1] === "\n") i += 1;
+        row.push(field);
+        field = "";
+        if (row.some(cell => n(cell))) records.push(row);
+        row = [];
+      } else field += ch;
     }
-    out.push(cur);
-    return out.map(s => s.trim());
+    row.push(field);
+    if (row.some(cell => n(cell))) records.push(row);
+    return records;
   }
 
-  function detectDelimiter(headerLine) {
+  function detectDelimiter(sampleLine) {
+    const line = sampleLine.replace(/^\uFEFF/, "");
     const counts = [
-      ["\t", (headerLine.match(/\t/g) || []).length],
-      [";", (headerLine.match(/;/g) || []).length],
-      [",", (headerLine.match(/,/g) || []).length]
+      ["\t", (line.match(/\t/g) || []).length],
+      [";", (line.match(/;/g) || []).length],
+      [",", (line.match(/,/g) || []).length]
     ];
     counts.sort((a, b) => b[1] - a[1]);
-    return counts[0][1] > 0 ? counts[0][0] : "\t";
+    return counts[0][1] > 0 ? counts[0][0] : ";";
+  }
+
+  function headerRowScore(cells) {
+    const joined = cells.map(normalizeHeaderKey).join(" ");
+    const markers = ["id pol", "oblast", "hlídá", "indikátor", "termín", "periodicita", "rektorát"];
+    return markers.reduce((score, m) => score + (joined.includes(m) ? 1 : 0), 0);
+  }
+
+  function findHeaderRowIndex(records) {
+    let bestIdx = 0;
+    let bestScore = -1;
+    records.slice(0, 8).forEach((row, idx) => {
+      const score = headerRowScore(row);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = idx;
+      }
+    });
+    return bestScore >= 2 ? bestIdx : 0;
   }
 
   function parseDelimitedTable(text) {
-    const lines = text.split(/\r?\n/).filter(line => n(line));
-    if (!lines.length) return [];
-    const delimiter = detectDelimiter(lines[0]);
-    const headers = splitDelimitedLine(lines[0], delimiter);
-    return lines.slice(1).map(line => {
-      const cols = splitDelimitedLine(line, delimiter);
+    const clean = text.replace(/^\uFEFF/, "").trim();
+    if (!clean) return { rows: [], meta: { headers: [], delimiter: ";", headerRow: 0 } };
+    const firstLine = clean.split(/\r?\n/).find(line => n(line)) || clean;
+    const delimiter = detectDelimiter(firstLine);
+    const records = parseCsvRecords(clean, delimiter);
+    if (!records.length) return { rows: [], meta: { headers: [], delimiter, headerRow: 0 } };
+    const headerIdx = findHeaderRowIndex(records);
+    const headers = records[headerIdx].map(h => n(h).replace(/^\uFEFF/, "").replace(/^"|"$/g, ""));
+    const rows = records.slice(headerIdx + 1).map(cols => {
       const row = {};
       headers.forEach((header, i) => {
-        row[header] = cols[i] ?? "";
+        if (header) row[header] = (cols[i] ?? "").replace(/^"|"$/g, "").trim();
       });
       return row;
     }).filter(row => Object.values(row).some(v => n(v)));
+    return { rows, meta: { headers, delimiter, headerRow: headerIdx + 1 } };
+  }
+
+  async function readImportFileText(file) {
+    const buffer = await file.arrayBuffer();
+    const encodings = ["utf-8", "windows-1250", "iso-8859-2"];
+    let bestText = "";
+    let bestScore = -1;
+    for (const encoding of encodings) {
+      try {
+        const text = new TextDecoder(encoding).decode(buffer);
+        const bad = (text.match(/\uFFFD/g) || []).length;
+        const czech = (text.match(/[ěščřžýáíéúůďťň]/gi) || []).length;
+        const score = czech * 3 - bad * 10;
+        if (score > bestScore) {
+          bestScore = score;
+          bestText = text;
+        }
+      } catch (_) {}
+    }
+    return (bestText || new TextDecoder("utf-8").decode(buffer)).replace(/^\uFEFF/, "");
   }
 
   function splitByStatus(items) {
@@ -380,25 +464,47 @@
     const lower = (fileName || "").toLowerCase();
     if (lower.endsWith(".json")) {
       const parsed = JSON.parse(text);
-      return Array.isArray(parsed) ? parsed : parsed.deadlines || parsed.items || [];
+      const rows = Array.isArray(parsed) ? parsed : parsed.deadlines || parsed.items || [];
+      return { rows, meta: { format: "json" } };
     }
     if (lower.endsWith(".csv") || lower.endsWith(".tsv") || lower.endsWith(".txt") || text.includes("\t") || text.includes(";")) {
-      return parseDelimitedTable(text);
+      const parsed = parseDelimitedTable(text);
+      return { rows: parsed.rows, meta: { format: "csv", ...parsed.meta } };
     }
     try {
       const parsed = JSON.parse(text);
-      return Array.isArray(parsed) ? parsed : parsed.deadlines || parsed.items || [];
+      const rows = Array.isArray(parsed) ? parsed : parsed.deadlines || parsed.items || [];
+      return { rows, meta: { format: "json" } };
     } catch (_) {
-      return parseDelimitedTable(text);
+      const parsed = parseDelimitedTable(text);
+      return { rows: parsed.rows, meta: { format: "csv", ...parsed.meta } };
     }
   }
 
-  async function importRows(rows, replace) {
+  function importErrorHelp(error) {
+    const msg = (error?.message || String(error)).toLowerCase();
+    if (msg.includes("column") || msg.includes("oblast") || msg.includes("schema cache")) {
+      return "\n\nV Supabase pravděpodobně chybí nové sloupce. Spusťte SQL soubor supabase/deadlines-migrate-v2.sql v SQL Editoru.";
+    }
+    if (msg.includes("jwt") || msg.includes("auth") || msg.includes("permission")) {
+      return "\n\nNejste přihlášeni nebo nemáte oprávnění. Přihlaste se a zkuste znovu.";
+    }
+    return "";
+  }
+
+  async function importRows(rows, replace, meta = {}) {
     if (!rows.length) {
-      alert("V souboru nejsou žádné záznamy.");
+      const headers = meta.headers?.slice(0, 5).join(", ") || "neznámé";
+      alert(
+        `V souboru nejsou žádné datové řádky.\n` +
+        `Rozpoznaná záhlaví (prvních 5): ${headers}\n` +
+        `Oddělovač: ${meta.delimiter || "?"}, řádek záhlaví: ${meta.headerRow || 1}\n\n` +
+        `Tip: Uložte z Excelu jako CSV UTF-8 (oddělovač středník).`
+      );
       return;
     }
     const normalized = rows.map(normalizeImportRow);
+    const withoutName = normalized.filter(r => !r.nazev || r.nazev.startsWith("Import ")).length;
     try {
       if (useSupabase && window.kbSupabaseDeadlines && await ensureAuth()) {
         if (replace) {
@@ -417,23 +523,44 @@
         persistLocal();
         setStatus(`Importováno lokálně: ${normalized.length} položek.`);
       }
+      if (withoutName > 0) {
+        setStatus(`Importováno ${normalized.length} položek. U ${withoutName} chyběl sloupec „Co se hlídá“ — doplňte ručně.`, true);
+      }
       render();
     } catch (error) {
       console.error(error);
-      alert("Import se nepodařil: " + (error.message || error));
+      try {
+        if (replace) deadlines = normalized;
+        else deadlines = [...normalized, ...deadlines];
+        persistLocal();
+        setStatus(`Supabase selhalo, data uložena lokálně (${normalized.length} položek).`, true);
+        render();
+        alert(
+          `Supabase import selhal: ${error.message || error}${importErrorHelp(error)}\n\n` +
+          `Data jsou zatím uložena jen v tomto prohlížeči.`
+        );
+      } catch (fallbackError) {
+        alert(`Import se nepodařil: ${error.message || error}${importErrorHelp(error)}`);
+      }
     }
   }
 
   async function importFile(file, replace) {
-    const text = await file.text();
-    let rows;
+    let text;
     try {
-      rows = parseImportRows(text, file.name);
+      text = await readImportFileText(file);
     } catch (_) {
-      alert("Soubor se nepodařilo načíst. Podporované formáty: CSV, TSV, JSON.");
+      alert("Soubor se nepodařilo přečíst.");
       return;
     }
-    await importRows(rows, replace);
+    let parsed;
+    try {
+      parsed = parseImportRows(text, file.name);
+    } catch (error) {
+      alert(`Soubor se nepodařilo zpracovat: ${error.message || error}\n\nPodporované formáty: CSV, TSV, JSON.`);
+      return;
+    }
+    await importRows(parsed.rows, replace, parsed.meta);
   }
 
   function exportJson() {
