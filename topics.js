@@ -836,10 +836,20 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
     }, 200);
   }
 
+  function topicsForDeadline(deadlineId) {
+    if (!deadlineId) return [];
+    return topics.filter(t => (t.deadlineIds || []).includes(deadlineId));
+  }
+
   window.kbTopics = {
     get topics() { return topics; },
     getTopic,
     recordsForTopic,
+    deadlinesForTopic,
+    topicsForDeadline,
+    addDeadlineToTopic,
+    removeDeadlineFromTopic,
+    loadTopics,
     openTopicDialog,
     buildTopicPrompt,
     showTopicAiPrompt

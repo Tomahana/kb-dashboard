@@ -335,7 +335,18 @@
     }
   }
 
+  function topicsForDeadline(deadlineId) {
+    return window.kbTopics?.topicsForDeadline?.(deadlineId) || [];
+  }
+
+  async function ensureTopicsLoaded() {
+    if (window.kbTopics?.loadTopics) {
+      try { await window.kbTopics.loadTopics(); } catch (_) {}
+    }
+  }
+
   function renderDeadlineCard({ item, deadline }) {
+    const topicCount = topicsForDeadline(item.id).length;
     const dateText = deadline ? formatDate(deadline) : "Bez termínu";
     const dates = [
       item.termin_sberu ? `Fakulty: ${formatDate(item.termin_sberu)}` : "",
@@ -353,6 +364,7 @@
           <div class="deadlineTags">
             ${item.periodicita ? `<span class="badge">${html(item.periodicita)}</span>` : ""}
             ${item.stav ? `<span class="badge">${html(item.stav)}</span>` : ""}
+            ${topicCount ? `<span class="badge">${topicCount} témat</span>` : ""}
           </div>
         </header>
         <div class="deadlineTitle">${html(item.nazev)}</div>
@@ -400,6 +412,7 @@
               <th>Externí</th>
               <th>Hlídá rek.</th>
               <th>Periodicita</th>
+              <th>Témata</th>
               <th></th>
             </tr>
           </thead>
@@ -414,6 +427,7 @@
                 <td>${html(formatDate(item.termin_odeslani))}</td>
                 <td>${html(item.odpovedna_osoba)}</td>
                 <td>${html(item.periodicita)}</td>
+                <td>${topicsForDeadline(item.id).length || "—"}</td>
                 <td><span class="openHint">Upravit →</span></td>
               </tr>
             `).join("")}
@@ -594,7 +608,64 @@
     ["deadlinePoznamka", "poznamka"]
   ];
 
-  function openDialog(item) {
+  function populateDeadlineTopicSelect(deadlineId) {
+    const select = el("deadlineTopicSelect");
+    if (!select) return;
+    const topics = window.kbTopics?.topics || [];
+    const linked = new Set(topicsForDeadline(deadlineId).map(t => t.id));
+    const available = topics.filter(t => !linked.has(t.id));
+    select.innerHTML = `<option value="">— vyberte téma —</option>` +
+      available.map(t => `<option value="${html(t.id)}">${html(t.name)}</option>`).join("");
+    if (!topics.length) {
+      select.innerHTML = `<option value="">Nejdříve vytvořte téma (modul Témata)</option>`;
+    }
+  }
+
+  function renderDeadlineTopicsList(deadlineId) {
+    const box = el("deadlineTopicsList");
+    if (!box) return;
+    if (!deadlineId) {
+      box.innerHTML = `<p class="hint">Po uložení termínu můžete propojit témata.</p>`;
+      return;
+    }
+    const items = topicsForDeadline(deadlineId);
+    if (!items.length) {
+      box.innerHTML = `<p class="hint">Termín zatím nemá propojená témata.</p>`;
+      return;
+    }
+    box.innerHTML = `<div class="deadlineTopicsList">${items.map(t => `
+      <div class="deadlineTopicItem">
+        <div>
+          <strong>${html(t.name)}</strong>
+          <div class="deadlineMeta">${html(t.agenda || "")}${t.description ? ` · ${html(t.description.slice(0, 80))}${t.description.length > 80 ? "…" : ""}` : ""}</div>
+        </div>
+        <div class="deadlineTopicActions">
+          <button type="button" class="button small secondary" data-open-topic="${html(t.id)}">Témata →</button>
+          <button type="button" class="button small secondary" data-remove-deadline-topic="${html(t.id)}">Odebrat</button>
+        </div>
+      </div>
+    `).join("")}</div>`;
+    box.querySelectorAll("[data-remove-deadline-topic]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (window.kbTopics?.removeDeadlineFromTopic) {
+          await window.kbTopics.removeDeadlineFromTopic(btn.dataset.removeDeadlineTopic, deadlineId);
+        }
+        renderDeadlineTopicsList(deadlineId);
+        populateDeadlineTopicSelect(deadlineId);
+        render();
+      });
+    });
+    box.querySelectorAll("[data-open-topic]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        el("deadlineDialog").close();
+        if (window.kbTopics?.openTopicDialog) window.kbTopics.openTopicDialog(btn.dataset.openTopic);
+        else if (window.kbLayout?.setActivePage) window.kbLayout.setActivePage("temata");
+      });
+    });
+  }
+
+  async function openDialog(item) {
+    await ensureTopicsLoaded();
     const existing = item || null;
     el("deadlineEditId").value = existing?.id || "";
     FORM_FIELDS.forEach(([elementId, field]) => {
@@ -609,6 +680,8 @@
     });
     el("deadlineDialogTitle").textContent = existing ? "Upravit položku" : "Nová položka";
     el("deleteDeadlineBtn").hidden = !existing;
+    renderDeadlineTopicsList(existing?.id);
+    populateDeadlineTopicSelect(existing?.id);
     el("deadlineDialog").showModal();
   }
 
@@ -663,7 +736,8 @@
       const idx = deadlines.findIndex(d => d.id === saved.id);
       if (idx === -1) deadlines.unshift(saved);
       else deadlines[idx] = { ...deadlines[idx], ...saved };
-      el("deadlineDialog").close();
+      renderDeadlineTopicsList(saved.id);
+      populateDeadlineTopicSelect(saved.id);
       setStatus(useSupabase ? "Uloženo v Supabase." : "Uloženo lokálně v prohlížeči.");
       render();
     } catch (error) {
@@ -785,6 +859,12 @@ ${lines}`;
       .deadlinesTable tr.deadline-clickable { cursor: pointer; }
       .deadlinesTable tr.deadline-clickable:hover { background: #f8fafc; }
       .navBadgeDeadline { background: #fef0c7; color: #b54708; }
+      .deadlineTopicAdd { display: flex; gap: .5rem; align-items: end; flex-wrap: wrap; margin-bottom: .5rem; }
+      .deadlineTopicAdd label { flex: 1; min-width: 200px; margin: 0; }
+      .deadlineTopicHint { margin: -.25rem 0 .5rem; }
+      .deadlineTopicsList { display: grid; gap: .5rem; margin-bottom: .75rem; }
+      .deadlineTopicItem { display: flex; justify-content: space-between; gap: .5rem; align-items: start; border: 1px solid var(--line); border-radius: 8px; padding: .5rem .65rem; background: #f8fafc; }
+      .deadlineTopicActions { display: flex; gap: .35rem; flex-shrink: 0; }
       #deadlineDialog { max-width: 760px; }
       #deadlineDialog form { max-height: 85vh; overflow-y: auto; }
       @media (max-width: 900px) {
@@ -801,6 +881,34 @@ ${lines}`;
     el("deadlinesCopyPromptBtn")?.addEventListener("click", copyAiPrompt);
     el("saveDeadlineBtn")?.addEventListener("click", saveDeadlineForm);
     el("deleteDeadlineBtn")?.addEventListener("click", deleteDeadline);
+    el("deadlineGotoTopicsBtn")?.addEventListener("click", () => {
+      el("deadlineDialog").close();
+      if (window.kbLayout?.setActivePage) window.kbLayout.setActivePage("temata");
+    });
+    el("addDeadlineTopicBtn")?.addEventListener("click", async () => {
+      const deadlineId = el("deadlineEditId").value;
+      const topicId = el("deadlineTopicSelect")?.value;
+      if (!deadlineId) {
+        alert("Nejdříve uložte termín.");
+        return;
+      }
+      if (!topicId) {
+        alert("Vyberte téma k propojení.");
+        return;
+      }
+      if (window.kbTopics?.addDeadlineToTopic) {
+        await window.kbTopics.addDeadlineToTopic(topicId, deadlineId);
+      }
+      renderDeadlineTopicsList(deadlineId);
+      populateDeadlineTopicSelect(deadlineId);
+      render();
+      el("deadlineTopicSelect").value = "";
+    });
+    el("newDeadlineTopicBtn")?.addEventListener("click", () => {
+      el("deadlineDialog").close();
+      if (window.kbTopics?.openTopicDialog) window.kbTopics.openTopicDialog();
+      else if (window.kbLayout?.setActivePage) window.kbLayout.setActivePage("temata");
+    });
     el("deadlinesImportFile")?.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -810,8 +918,14 @@ ${lines}`;
     ["deadlinesOblastFilter", "deadlinesStavFilter", "deadlinesSearch"].forEach(id => {
       el(id)?.addEventListener("input", render);
     });
-    document.addEventListener("kb:page-changed", (e) => {
+    document.addEventListener("kb:page-changed", async (e) => {
       if (e.detail?.page === "terminy" && !deadlines.length && !loading) loadDeadlines();
+      if (e.detail?.page === "terminy" && el("deadlineDialog")?.open) {
+        await ensureTopicsLoaded();
+        const id = el("deadlineEditId")?.value;
+        populateDeadlineTopicSelect(id);
+        renderDeadlineTopicsList(id);
+      }
     });
   }
 

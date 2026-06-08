@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>KB Dashboard – Znalostní báze</title>
-  <link rel="stylesheet" href="styles.css?v=15" />
+  <link rel="stylesheet" href="styles.css?v=16" />
 </head>
 <body class="app-shell">
   <aside class="sidebar">
@@ -29,7 +29,7 @@
     </nav>
     <div class="sidebarFoot">
       <p class="hint">Vyberte modul v přehledu</p>
-      <p class="appVersion" id="appVersion">Verze 3.7</p>
+      <p class="appVersion" id="appVersion">Verze 3.8</p>
     </div>
   </aside>
 
@@ -407,6 +407,18 @@
       <label>Poznámka
         <textarea id="deadlinePoznamka" rows="2"></textarea>
       </label>
+      <div class="sectionHeader compact">
+        <h3>Propojená témata</h3>
+      </div>
+      <p class="hint deadlineTopicHint">Propojte tento termín s tématem z modulu <button type="button" class="linkish" id="deadlineGotoTopicsBtn">Témata</button>.</p>
+      <div class="deadlineTopicAdd">
+        <label>Téma
+          <select id="deadlineTopicSelect"><option value="">— vyberte téma —</option></select>
+        </label>
+        <button id="addDeadlineTopicBtn" type="button" class="button small accent">Propojit téma</button>
+        <button id="newDeadlineTopicBtn" type="button" class="button small secondary">+ Nové téma</button>
+      </div>
+      <div id="deadlineTopicsList"></div>
       <div class="dialogActions">
         <button id="deleteDeadlineBtn" type="button" class="button danger" hidden>Smazat</button>
         <button value="cancel" class="button secondary">Zavřít</button>
@@ -463,21 +475,21 @@
   </datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=15"></script>
-  <script src="auth.js?v=15"></script>
-  <script src="form-pickers.js?v=15"></script>
-  <script src="layout.js?v=15"></script>
-  <script src="modules.js?v=15"></script>
-  <script src="app.js?v=15"></script>
-  <script src="enhancements.js?v=15"></script>
-  <script src="supabase-loader.js?v=15"></script>
-  <script src="ai-classify.js?v=15"></script>
-  <script src="task-export.js?v=15"></script>
-  <script src="notion.js?v=15"></script>
-  <script src="supabase-topics.js?v=15"></script>
-  <script src="topics.js?v=15"></script>
-  <script src="supabase-deadlines.js?v=15"></script>
-  <script src="record-click-fix.js?v=15"></script>
-  <script src="deadlines.js?v=15"></script>
+  <script src="supabase-config.js?v=16"></script>
+  <script src="auth.js?v=16"></script>
+  <script src="form-pickers.js?v=16"></script>
+  <script src="layout.js?v=16"></script>
+  <script src="modules.js?v=16"></script>
+  <script src="app.js?v=16"></script>
+  <script src="enhancements.js?v=16"></script>
+  <script src="supabase-loader.js?v=16"></script>
+  <script src="ai-classify.js?v=16"></script>
+  <script src="task-export.js?v=16"></script>
+  <script src="notion.js?v=16"></script>
+  <script src="supabase-topics.js?v=16"></script>
+  <script src="topics.js?v=16"></script>
+  <script src="supabase-deadlines.js?v=16"></script>
+  <script src="record-click-fix.js?v=16"></script>
+  <script src="deadlines.js?v=16"></script>
 </body>
 </html>
