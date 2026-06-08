@@ -64,6 +64,9 @@ drop policy if exists "kb_topic_records anon write" on public.kb_topic_records;
 drop policy if exists "kb_topic_records authenticated read" on public.kb_topic_records;
 drop policy if exists "kb_topic_records authenticated write" on public.kb_topic_records;
 
+drop policy if exists "kb_topic_deadlines authenticated read" on public.kb_topic_deadlines;
+drop policy if exists "kb_topic_deadlines authenticated write" on public.kb_topic_deadlines;
+
 create policy "kb_topics authenticated read"
   on public.kb_topics for select
   to authenticated
@@ -86,10 +89,23 @@ create policy "kb_topic_records authenticated write"
   using (true)
   with check (true);
 
+create policy "kb_topic_deadlines authenticated read"
+  on public.kb_topic_deadlines for select
+  to authenticated
+  using (true);
+
+create policy "kb_topic_deadlines authenticated write"
+  on public.kb_topic_deadlines for all
+  to authenticated
+  using (true)
+  with check (true);
+
 revoke all on public.kb_topics from anon;
 revoke all on public.kb_topic_records from anon;
+revoke all on public.kb_topic_deadlines from anon;
 grant select, insert, update, delete on public.kb_topics to authenticated;
 grant select, insert, update, delete on public.kb_topic_records to authenticated;
+grant select, insert, update, delete on public.kb_topic_deadlines to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 3) kb_deadlines (termíny sběrů)
