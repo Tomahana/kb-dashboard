@@ -21,6 +21,7 @@
       </a>
       <a href="#temata" class="navItem" data-page="temata">Témata</a>
       <a href="#analyza" class="navItem" data-page="analyza">Analýza</a>
+      <a href="#terminy" class="navItem" data-page="terminy">Termíny</a>
       <a href="#nastaveni" class="navItem" data-page="nastaveni">Nastavení</a>
     </nav>
     <div class="sidebarFoot">
@@ -157,6 +158,59 @@
       <div id="actionsAnalytics" class="panel pageToolbar"></div>
       <div id="analyticsAgendaRoot"></div>
       <div id="analyticsAdvancedRoot"></div>
+    </section>
+
+    <!-- TERMÍNY -->
+    <section id="page-terminy" class="page">
+      <section class="panel">
+        <div class="sectionHeader">
+          <div>
+            <h2>Přehled termínů</h2>
+            <p class="hint">Sledování termínů sběrů dat a odesílání přehledů na úřady, vycházející z pole „Termín“ a typu „Termín“ v záznamech.</p>
+          </div>
+          <div class="sectionActions">
+            <button id="deadlinesCopyPromptBtn" class="button small secondary" type="button">AI přehled termínů</button>
+          </div>
+        </div>
+        <div class="deadlinesOverview">
+          <article class="metric">
+            <span id="deadlinesTotal">0</span>
+            <small>záznamů s termínem</small>
+          </article>
+          <article class="metric">
+            <span id="deadlinesUpcoming">0</span>
+            <small>v následujících 30 dnech</small>
+          </article>
+          <article class="metric">
+            <span id="deadlinesOverdue">0</span>
+            <small>po termínu</small>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="sectionHeader">
+          <h2>Nadcházející termíny</h2>
+          <p class="hint">Seřazeno podle data termínu. Vychází z aktuálně vyfiltrovaných záznamů v modulu E-maily.</p>
+        </div>
+        <div id="deadlinesUpcomingList"></div>
+      </section>
+
+      <section class="panel">
+        <div class="sectionHeader">
+          <h2>Termíny po splatnosti</h2>
+          <p class="hint">Termíny, které již proběhly a záznam není uzavřený.</p>
+        </div>
+        <div id="deadlinesOverdueList"></div>
+      </section>
+
+      <section class="panel">
+        <div class="sectionHeader">
+          <h2>Všechny termíny ve výběru</h2>
+          <p class="hint">Tabulkový přehled všech záznamů s vyplněným termínem v rámci aktuálních filtrů.</p>
+        </div>
+        <div id="deadlinesAllList"></div>
+      </section>
     </section>
 
     <!-- NASTAVENÍ -->
@@ -328,5 +382,6 @@
   <script src="supabase-topics.js?v=10"></script>
   <script src="topics.js?v=10"></script>
   <script src="record-click-fix.js?v=10"></script>
+  <script src="deadlines.js?v=10"></script>
 </body>
 </html>

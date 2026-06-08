@@ -6,6 +6,7 @@
     emaily: { title: "E-maily", subtitle: "Třídění, klasifikace a práce se záznamy" },
     temata: { title: "Témata", subtitle: "Seskupení e-mailů a AI shrnutí" },
     analyza: { title: "Analýza", subtitle: "Přehled agend, rizik a vývoje v čase" },
+    terminy: { title: "Termíny", subtitle: "Termíny sběrů dat a odesílání na úřady" },
     nastaveni: { title: "Nastavení", subtitle: "Supabase, AI, import a export" }
   };
 
