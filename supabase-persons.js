@@ -80,18 +80,21 @@
     return (data || []).map(mapPerson);
   }
 
-  async function savePerson(person) {
+  function toPayload(person, { includeId = true, includeCreated = false } = {}) {
     const normalized = normalizePerson(person);
-    const payload = {
-      id: normalized.id,
-      updated_at: new Date().toISOString()
-    };
+    const payload = { updated_at: new Date().toISOString() };
+    if (includeId && normalized.id) payload.id = normalized.id;
     const required = new Set(["prijmeni", "jmeno", "osobni_cislo"]);
     for (const field of PERSON_FIELDS) {
       const value = normalized[field];
       payload[field] = required.has(field) ? value : (value || null);
     }
-    if (!person.__existing) payload.created_at = person.created_at || new Date().toISOString();
+    if (includeCreated) payload.created_at = person.created_at || new Date().toISOString();
+    return payload;
+  }
+
+  async function savePerson(person) {
+    const payload = toPayload(person, { includeId: true, includeCreated: !person.__existing });
     const { data, error } = await getClient()
       .from("kb_persons")
       .upsert(payload, { onConflict: "id" })
@@ -99,6 +102,22 @@
       .single();
     if (error) throw error;
     return mapPerson(data);
+  }
+
+  async function upsertPersonsBatch(items, onProgress) {
+    const CHUNK = 400;
+    const results = [];
+    for (let i = 0; i < items.length; i += CHUNK) {
+      const chunk = items.slice(i, i + CHUNK).map(item => toPayload(item, { includeId: false, includeCreated: true }));
+      const { data, error } = await getClient()
+        .from("kb_persons")
+        .upsert(chunk, { onConflict: "osobni_cislo" })
+        .select("*");
+      if (error) throw error;
+      results.push(...(data || []).map(mapPerson));
+      onProgress?.(Math.min(i + CHUNK, items.length), items.length);
+    }
+    return results;
   }
 
   async function deletePerson(id) {
@@ -136,6 +155,7 @@
     probeTables,
     loadAll,
     savePerson,
+    upsertPersonsBatch,
     deletePerson,
     loadLocal,
     saveLocal,
