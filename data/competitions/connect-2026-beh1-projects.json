@@ -1,10 +1,10 @@
 {
-  "source": "Export hodnocení UHK Connect 2026 – 3. běh (kolo 1 a 2). Názvy projektů a další údaje lze doplnit ručně.",
+  "source": "Export hodnocení UHK Connect 2026 – 1. kolo (běh 1)",
   "competition_updates": {
-    "alokovana_castka": 0,
-    "stav": "Hodnocení",
-    "hodnoceni_prodekanu": "Hodnocení HT, proděkanů fakult (PřF, PdF, FF, FIM) – viz skóre u přihlášek podle kola.",
-    "rozhodnuti_prorektorky": "Kolo 1 rozhodnuto. Kolo 2 – část údajů z exportu, doplnění názvů projektů a chybějících řádků ručně."
+    "alokovana_castka": 800000,
+    "stav": "Rozhodnuto",
+    "hodnoceni_prodekanu": "Hodnocení HT a proděkanů fakult (PřF, PdF, FF, FIM) – viz skóre u přihlášek.",
+    "rozhodnuti_prorektorky": "1. kolo rozhodnuto dle průměrného skóre a rozhodnutí komise (Schváleno / Rejected / Cut)."
   },
   "persons": [
     {
@@ -61,32 +61,6 @@
       "jmeno": "Jaroslav",
       "email": "jaroslav.sommer@uhk.cz",
       "fakulta": "PdF"
-    },
-    {
-      "key": "oleksak",
-      "id": "c2000001-0001-4001-8001-000000000008",
-      "prijmeni": "Oleksák",
-      "jmeno": "Patrik",
-      "titul_pred": "RNDr.",
-      "titul_za": "Ph.D.",
-      "fakulta": "PřF"
-    },
-    {
-      "key": "palla",
-      "id": "c2000001-0001-4001-8001-000000000009",
-      "prijmeni": "Palla",
-      "jmeno": "Dominik",
-      "titul_pred": "Ing.",
-      "titul_za": "Ph.D.",
-      "fakulta": "PdF"
-    },
-    {
-      "key": "rejected2",
-      "id": "c2000001-0001-4001-8001-000000000010",
-      "prijmeni": "—",
-      "jmeno": "Žadatel kolo 2",
-      "fakulta": "FF",
-      "poznamka": "Doplnit z exportu (APP-260424-483FB)"
     }
   ],
   "applications": [
@@ -97,7 +71,6 @@
       "nazev_projektu": "— doplnit název projektu",
       "fakulta": "PdF",
       "katedra": "",
-      "kolo": 1,
       "financni_pozadavek": 27550,
       "castka_alokovana": 27550,
       "skore": { "ht": 19, "prf": 21, "pdf": 20, "ff": 21, "fim": 15 },
@@ -113,7 +86,6 @@
       "nazev_projektu": "— doplnit název projektu",
       "fakulta": "FF",
       "katedra": "",
-      "kolo": 1,
       "financni_pozadavek": 28680,
       "castka_alokovana": 0,
       "skore": { "ht": 10, "prf": 19, "pdf": 16, "ff": 19, "fim": 12 },
@@ -129,7 +101,6 @@
       "nazev_projektu": "— doplnit název projektu",
       "fakulta": "PdF",
       "katedra": "",
-      "kolo": 1,
       "financni_pozadavek": 45325,
       "castka_alokovana": 0,
       "skore": { "ht": 12, "prf": 12, "pdf": 13, "ff": 15, "fim": 14 },
@@ -145,7 +116,6 @@
       "nazev_projektu": "— doplnit název projektu",
       "fakulta": "FF",
       "katedra": "",
-      "kolo": 1,
       "financni_pozadavek": 25300,
       "castka_alokovana": 25300,
       "skore": { "ht": 17, "prf": 22, "pdf": 21, "ff": 24, "fim": 19 },
@@ -161,7 +131,6 @@
       "nazev_projektu": "— doplnit název projektu",
       "fakulta": "FF",
       "katedra": "",
-      "kolo": 1,
       "financni_pozadavek": 29000,
       "castka_alokovana": 29000,
       "skore": { "ht": 15, "prf": 21, "pdf": 22, "ff": 20, "fim": 18 },
@@ -177,7 +146,6 @@
       "nazev_projektu": "— doplnit název projektu",
       "fakulta": "FIM",
       "katedra": "",
-      "kolo": 1,
       "financni_pozadavek": 80000,
       "castka_alokovana": 55000,
       "skore": { "ht": 10, "prf": 17, "pdf": 18, "ff": 18, "fim": 20 },
@@ -194,7 +162,6 @@
       "nazev_projektu": "— doplnit název projektu",
       "fakulta": "PdF",
       "katedra": "",
-      "kolo": 1,
       "financni_pozadavek": 14587,
       "castka_alokovana": 14587,
       "skore": { "ht": 14, "prf": 10, "pdf": 18, "ff": 16, "fim": 17 },
@@ -202,57 +169,6 @@
       "rozhodnuti": "Schváleno",
       "stav": "Podpořeno",
       "podporit": true
-    },
-    {
-      "id": "c2000001-0001-4001-8001-000000000201",
-      "projekt_id": "APP-260515-06BCB",
-      "person_key": "oleksak",
-      "nazev_projektu": "— doplnit název projektu",
-      "fakulta": "PřF",
-      "katedra": "",
-      "kolo": 2,
-      "financni_pozadavek": 80000,
-      "castka_alokovana": 80000,
-      "skore": { "ht": null, "prf": null, "pdf": null, "ff": null, "fim": null },
-      "prumer": 22.4,
-      "rozhodnuti": "Schváleno",
-      "stav": "Podpořeno",
-      "podporit": true,
-      "poznamka": "Skóre fakult doplnit z exportu"
-    },
-    {
-      "id": "c2000001-0001-4001-8001-000000000202",
-      "projekt_id": "APP-260428-B1F6C",
-      "person_key": "palla",
-      "nazev_projektu": "— doplnit název projektu",
-      "fakulta": "PdF",
-      "katedra": "",
-      "kolo": 2,
-      "financni_pozadavek": 70500,
-      "castka_alokovana": 65500,
-      "skore": { "ht": null, "prf": null, "pdf": null, "ff": null, "fim": null },
-      "prumer": 18.6,
-      "rozhodnuti": "Cut",
-      "stav": "Podpořeno",
-      "podporit": true,
-      "poznamka": "Snížení alokace oproti požadavku (Cut)"
-    },
-    {
-      "id": "c2000001-0001-4001-8001-000000000203",
-      "projekt_id": "APP-260424-483FB",
-      "person_key": "rejected2",
-      "nazev_projektu": "— doplnit název projektu",
-      "fakulta": "FF",
-      "katedra": "",
-      "kolo": 2,
-      "financni_pozadavek": 0,
-      "castka_alokovana": 0,
-      "skore": { "ht": null, "prf": null, "pdf": null, "ff": 12, "fim": null },
-      "prumer": 15.8,
-      "rozhodnuti": "Rejected",
-      "stav": "Zamítnuto",
-      "podporit": false,
-      "poznamka": "Žadatele a finance doplnit z exportu"
     }
   ]
 }
