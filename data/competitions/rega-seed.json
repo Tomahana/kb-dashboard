@@ -1,0 +1,16 @@
+{
+  "source_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/re_ga_uhk",
+  "competition": {
+    "program_slug": "rega",
+    "nazev": "Interní soutěž UHK ReGa – výzva č. 1/2026",
+    "rok": 2026,
+    "beh_cislo": 1,
+    "alokovana_castka": 0,
+    "stav": "Aktivní",
+    "poznamka": "Interní nástroj UHK pro podporu kvalitních, dosud nezafinancovaných návrhů projektů základního výzkumu. Umožňuje řešitelům projekty odborně i formálně dopracovat a znovu je podat do externích soutěží (zejména GA ČR).\n\nKontakt: Ing. Jana Kukáková, Oddělení vědy a transferu znalostí — jana.kukakova@uhk.cz, +420 703 150 087\n\nZdroj: https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/re_ga_uhk",
+    "pokyn_nazev": "Pokyn prorektorky č. 5/2026 – Interní soutěž UHK ReGa",
+    "vyvza_nazev": "Vyhlášení výzvy č. 1 – Interní soutěž UHK ReGa",
+    "pokyn_file": "data/competitions/rega/pokyn.pdf",
+    "vyvza_file": "data/competitions/rega/vyvza.pdf"
+  }
+}
