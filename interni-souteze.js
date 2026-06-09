@@ -11,11 +11,17 @@
   ];
 
   const STORAGE_KEY = "kb-dashboard-competitions-v1";
+  const PERSONS_KEY = "kb-dashboard-competition-persons-v1";
   let competitions = [];
+  let persons = [];
   let useSupabase = false;
   let loading = false;
   let activeProgram = PROGRAMS[0].slug;
   let activeCompetitionId = null;
+  let pendingPokynFile = null;
+  let pendingVyvzaFile = null;
+  let removePokynPdf = false;
+  let removeVyvzaPdf = false;
 
   const el = (id) => document.getElementById(id);
   const n = (s) => (s || "").toString().trim();
@@ -43,6 +49,140 @@
     return (comp?.applications || []).reduce((s, r) => s + (Number(r.financni_pozadavek) || 0), 0);
   }
 
+  function personLabel(p) {
+    if (!p) return "";
+    return [p.titul_pred, p.jmeno, p.prijmeni, p.titul_za].map(n).filter(Boolean).join(" ").trim();
+  }
+
+  function getPerson(id) {
+    return persons.find(p => p.id === id) || null;
+  }
+
+  function resitelDisplay(item) {
+    if (item?.resitel_id) {
+      const p = getPerson(item.resitel_id);
+      if (p) return personLabel(p);
+    }
+    return item?.resitel || "";
+  }
+
+  function suggestProjektId(comp) {
+    const prog = getProgram(comp.program_slug);
+    const prefix = prog.slug.toUpperCase().replace(/-/g, "");
+    const year = comp.rok || new Date().getFullYear();
+    const seq = (comp.applications?.length || 0) + 1;
+    return `${prefix}-${year}-${String(seq).padStart(3, "0")}`;
+  }
+
+  function persistLocalPersons() {
+    localStorage.setItem(PERSONS_KEY, JSON.stringify(persons, null, 2));
+    if (window.kbSupabaseCompetitions?.saveLocalPersons) window.kbSupabaseCompetitions.saveLocalPersons(persons);
+  }
+
+  function renderPersonOptions(selectedId) {
+    const sorted = [...persons].sort((a, b) => personLabel(a).localeCompare(personLabel(b), "cs"));
+    const opts = sorted.map(p => {
+      const label = `${personLabel(p)}${p.fakulta ? ` · ${p.fakulta}` : ""}`;
+      return `<option value="${html(p.id)}" ${p.id === selectedId ? "selected" : ""}>${html(label)}</option>`;
+    }).join("");
+    return `<option value="">— vyberte osobu —</option>${opts}`;
+  }
+
+  function pdfHref(path) {
+    if (!path) return "";
+    return window.kbSupabaseCompetitions?.resolvePdfUrl?.(path) || path;
+  }
+
+  function renderPdfBlock(path, nazev, label) {
+    if (!path) {
+      return `<div class="competitionPdfBlock"><strong>${html(label)}</strong><p class="hint">PDF není nahráno.</p></div>`;
+    }
+    const href = pdfHref(path);
+    const name = html(nazev || `${label}.pdf`);
+    return `<div class="competitionPdfBlock">
+      <strong>${html(label)}</strong>
+      <a class="competitionPdfLink" href="${html(href)}" target="_blank" rel="noopener">📄 ${name}</a>
+      <span class="hint">Otevřít PDF v novém okně</span>
+    </div>`;
+  }
+
+  function updatePdfFieldPreview(kind, path, nazev) {
+    const cap = kind === "pokyn" ? "Pokyn" : "Vyvza";
+    const current = el(`comp${cap}Current`);
+    const removeBtn = el(`comp${cap}Remove`);
+    const pending = kind === "pokyn" ? pendingPokynFile : pendingVyvzaFile;
+    const removed = kind === "pokyn" ? removePokynPdf : removeVyvzaPdf;
+    if (!current) return;
+    if (pending) {
+      current.textContent = `Nový soubor: ${pending.name}`;
+      if (removeBtn) removeBtn.hidden = false;
+      return;
+    }
+    if (removed) {
+      current.textContent = "PDF bude odebráno po uložení.";
+      if (removeBtn) removeBtn.hidden = false;
+      return;
+    }
+    if (path) {
+      const href = pdfHref(path);
+      const name = html(nazev || "dokument.pdf");
+      current.innerHTML = `Aktuální: <a href="${href}" target="_blank" rel="noopener">${name}</a>`;
+      if (removeBtn) removeBtn.hidden = false;
+    } else {
+      current.textContent = "Zatím není nahráno PDF.";
+      if (removeBtn) removeBtn.hidden = true;
+    }
+  }
+
+  function resetPdfDialogState(c) {
+    pendingPokynFile = null;
+    pendingVyvzaFile = null;
+    removePokynPdf = false;
+    removeVyvzaPdf = false;
+    const pokynInput = el("compPokynFile");
+    const vyvzaInput = el("compVyvzaFile");
+    if (pokynInput) pokynInput.value = "";
+    if (vyvzaInput) vyvzaInput.value = "";
+    updatePdfFieldPreview("pokyn", c?.pokyn, c?.pokyn_nazev);
+    updatePdfFieldPreview("vyvza", c?.vyvza, c?.vyvza_nazev);
+  }
+
+  async function applyPdfFields(compId, existing) {
+    let pokyn = existing?.pokyn || "";
+    let pokyn_nazev = existing?.pokyn_nazev || "";
+    let vyvza = existing?.vyvza || "";
+    let vyvza_nazev = existing?.vyvza_nazev || "";
+    const api = window.kbSupabaseCompetitions;
+
+    if (removePokynPdf) {
+      if (pokyn && api?.deletePdf) await api.deletePdf(pokyn);
+      pokyn = "";
+      pokyn_nazev = "";
+    }
+    if (removeVyvzaPdf) {
+      if (vyvza && api?.deletePdf) await api.deletePdf(vyvza);
+      vyvza = "";
+      vyvza_nazev = "";
+    }
+    if (pendingPokynFile) {
+      const up = api?.uploadPdf
+        ? await api.uploadPdf(compId, "pokyn", pendingPokynFile)
+        : { path: "", nazev: pendingPokynFile.name };
+      if (pokyn && api?.deletePdf) await api.deletePdf(pokyn);
+      pokyn = up.path;
+      pokyn_nazev = up.nazev;
+    }
+    if (pendingVyvzaFile) {
+      const up = api?.uploadPdf
+        ? await api.uploadPdf(compId, "vyvza", pendingVyvzaFile)
+        : { path: "", nazev: pendingVyvzaFile.name };
+      if (vyvza && api?.deletePdf) await api.deletePdf(vyvza);
+      vyvza = up.path;
+      vyvza_nazev = up.nazev;
+    }
+    return { pokyn, pokyn_nazev, vyvza, vyvza_nazev };
+  }
+
   function persistLocal() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(competitions, null, 2));
   }
@@ -61,7 +201,9 @@
       if (!window.kbSupabaseCompetitions) {
         useSupabase = false;
         competitions = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+        persons = JSON.parse(localStorage.getItem(PERSONS_KEY) || "[]");
         if (!Array.isArray(competitions)) competitions = [];
+        if (!Array.isArray(persons)) persons = [];
         setStatus("Data v prohlížeči. Pro Supabase spusťte supabase/competitions-schema.sql.");
         return;
       }
@@ -69,22 +211,124 @@
       if (!available) {
         useSupabase = false;
         competitions = window.kbSupabaseCompetitions.loadLocal();
+        persons = window.kbSupabaseCompetitions.loadLocalPersons?.() || [];
         setStatus("Tabulky v Supabase zatím neexistují. Spusťte supabase/competitions-schema.sql.");
         return;
       }
       useSupabase = true;
       competitions = await window.kbSupabaseCompetitions.loadAll();
-      setStatus(`Načteno ze Supabase: ${competitions.length} běhů soutěží.`);
+      try {
+        persons = await window.kbSupabaseCompetitions.loadPersons();
+      } catch (_) {
+        persons = window.kbSupabaseCompetitions.loadLocalPersons?.() || [];
+      }
+      setStatus(`Načteno ze Supabase: ${competitions.length} běhů, ${persons.length} osob.`);
     } catch (e) {
       console.error(e);
       useSupabase = false;
       competitions = window.kbSupabaseCompetitions?.loadLocal?.() || [];
+      persons = window.kbSupabaseCompetitions?.loadLocalPersons?.() || [];
       setStatus(`Chyba: ${e.message || e}`, true);
     } finally {
       loading = false;
       render();
       document.dispatchEvent(new CustomEvent("kb:competitions-loaded"));
     }
+  }
+
+  async function fetchPdfAsFile(path, filename) {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error(`Soubor ${filename} se nepodařilo načíst.`);
+    const blob = await res.blob();
+    return new File([blob], filename, { type: "application/pdf" });
+  }
+
+  async function importRegaSeed() {
+    let seed;
+    try {
+      const seedRes = await fetch("data/competitions/rega-seed.json");
+      if (!seedRes.ok) throw new Error("Soubor rega-seed.json nenalezen.");
+      seed = await seedRes.json();
+    } catch (err) {
+      alert("Šablonu ReGa se nepodařilo načíst: " + (err.message || err));
+      return;
+    }
+    const s = seed.competition;
+    const existing = competitions.find(c => c.program_slug === "rega" && c.rok === s.rok && c.beh_cislo === s.beh_cislo);
+    if (existing?.applications?.length) {
+      if (!confirm("Běh ReGa 2026 už obsahuje přihlášky. Aktualizovat metadata a PDF (pokyn, výzva)? Projekty zůstanou.")) return;
+    } else if (existing && !confirm("Běh ReGa 2026 už existuje. Nahradit pokynem a výzvou ze šablony?")) {
+      return;
+    }
+    setStatus("Načítám šablonu UHK ReGa a PDF…");
+    loading = true;
+    render();
+    try {
+      const compId = existing?.id || uuid();
+      const pokynFile = await fetchPdfAsFile(s.pokyn_file, "pokyn-rega-2026.pdf");
+      const vyvzaFile = await fetchPdfAsFile(s.vyvza_file, "vyvza-rega-2026.pdf");
+      const api = window.kbSupabaseCompetitions;
+      let pokyn = "";
+      let vyvza = "";
+      if (api?.uploadPdf) {
+        const upP = await api.uploadPdf(compId, "pokyn", pokynFile);
+        const upV = await api.uploadPdf(compId, "vyvza", vyvzaFile);
+        pokyn = upP.path;
+        vyvza = upV.path;
+      }
+      const comp = {
+        id: compId,
+        program_slug: s.program_slug,
+        nazev: s.nazev,
+        rok: s.rok,
+        beh_cislo: s.beh_cislo,
+        alokovana_castka: Number(s.alokovana_castka) || 0,
+        pokyn,
+        pokyn_nazev: s.pokyn_nazev,
+        vyvza,
+        vyvza_nazev: s.vyvza_nazev,
+        poznamka: s.poznamka,
+        stav: s.stav || "Aktivní",
+        hodnoceni_prodekanu: existing?.hodnoceni_prodekanu || "",
+        rozhodnuti_prorektorky: existing?.rozhodnuti_prorektorky || "",
+        applications: existing?.applications || [],
+        supported: existing?.supported || [],
+        created_at: existing?.created_at || new Date().toISOString(),
+        __existing: !!existing
+      };
+      const saved = await saveCompetition(comp);
+      activeProgram = "rega";
+      activeCompetitionId = saved.id;
+      setStatus("Šablona UHK ReGa 2026 načtena včetně PDF pokynu a výzvy. Nyní doplňte projekty.");
+    } catch (err) {
+      console.error(err);
+      alert("Import ReGa selhal: " + (err.message || err));
+      setStatus("Import ReGa selhal.", true);
+    } finally {
+      loading = false;
+      render();
+      document.dispatchEvent(new CustomEvent("kb:competitions-loaded"));
+    }
+  }
+
+  function renderRegaBanner() {
+    const box = el("competitionRegaBanner");
+    if (!box) return;
+    if (activeProgram !== "rega") {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    const hasRun = competitions.some(c => c.program_slug === "rega" && c.rok === 2026 && c.beh_cislo === 1);
+    const sourceUrl = "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/re_ga_uhk";
+    box.innerHTML = `
+      <div class="competitionRegaSeedBox">
+        <p><strong>UHK ReGa</strong> — interní soutěž pro dopracování nezafinancovaných projektů základního výzkumu.
+          Údaje a PDF podle <a href="${sourceUrl}" target="_blank" rel="noopener">oficiální stránky UHK</a>
+          (pokyn prorektorky č. 5/2026, výzva č. 1/2026). Projekty doplníte v aplikaci.</p>
+        <button type="button" id="importRegaSeedBtn" class="button small accent">${hasRun ? "Aktualizovat šablonu ReGa 2026" : "Načíst šablonu ReGa 2026"}</button>
+      </div>`;
+    el("importRegaSeedBtn")?.addEventListener("click", importRegaSeed);
   }
 
   async function saveCompetition(comp) {
@@ -129,7 +373,10 @@
       return;
     }
     if (!items.length) {
-      box.innerHTML = `<p class="hint">Zatím žádný běh pro ${html(prog.title)}. Klikněte „Nový běh / výzva“.</p>`;
+      const hint = activeProgram === "rega"
+        ? `<p class="hint">Zatím žádný běh ReGa. Použijte <strong>Načíst šablonu ReGa 2026</strong> výše (pokyn + výzva v PDF), nebo vytvořte běh ručně.</p>`
+        : `<p class="hint">Zatím žádný běh pro ${html(prog.title)}. Klikněte „Nový běh / výzva“.</p>`;
+      box.innerHTML = hint;
       return;
     }
     box.innerHTML = `<div class="competitionCards">${items.map(c => {
@@ -185,8 +432,8 @@
       <section class="competitionSection panel">
         <h3>Pokyn a výzva</h3>
         <div class="competitionDocs">
-          <div><strong>Pokyn</strong><p>${html(c.pokyn) || "—"}</p></div>
-          <div><strong>Výzva</strong><p>${html(c.vyvza) || "—"}</p></div>
+          ${renderPdfBlock(c.pokyn, c.pokyn_nazev, "Pokyn")}
+          ${renderPdfBlock(c.vyvza, c.vyvza_nazev, "Výzva")}
         </div>
       </section>
       <section class="competitionSection panel">
@@ -233,31 +480,37 @@
     const apps = c.applications || [];
     if (!apps.length) return `<p class="hint">Žádné přihlášky.</p>`;
     return `<div class="competitionTableWrap"><table class="competitionTable">
-      <thead><tr><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Požadavek</th><th>Hodnocení</th><th>Stav</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Katedra</th><th>Požadavek</th><th>Stav</th><th></th></tr></thead>
       <tbody>${apps.map(a => `<tr>
+        <td><code class="projektId">${html(a.projekt_id) || "—"}</code></td>
         <td><strong>${html(a.nazev_projektu)}</strong></td>
-        <td>${html(a.resitel)}</td>
+        <td>${html(resitelDisplay(a))}</td>
         <td>${html(a.fakulta)}</td>
+        <td>${html(a.katedra)}</td>
         <td class="money">${fmtMoney(a.financni_pozadavek)}</td>
-        <td>${html(a.hodnoceni)}</td>
         <td>${html(a.stav)}</td>
         <td class="rowActions">
           <button type="button" class="button small secondary" data-edit-app="${html(a.id)}">Upravit</button>
           <button type="button" class="button small accent" data-promote-app="${html(a.id)}">Podpořit</button>
           <button type="button" class="button small secondary" data-del-app="${html(a.id)}">×</button>
         </td>
-      </tr>`).join("")}</tbody></table></div>`;
+      </tr>${a.hodnoceni || a.hodnoceni_komise ? `<tr class="appEvalRow"><td colspan="8">
+        ${a.hodnoceni ? `<div><strong>Proděkan:</strong> ${html(a.hodnoceni)}</div>` : ""}
+        ${a.hodnoceni_komise ? `<div class="appKomiseBlock"><strong>Hodnocení komise:</strong><p class="competitionTextBlock">${html(a.hodnoceni_komise)}</p></div>` : ""}
+      </td></tr>` : ""}`).join("")}</tbody></table></div>`;
   }
 
   function renderSupportedTable(c) {
     const items = c.supported || [];
     if (!items.length) return `<p class="hint">Žádné podpořené projekty.</p>`;
     return `<div class="competitionTableWrap"><table class="competitionTable">
-      <thead><tr><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Částka podpory</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Katedra</th><th>Částka podpory</th><th></th></tr></thead>
       <tbody>${items.map(s => `<tr>
+        <td><code class="projektId">${html(s.projekt_id) || "—"}</code></td>
         <td><strong>${html(s.nazev_projektu)}</strong></td>
-        <td>${html(s.resitel)}</td>
+        <td>${html(resitelDisplay(s))}</td>
         <td>${html(s.fakulta)}</td>
+        <td>${html(s.katedra)}</td>
         <td class="money">${fmtMoney(s.castka_podpory)}</td>
         <td class="rowActions">
           <button type="button" class="button small secondary" data-edit-supp="${html(s.id)}">Upravit</button>
@@ -275,7 +528,9 @@
       beh_cislo: competitionsForProgram(activeProgram).length + 1,
       alokovana_castka: 0,
       pokyn: "",
+      pokyn_nazev: "",
       vyvza: "",
+      vyvza_nazev: "",
       hodnoceni_prodekanu: "",
       rozhodnuti_prorektorky: "",
       poznamka: "",
@@ -289,8 +544,7 @@
     el("compRok").value = c.rok || "";
     el("compBeh").value = c.beh_cislo || 1;
     el("compAlokace").value = c.alokovana_castka || "";
-    el("compPokyn").value = c.pokyn || "";
-    el("compVyvza").value = c.vyvza || "";
+    resetPdfDialogState(c);
     el("compHodnoceni").value = c.hodnoceni_prodekanu || "";
     el("compRozhodnuti").value = c.rozhodnuti_prorektorky || "";
     el("compStav").value = c.stav || "Aktivní";
@@ -303,6 +557,13 @@
     e.preventDefault();
     const id = el("compEditId").value || uuid();
     const existing = getCompetition(id);
+    let pdfFields;
+    try {
+      pdfFields = await applyPdfFields(id, existing);
+    } catch (err) {
+      alert("PDF se nepodařilo nahrát: " + (err.message || err));
+      return;
+    }
     const comp = {
       id,
       program_slug: el("compProgram").value || activeProgram,
@@ -310,8 +571,10 @@
       rok: Number(el("compRok").value) || null,
       beh_cislo: Number(el("compBeh").value) || 1,
       alokovana_castka: Number(el("compAlokace").value) || 0,
-      pokyn: n(el("compPokyn").value),
-      vyvza: n(el("compVyvza").value),
+      pokyn: pdfFields.pokyn,
+      pokyn_nazev: pdfFields.pokyn_nazev,
+      vyvza: pdfFields.vyvza,
+      vyvza_nazev: pdfFields.vyvza_nazev,
       hodnoceni_prodekanu: n(el("compHodnoceni").value),
       rozhodnuti_prorektorky: n(el("compRozhodnuti").value),
       poznamka: n(el("compPoznamka").value),
@@ -325,6 +588,7 @@
       const saved = await saveCompetition(comp);
       activeCompetitionId = saved.id;
       activeProgram = saved.program_slug;
+      resetPdfDialogState(saved);
       el("competitionDialog").close();
       setStatus("Běh soutěže uložen.");
       render();
@@ -346,17 +610,34 @@
     }
   }
 
+  function fillResitelFromPerson(selectEl) {
+    const p = getPerson(selectEl.value);
+    if (!p) return;
+    if (el("appFakulta")) el("appFakulta").value = p.fakulta || "";
+    if (el("appKatedra")) el("appKatedra").value = p.katedra || "";
+  }
+
+  function fillSuppResitelFromPerson(selectEl) {
+    const p = getPerson(selectEl.value);
+    if (!p) return;
+    if (el("suppFakulta")) el("suppFakulta").value = p.fakulta || "";
+    if (el("suppKatedra")) el("suppKatedra").value = p.katedra || "";
+  }
+
   function openApplicationDialog(compId, appId) {
     const comp = getCompetition(compId);
     if (!comp) return;
     const existing = appId ? (comp.applications || []).find(a => a.id === appId) : null;
     el("appEditId").value = existing?.id || "";
     el("appCompId").value = compId;
+    el("appProjektId").value = existing?.projekt_id || suggestProjektId(comp);
     el("appNazev").value = existing?.nazev_projektu || "";
-    el("appResitel").value = existing?.resitel || "";
+    el("appResitelId").innerHTML = renderPersonOptions(existing?.resitel_id);
     el("appFakulta").value = existing?.fakulta || "";
+    el("appKatedra").value = existing?.katedra || "";
     el("appCastka").value = existing?.financni_pozadavek || "";
     el("appHodnoceni").value = existing?.hodnoceni || "";
+    el("appHodnoceniKomise").value = existing?.hodnoceni_komise || "";
     el("appStav").value = existing?.stav || "Přihláška";
     el("appPoznamka").value = existing?.poznamka || "";
     el("applicationDialog").showModal();
@@ -369,13 +650,19 @@
     if (!comp) return;
     const id = el("appEditId").value || uuid();
     const existing = (comp.applications || []).find(a => a.id === id);
+    const resitelId = el("appResitelId").value || null;
+    const person = resitelId ? getPerson(resitelId) : null;
     const app = {
       id,
+      projekt_id: n(el("appProjektId").value),
       nazev_projektu: n(el("appNazev").value) || "Bez názvu",
-      resitel: n(el("appResitel").value),
+      resitel_id: resitelId,
+      resitel: person ? personLabel(person) : "",
       fakulta: n(el("appFakulta").value),
+      katedra: n(el("appKatedra").value),
       financni_pozadavek: Number(el("appCastka").value) || 0,
       hodnoceni: n(el("appHodnoceni").value),
+      hodnoceni_komise: n(el("appHodnoceniKomise").value),
       stav: n(el("appStav").value) || "Přihláška",
       poznamka: n(el("appPoznamka").value),
       created_at: existing?.created_at || new Date().toISOString(),
@@ -404,9 +691,11 @@
     const existing = suppId ? (comp.supported || []).find(s => s.id === suppId) : null;
     el("suppEditId").value = existing?.id || "";
     el("suppCompId").value = compId;
+    el("suppProjektId").value = existing?.projekt_id || "";
     el("suppNazev").value = existing?.nazev_projektu || "";
-    el("suppResitel").value = existing?.resitel || "";
+    el("suppResitelId").innerHTML = renderPersonOptions(existing?.resitel_id);
     el("suppFakulta").value = existing?.fakulta || "";
+    el("suppKatedra").value = existing?.katedra || "";
     el("suppCastka").value = existing?.castka_podpory || "";
     el("suppPoznamka").value = existing?.poznamka || "";
     el("supportedDialog").showModal();
@@ -419,11 +708,16 @@
     if (!comp) return;
     const id = el("suppEditId").value || uuid();
     const existing = (comp.supported || []).find(s => s.id === id);
+    const resitelId = el("suppResitelId").value || null;
+    const person = resitelId ? getPerson(resitelId) : null;
     const item = {
       id,
+      projekt_id: n(el("suppProjektId").value),
       nazev_projektu: n(el("suppNazev").value) || "Bez názvu",
-      resitel: n(el("suppResitel").value),
+      resitel_id: resitelId,
+      resitel: person ? personLabel(person) : "",
       fakulta: n(el("suppFakulta").value),
+      katedra: n(el("suppKatedra").value),
       castka_podpory: Number(el("suppCastka").value) || 0,
       poznamka: n(el("suppPoznamka").value),
       application_id: existing?.application_id || null,
@@ -454,15 +748,118 @@
     const item = {
       id: uuid(),
       application_id: app.id,
+      projekt_id: app.projekt_id,
       nazev_projektu: app.nazev_projektu,
-      resitel: app.resitel,
+      resitel_id: app.resitel_id,
+      resitel: resitelDisplay(app),
       fakulta: app.fakulta,
+      katedra: app.katedra,
       castka_podpory: app.financni_pozadavek,
       poznamka: `Z přihlášky: ${app.stav || ""}`,
       created_at: new Date().toISOString()
     };
     await saveCompetition({ ...comp, supported: [...(comp.supported || []), item], __existing: true });
     render();
+  }
+
+  function renderPersonsPanel() {
+    const box = el("competitionPersonsList");
+    if (!box) return;
+    if (!persons.length) {
+      box.innerHTML = `<p class="hint">Zatím žádné osoby. Přidejte řešitele do databáze — pak je vyberete u přihlášek.</p>`;
+      return;
+    }
+    const sorted = [...persons].sort((a, b) => personLabel(a).localeCompare(personLabel(b), "cs"));
+    box.innerHTML = `<div class="competitionTableWrap"><table class="competitionTable">
+      <thead><tr><th>ID</th><th>Jméno</th><th>E-mail</th><th>Fakulta</th><th>Katedra</th><th></th></tr></thead>
+      <tbody>${sorted.map(p => `<tr>
+        <td><code class="projektId">${html(p.osobni_cislo) || "—"}</code></td>
+        <td><strong>${html(personLabel(p))}</strong></td>
+        <td>${html(p.email)}</td>
+        <td>${html(p.fakulta)}</td>
+        <td>${html(p.katedra)}</td>
+        <td class="rowActions">
+          <button type="button" class="button small secondary" data-edit-person="${html(p.id)}">Upravit</button>
+          <button type="button" class="button small secondary" data-del-person="${html(p.id)}">×</button>
+        </td>
+      </tr>`).join("")}</tbody></table></div>`;
+    box.querySelectorAll("[data-edit-person]").forEach(btn => btn.addEventListener("click", () => openPersonDialog(btn.dataset.editPerson)));
+    box.querySelectorAll("[data-del-person]").forEach(btn => btn.addEventListener("click", () => deletePerson(btn.dataset.delPerson)));
+  }
+
+  function openPersonDialog(personId) {
+    const existing = personId ? getPerson(personId) : null;
+    el("personEditId").value = existing?.id || "";
+    el("personCislo").value = existing?.osobni_cislo || "";
+    el("personTitulPred").value = existing?.titul_pred || "";
+    el("personJmeno").value = existing?.jmeno || "";
+    el("personPrijmeni").value = existing?.prijmeni || "";
+    el("personTitulZa").value = existing?.titul_za || "";
+    el("personEmail").value = existing?.email || "";
+    el("personTelefon").value = existing?.telefon || "";
+    el("personFakulta").value = existing?.fakulta || "";
+    el("personKatedra").value = existing?.katedra || "";
+    el("personPoznamka").value = existing?.poznamka || "";
+    el("personDialogTitle").textContent = existing ? "Upravit osobu" : "Nová osoba";
+    el("personDialog").showModal();
+  }
+
+  async function savePersonDialog(e) {
+    e.preventDefault();
+    const id = el("personEditId").value || uuid();
+    const existing = getPerson(id);
+    const person = {
+      id,
+      osobni_cislo: n(el("personCislo").value),
+      titul_pred: n(el("personTitulPred").value),
+      jmeno: n(el("personJmeno").value),
+      prijmeni: n(el("personPrijmeni").value),
+      titul_za: n(el("personTitulZa").value),
+      email: n(el("personEmail").value),
+      telefon: n(el("personTelefon").value),
+      fakulta: n(el("personFakulta").value),
+      katedra: n(el("personKatedra").value),
+      poznamka: n(el("personPoznamka").value),
+      created_at: existing?.created_at || new Date().toISOString(),
+      __existing: !!existing
+    };
+    if (!person.jmeno || !person.prijmeni) {
+      alert("Vyplňte jméno a příjmení.");
+      return;
+    }
+    try {
+      if (useSupabase && window.kbSupabaseCompetitions?.savePerson) {
+        const saved = await window.kbSupabaseCompetitions.savePerson(person);
+        const idx = persons.findIndex(p => p.id === saved.id);
+        if (idx === -1) persons.push(saved);
+        else persons[idx] = saved;
+      } else {
+        const idx = persons.findIndex(p => p.id === id);
+        if (idx === -1) persons.push(person);
+        else persons[idx] = person;
+        persistLocalPersons();
+      }
+      el("personDialog").close();
+      renderPersonsPanel();
+      render();
+    } catch (err) {
+      alert("Uložení osoby selhalo: " + (err.message || err));
+    }
+  }
+
+  async function deletePerson(id) {
+    if (!confirm("Smazat osobu z databáze? (Přihlášky si ponechají text řešitele.)")) return;
+    try {
+      if (useSupabase && window.kbSupabaseCompetitions?.deletePerson) {
+        await window.kbSupabaseCompetitions.deletePerson(id);
+      }
+      persons = persons.filter(p => p.id !== id);
+      if (!useSupabase) persistLocalPersons();
+      renderPersonsPanel();
+      render();
+    } catch (err) {
+      alert("Smazání selhalo: " + (err.message || err));
+    }
   }
 
   function injectPage() {
@@ -482,6 +879,17 @@
         </div>
         <p id="competitionsStatus" class="competitionsStatus hint">Načítám…</p>
         <div id="competitionProgramTabs" class="competitionProgramTabs"></div>
+        <div id="competitionRegaBanner" hidden></div>
+      </section>
+      <section class="panel competitionPersonsPanel">
+        <div class="sectionHeader">
+          <div>
+            <h3>Databáze osob</h3>
+            <p class="hint">Řešitelé projektů — jméno, fakulta, katedra. Vyberete je u přihlášek.</p>
+          </div>
+          <button type="button" id="newPersonBtn" class="button small accent">+ Osoba</button>
+        </div>
+        <div id="competitionPersonsList"></div>
       </section>
       <div class="competitionLayout">
         <section class="panel competitionListPanel">
@@ -495,6 +903,8 @@
     `;
     el("competitionsReloadBtn").addEventListener("click", loadCompetitions);
     el("newCompetitionBtn").addEventListener("click", () => openCompetitionDialog());
+    el("newPersonBtn").addEventListener("click", () => openPersonDialog());
+    renderPersonsPanel();
   }
 
   function injectDialogs() {
@@ -513,8 +923,20 @@
             <label>Alokovaná částka (Kč)<input id="compAlokace" type="number" min="0" step="1000" /></label>
             <label>Stav<select id="compStav"><option>Aktivní</option><option>Hodnocení</option><option>Rozhodnuto</option><option>Uzavřeno</option></select></label>
           </div>
-          <label>Pokyn<textarea id="compPokyn" rows="3" placeholder="Odkaz nebo text pokynu…"></textarea></label>
-          <label>Výzva<textarea id="compVyvza" rows="3" placeholder="Text výzvy…"></textarea></label>
+          <label>Pokyn (PDF)
+            <div class="pdfField">
+              <p id="compPokynCurrent" class="hint pdfFieldCurrent">Zatím není nahráno PDF.</p>
+              <input id="compPokynFile" type="file" accept=".pdf,application/pdf" />
+              <button type="button" id="compPokynRemove" class="button small secondary" hidden>Odebrat PDF</button>
+            </div>
+          </label>
+          <label>Výzva (PDF)
+            <div class="pdfField">
+              <p id="compVyvzaCurrent" class="hint pdfFieldCurrent">Zatím není nahráno PDF.</p>
+              <input id="compVyvzaFile" type="file" accept=".pdf,application/pdf" />
+              <button type="button" id="compVyvzaRemove" class="button small secondary" hidden>Odebrat PDF</button>
+            </div>
+          </label>
           <label>Hodnocení proděkanů<textarea id="compHodnoceni" rows="3"></textarea></label>
           <label>Rozhodnutí prorektorky<textarea id="compRozhodnuti" rows="3"></textarea></label>
           <label>Poznámka<textarea id="compPoznamka" rows="2"></textarea></label>
@@ -524,18 +946,45 @@
           </div>
         </form>
       </dialog>
+      <dialog id="personDialog">
+        <form method="dialog">
+          <div class="dialogHeader"><h2 id="personDialogTitle">Nová osoba</h2><button class="iconButton" value="cancel">×</button></div>
+          <input type="hidden" id="personEditId" />
+          <div class="grid2">
+            <label>ID / osobní číslo<input id="personCislo" placeholder="např. OV-001" /></label>
+            <label>Titul před<input id="personTitulPred" placeholder="doc., prof." /></label>
+            <label>Jméno<input id="personJmeno" required /></label>
+            <label>Příjmení<input id="personPrijmeni" required /></label>
+            <label>Titul za<input id="personTitulZa" placeholder="Ph.D., CSc." /></label>
+            <label>E-mail<input id="personEmail" type="email" /></label>
+            <label>Telefon<input id="personTelefon" /></label>
+            <label>Fakulta<input id="personFakulta" /></label>
+            <label>Katedra<input id="personKatedra" /></label>
+          </div>
+          <label>Poznámka<textarea id="personPoznamka" rows="2"></textarea></label>
+          <div class="dialogActions">
+            <button value="cancel" class="button secondary">Zavřít</button>
+            <button id="savePersonBtn" type="button" class="button accent">Uložit</button>
+          </div>
+        </form>
+      </dialog>
       <dialog id="applicationDialog">
         <form method="dialog">
           <div class="dialogHeader"><h2>Přihláška projektu</h2><button class="iconButton" value="cancel">×</button></div>
           <input type="hidden" id="appEditId" /><input type="hidden" id="appCompId" />
-          <label>Název projektu<input id="appNazev" required /></label>
           <div class="grid2">
-            <label>Řešitel<input id="appResitel" /></label>
-            <label>Fakulta / součást<input id="appFakulta" /></label>
+            <label>ID projektu<input id="appProjektId" placeholder="CONNECT-2025-001" required /></label>
+            <label>Název projektu<input id="appNazev" required /></label>
+          </div>
+          <label>Řešitel (z databáze osob)<select id="appResitelId"></select></label>
+          <div class="grid2">
+            <label>Fakulta<input id="appFakulta" /></label>
+            <label>Katedra<input id="appKatedra" /></label>
             <label>Finanční požadavek (Kč)<input id="appCastka" type="number" min="0" step="1000" /></label>
             <label>Stav<select id="appStav"><option>Přihláška</option><option>Hodnoceno</option><option>Podpořeno</option><option>Zamítnuto</option></select></label>
           </div>
-          <label>Hodnocení (proděkan)<textarea id="appHodnoceni" rows="2"></textarea></label>
+          <label>Hodnocení proděkana<textarea id="appHodnoceni" rows="2" placeholder="Krátké hodnocení proděkana…"></textarea></label>
+          <label>Hodnocení komise<textarea id="appHodnoceniKomise" rows="8" placeholder="Delší text hodnocení komise…"></textarea></label>
           <label>Poznámka<textarea id="appPoznamka" rows="2"></textarea></label>
           <div class="dialogActions">
             <button value="cancel" class="button secondary">Zavřít</button>
@@ -547,10 +996,14 @@
         <form method="dialog">
           <div class="dialogHeader"><h2>Podpořený projekt</h2><button class="iconButton" value="cancel">×</button></div>
           <input type="hidden" id="suppEditId" /><input type="hidden" id="suppCompId" />
-          <label>Název projektu<input id="suppNazev" required /></label>
           <div class="grid2">
-            <label>Řešitel<input id="suppResitel" /></label>
+            <label>ID projektu<input id="suppProjektId" /></label>
+            <label>Název projektu<input id="suppNazev" required /></label>
+          </div>
+          <label>Řešitel<select id="suppResitelId"></select></label>
+          <div class="grid2">
             <label>Fakulta<input id="suppFakulta" /></label>
+            <label>Katedra<input id="suppKatedra" /></label>
             <label>Částka podpory (Kč)<input id="suppCastka" type="number" min="0" step="1000" /></label>
           </div>
           <label>Poznámka<textarea id="suppPoznamka" rows="2"></textarea></label>
@@ -562,7 +1015,34 @@
       </dialog>
     `;
     document.body.appendChild(dialogs);
+    el("compPokynFile")?.addEventListener("change", (e) => {
+      pendingPokynFile = e.target.files?.[0] || null;
+      removePokynPdf = false;
+      const existing = getCompetition(el("compEditId").value);
+      updatePdfFieldPreview("pokyn", existing?.pokyn, existing?.pokyn_nazev);
+    });
+    el("compVyvzaFile")?.addEventListener("change", (e) => {
+      pendingVyvzaFile = e.target.files?.[0] || null;
+      removeVyvzaPdf = false;
+      const existing = getCompetition(el("compEditId").value);
+      updatePdfFieldPreview("vyvza", existing?.vyvza, existing?.vyvza_nazev);
+    });
+    el("compPokynRemove")?.addEventListener("click", () => {
+      pendingPokynFile = null;
+      removePokynPdf = true;
+      el("compPokynFile").value = "";
+      updatePdfFieldPreview("pokyn", "", "");
+    });
+    el("compVyvzaRemove")?.addEventListener("click", () => {
+      pendingVyvzaFile = null;
+      removeVyvzaPdf = true;
+      el("compVyvzaFile").value = "";
+      updatePdfFieldPreview("vyvza", "", "");
+    });
+    el("appResitelId")?.addEventListener("change", (e) => fillResitelFromPerson(e.target));
+    el("suppResitelId")?.addEventListener("change", (e) => fillSuppResitelFromPerson(e.target));
     el("saveCompBtn").addEventListener("click", saveCompetitionDialog);
+    el("savePersonBtn").addEventListener("click", savePersonDialog);
     el("saveAppBtn").addEventListener("click", saveApplicationDialog);
     el("saveSuppBtn").addEventListener("click", saveSupportedDialog);
   }
@@ -584,6 +1064,11 @@
       .competitionMetrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .65rem; margin-bottom: 1rem; }
       .competitionSection { margin-bottom: 1rem; }
       .competitionDocs { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .competitionPdfBlock { border: 1px solid var(--line); border-radius: 10px; padding: .75rem; background: #f8fafc; }
+      .competitionPdfLink { display: inline-block; margin-top: .35rem; font-weight: 700; color: var(--accent); text-decoration: none; }
+      .competitionPdfLink:hover { text-decoration: underline; }
+      .pdfField { display: grid; gap: .45rem; margin-top: .25rem; }
+      .pdfFieldCurrent { margin: 0; }
       .competitionTextBlock { white-space: pre-wrap; color: var(--text); }
       .competitionTableWrap { overflow-x: auto; }
       .competitionTable { width: 100%; border-collapse: collapse; }
@@ -594,6 +1079,12 @@
       .competitionSummary table { max-width: 480px; }
       .competitionsStatus { margin: .35rem 0 .75rem; }
       .competitionsStatusError { color: #b42318; }
+      .projektId { font-size: .82rem; background: #f2f4f7; padding: .1rem .35rem; border-radius: 4px; }
+      .appEvalRow td { background: #f8fafc; font-size: .88rem; }
+      .appKomiseBlock { margin-top: .5rem; }
+      .competitionPersonsPanel { margin-bottom: 1rem; }
+      .competitionRegaSeedBox { margin: .75rem 0 0; padding: .85rem 1rem; border: 1px solid var(--line); border-radius: 10px; background: #f0f9ff; }
+      .competitionRegaSeedBox p { margin: 0 0 .6rem; line-height: 1.5; }
       @media (max-width: 900px) {
         .competitionLayout, .competitionDocs, .competitionMetrics { grid-template-columns: 1fr; }
       }
@@ -603,8 +1094,10 @@
 
   function render() {
     renderProgramTabs();
+    renderRegaBanner();
     renderCompetitionList();
     renderCompetitionDetail();
+    renderPersonsPanel();
   }
 
   function init() {
@@ -617,7 +1110,7 @@
     });
   }
 
-  window.kbCompetitions = { PROGRAMS, loadCompetitions, getCompetitions: () => competitions };
+  window.kbCompetitions = { PROGRAMS, loadCompetitions, getCompetitions: () => competitions, getPersons: () => persons };
 
   document.addEventListener("DOMContentLoaded", init);
 })();
