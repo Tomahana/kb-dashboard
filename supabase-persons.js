@@ -71,13 +71,21 @@
   }
 
   async function loadAll() {
-    const { data, error } = await getClient()
-      .from("kb_persons")
-      .select("*")
-      .order("prijmeni")
-      .order("jmeno");
-    if (error) throw error;
-    return (data || []).map(mapPerson);
+    const PAGE = 1000;
+    const all = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await getClient()
+        .from("kb_persons")
+        .select("*")
+        .order("prijmeni")
+        .order("jmeno")
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const batch = data || [];
+      all.push(...batch);
+      if (batch.length < PAGE) break;
+    }
+    return all.map(mapPerson);
   }
 
   function toPayload(person, { includeId = true, includeCreated = false } = {}) {

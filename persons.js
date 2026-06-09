@@ -21,6 +21,22 @@
     scopus_id: ["Scopus ID", "scopus_id"]
   };
 
+  const FILTER_FIELDS = [
+    { key: "prijmeni", label: "Příjmení", type: "text" },
+    { key: "jmeno", label: "Jméno", type: "text" },
+    { key: "osobni_cislo", label: "Osobní číslo", type: "text" },
+    { key: "stav_osoby", label: "Stav osoby", type: "select" },
+    { key: "pracoviste", label: "Pracoviště", type: "select" }
+  ];
+
+  const SORT_FIELDS = [
+    { key: "prijmeni", label: "Příjmení" },
+    { key: "jmeno", label: "Jméno" },
+    { key: "osobni_cislo", label: "Osobní číslo" },
+    { key: "stav_osoby", label: "Stav osoby" },
+    { key: "pracoviste", label: "Pracoviště" }
+  ];
+
   const TABLE_COLUMNS = [
     { key: "prijmeni", label: "Příjmení" },
     { key: "jmeno", label: "Jméno" },
@@ -108,11 +124,75 @@
     window.kbSupabasePersons?.saveLocal?.(persons);
   }
 
+  let statusMessage = "";
+  let statusIsError = false;
+
   function setStatus(text, isError) {
-    const node = el("personsStatus");
+    statusMessage = text;
+    statusIsError = !!isError;
+    updateListSummary();
+  }
+
+  function uniqueValues(field) {
+    return [...new Set(persons.map(p => n(p[field])).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "cs"));
+  }
+
+  function populateFilters() {
+    FILTER_FIELDS.filter(f => f.type === "select").forEach(({ key }) => {
+      const select = el(`personsFilter_${key}`);
+      if (!select) return;
+      const current = select.value;
+      const options = uniqueValues(key)
+        .map(v => `<option value="${html(v)}">${html(v)}</option>`)
+        .join("");
+      select.innerHTML = `<option value="">Vše</option>${options}`;
+      if (current && uniqueValues(key).includes(current)) select.value = current;
+    });
+  }
+
+  function filteredPersons() {
+    const l = (s) => n(s).toLowerCase();
+    return persons.filter(p => FILTER_FIELDS.every(({ key, type }) => {
+      const raw = el(`personsFilter_${key}`)?.value ?? "";
+      if (!n(raw)) return true;
+      if (type === "select") return n(p[key]) === n(raw);
+      return l(p[key]).includes(l(raw));
+    }));
+  }
+
+  function sortPersons(list) {
+    const sortKey = el("personsSortBy")?.value || "prijmeni";
+    const desc = el("personsSortDir")?.value === "desc";
+    return [...list].sort((a, b) => {
+      const av = n(a[sortKey]);
+      const bv = n(b[sortKey]);
+      const cmp = av.localeCompare(bv, "cs", { numeric: true, sensitivity: "base" });
+      if (cmp !== 0) return desc ? -cmp : cmp;
+      const tie = n(a.prijmeni).localeCompare(n(b.prijmeni), "cs");
+      if (tie !== 0) return tie;
+      return n(a.jmeno).localeCompare(n(b.jmeno), "cs");
+    });
+  }
+
+  function updateListSummary() {
+    const node = el("personsListSummary");
     if (!node) return;
-    node.textContent = text;
-    node.classList.toggle("personsStatusError", !!isError);
+    if (loading) {
+      node.textContent = statusMessage || "Načítám…";
+      node.classList.toggle("personsStatusError", statusIsError);
+      return;
+    }
+    const filtered = filteredPersons();
+    const parts = [];
+    if (statusMessage) parts.push(statusMessage);
+    if (persons.length) {
+      parts.push(filtered.length === persons.length
+        ? `Zobrazeno ${persons.length} osob`
+        : `Zobrazeno ${filtered.length} z ${persons.length} osob`);
+    }
+    node.textContent = parts.join(" · ") || "Žádné osoby";
+    node.classList.toggle("personsStatusError", statusIsError);
   }
 
   async function loadPersons() {
@@ -145,6 +225,7 @@
       setStatus(`Chyba: ${e.message || e}`, true);
     } finally {
       loading = false;
+      populateFilters();
       renderList();
       document.dispatchEvent(new CustomEvent("kb:persons-loaded", { detail: { persons } }));
     }
@@ -180,19 +261,14 @@
   function renderList() {
     const box = el("personsList");
     if (!box) return;
+    updateListSummary();
     if (loading) {
       box.innerHTML = `<p class="hint">Načítám…</p>`;
       return;
     }
-    const q = n(el("personsSearch")?.value).toLowerCase();
-    let list = [...persons].sort((a, b) => personLabel(a).localeCompare(personLabel(b), "cs"));
-    if (q) {
-      list = list.filter(p => TABLE_COLUMNS
-        .map(col => col.key === "datum_narozeni" ? formatDate(p.datum_narozeni) : p[col.key])
-        .some(v => n(v).toLowerCase().includes(q)));
-    }
+    const list = sortPersons(filteredPersons());
     if (!list.length) {
-      box.innerHTML = `<p class="hint">${persons.length ? "Žádná shoda s hledáním." : "Zatím žádné osoby. Přidejte první záznam — osobní číslo slouží jako klíč pro projekty a další moduly."}</p>`;
+      box.innerHTML = `<p class="hint">${persons.length ? "Žádná shoda s filtrem." : "Zatím žádné osoby. Přidejte první záznam — osobní číslo slouží jako klíč pro projekty a další moduly."}</p>`;
       return;
     }
     const headers = TABLE_COLUMNS.map(col => `<th>${html(col.label)}</th>`).join("");
@@ -262,6 +338,7 @@
       if (!useSupabase) persistLocal();
       el("personDialog").close();
       setStatus("Osoba uložena.");
+      populateFilters();
       renderList();
       document.dispatchEvent(new CustomEvent("kb:persons-loaded", { detail: { persons } }));
       if (onSavedCallback) onSavedCallback(saved);
@@ -502,6 +579,7 @@
         persistLocal();
         setStatus(`Importováno lokálně: ${valid.length} osob.`);
       }
+      populateFilters();
       renderList();
       document.dispatchEvent(new CustomEvent("kb:persons-loaded", { detail: { persons } }));
     } catch (err) {
@@ -538,6 +616,7 @@
       if (useSupabase && window.kbSupabasePersons) await window.kbSupabasePersons.deletePerson(id);
       persons = persons.filter(p => p.id !== id);
       if (!useSupabase) persistLocal();
+      populateFilters();
       renderList();
       document.dispatchEvent(new CustomEvent("kb:persons-loaded", { detail: { persons } }));
     } catch (err) {
@@ -562,10 +641,23 @@
             <button type="button" id="newPersonBtn" class="button accent">+ Osoba</button>
           </div>
         </div>
-        <p id="personsStatus" class="personsStatus hint">Načítám…</p>
-        <label class="personsSearchLabel">Hledat
-          <input id="personsSearch" type="search" placeholder="Jméno, osobní číslo, pracoviště, ORCID…" />
-        </label>
+        <p id="personsListSummary" class="personsStatus hint">Načítám…</p>
+        <div class="personsFilters">
+          ${FILTER_FIELDS.map(f => f.type === "text"
+    ? `<label>${html(f.label)}<input id="personsFilter_${f.key}" type="search" placeholder="Vše" /></label>`
+    : `<label>${html(f.label)}<select id="personsFilter_${f.key}"><option value="">Vše</option></select></label>`
+  ).join("")}
+          <label>Řadit podle
+            <select id="personsSortBy">${SORT_FIELDS.map(f => `<option value="${f.key}">${html(f.label)}</option>`).join("")}</select>
+          </label>
+          <label>Směr
+            <select id="personsSortDir">
+              <option value="asc">A → Z</option>
+              <option value="desc">Z → A</option>
+            </select>
+          </label>
+          <button type="button" id="personsClearFilters" class="button small secondary">Zrušit filtry</button>
+        </div>
         <div id="personsList"></div>
       </section>`;
     el("personsImportBtn")?.addEventListener("click", () => el("personsImportFile")?.click());
@@ -577,7 +669,21 @@
     });
     el("personsReloadBtn").addEventListener("click", loadPersons);
     el("newPersonBtn").addEventListener("click", () => openDialog());
-    el("personsSearch")?.addEventListener("input", renderList);
+    FILTER_FIELDS.forEach(({ key }) => {
+      el(`personsFilter_${key}`)?.addEventListener("input", renderList);
+      el(`personsFilter_${key}`)?.addEventListener("change", renderList);
+    });
+    el("personsSortBy")?.addEventListener("change", renderList);
+    el("personsSortDir")?.addEventListener("change", renderList);
+    el("personsClearFilters")?.addEventListener("click", () => {
+      FILTER_FIELDS.forEach(({ key }) => {
+        const node = el(`personsFilter_${key}`);
+        if (node) node.value = "";
+      });
+      if (el("personsSortBy")) el("personsSortBy").value = "prijmeni";
+      if (el("personsSortDir")) el("personsSortDir").value = "asc";
+      renderList();
+    });
   }
 
   function injectDialog() {
@@ -608,7 +714,10 @@
     const style = document.createElement("style");
     style.id = "personsStyles";
     style.textContent = `
-      .personsSearchLabel { display: block; margin: .5rem 0 .75rem; max-width: 420px; }
+      .personsFilters { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem .75rem; margin: .5rem 0 .75rem; align-items: end; }
+      .personsFilters label { display: flex; flex-direction: column; gap: .2rem; font-size: .82rem; margin: 0; }
+      .personsFilters input, .personsFilters select { width: 100%; }
+      #personsClearFilters { align-self: end; }
       .personsTableWrap { overflow-x: auto; }
       .personsTable { width: 100%; border-collapse: collapse; min-width: 1400px; }
       .personsTable th, .personsTable td { padding: .45rem .5rem; border-bottom: 1px solid var(--line); text-align: left; font-size: .82rem; white-space: nowrap; }
@@ -616,6 +725,9 @@
       .personId { font-size: .82rem; background: #f2f4f7; padding: .1rem .35rem; border-radius: 4px; }
       .personsStatus { margin: .35rem 0 .5rem; }
       .personsStatusError { color: #b42318; }
+      @media (max-width: 700px) {
+        .personsFilters { grid-template-columns: 1fr 1fr; }
+      }
     `;
     document.head.appendChild(style);
   }
