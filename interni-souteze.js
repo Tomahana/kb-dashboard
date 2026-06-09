@@ -50,6 +50,51 @@
     return (comp?.applications || []).reduce((s, r) => s + (Number(r.financni_pozadavek) || 0), 0);
   }
 
+  function usesCascadingAllocation(programSlug) {
+    return programSlug === "connect";
+  }
+
+  function runsForYear(programSlug, rok) {
+    if (!programSlug || rok == null) return [];
+    return competitions
+      .filter(c => c.program_slug === programSlug && Number(c.rok) === Number(rok))
+      .sort((a, b) => (a.beh_cislo || 0) - (b.beh_cislo || 0));
+  }
+
+  function annualBudget(programSlug, rok) {
+    if (!usesCascadingAllocation(programSlug)) return 0;
+    const beh1 = runsForYear(programSlug, rok).find(r => (r.beh_cislo || 1) === 1);
+    return Number(beh1?.alokovana_castka) || 0;
+  }
+
+  function usedInPriorRuns(programSlug, rok, behCislo) {
+    return runsForYear(programSlug, rok)
+      .filter(r => (r.beh_cislo || 1) < behCislo)
+      .reduce((s, r) => s + sumSupported(r), 0);
+  }
+
+  function remainingForBeh(programSlug, rok, behCislo) {
+    if (!usesCascadingAllocation(programSlug) || behCislo <= 1) {
+      return annualBudget(programSlug, rok);
+    }
+    return Math.max(0, annualBudget(programSlug, rok) - usedInPriorRuns(programSlug, rok, behCislo));
+  }
+
+  function effectiveAllocation(c) {
+    const stored = Number(c?.alokovana_castka) || 0;
+    if (!usesCascadingAllocation(c?.program_slug)) return stored;
+    const beh = c?.beh_cislo || 1;
+    if (beh <= 1) return stored;
+    return remainingForBeh(c.program_slug, c.rok, beh);
+  }
+
+  function allocationAllocLabel(c) {
+    if (usesCascadingAllocation(c?.program_slug) && (c?.beh_cislo || 1) > 1) {
+      return "Zbývá z alokace";
+    }
+    return "Alokovaná částka";
+  }
+
   function stavBucket(stav) {
     const s = n(stav).toLowerCase();
     if (["aktivní", "hodnocení"].includes(s)) return "bezi";
@@ -64,25 +109,29 @@
   }
 
   function allocationStats(c) {
-    const alloc = Number(c.alokovana_castka) || 0;
+    const alloc = effectiveAllocation(c);
     const used = sumSupported(c);
     const requested = sumApplications(c);
     const remaining = alloc - used;
     const pct = alloc > 0 ? Math.round((used / alloc) * 100) : 0;
-    return { alloc, used, requested, remaining, pct };
+    const annual = usesCascadingAllocation(c?.program_slug) ? annualBudget(c.program_slug, c.rok) : alloc;
+    return { alloc, used, requested, remaining, pct, annual, allocLabel: allocationAllocLabel(c) };
   }
 
   function renderAllocationSummary(c, options = {}) {
-    const { alloc, used, requested, remaining, pct } = allocationStats(c);
+    const { alloc, used, requested, remaining, pct, annual, allocLabel } = allocationStats(c);
     const bar = alloc > 0 ? `
       <div class="allocationBar" aria-hidden="true">
         <div class="allocationBarFill" style="width:${Math.min(pct, 100)}%"></div>
       </div>
       <p class="allocationBarLabel">${pct} % čerpáno · ${fmtMoney(used)} z ${fmtMoney(alloc)}</p>` : "";
+    const annualRow = usesCascadingAllocation(c?.program_slug) && annual > 0 && (c?.beh_cislo || 1) > 1
+      ? `<tr><td>Celoroční alokace ${c.rok || ""}</td><td class="money">${fmtMoney(annual)}</td></tr>` : "";
     return `
       ${options.showBar !== false ? bar : ""}
       <table class="competitionTable competitionSummaryTable">
-        <tr><td>Alokovaná částka</td><td class="money">${fmtMoney(alloc)}</td></tr>
+        ${annualRow}
+        <tr><td>${html(allocLabel)}</td><td class="money">${fmtMoney(alloc)}</td></tr>
         <tr><td>Celkem požadováno v přihláškách</td><td class="money">${fmtMoney(requested)}</td></tr>
         <tr><td>Celkem podpořeno</td><td class="money">${fmtMoney(used)}</td></tr>
         <tr><td><strong>Zbývá / přebytek</strong></td><td class="money"><strong>${fmtMoney(remaining)}</strong></td></tr>
@@ -142,10 +191,10 @@
     const totals = items.reduce((t, c) => {
       const s = allocationStats(c);
       const budgetKey = `${c.program_slug}-${c.rok}`;
-      if (c.program_slug === "connect") {
+      if (usesCascadingAllocation(c.program_slug)) {
         if (!seenYearBudget.has(budgetKey)) {
           seenYearBudget.add(budgetKey);
-          t.alloc += s.alloc;
+          t.alloc += annualBudget(c.program_slug, c.rok) || s.alloc;
         }
       } else {
         t.alloc += s.alloc;
@@ -675,7 +724,7 @@
     },
     connect: {
       title: "UHK Connect",
-      description: "Krátké projekty pro síťování, mobilitu a navázání spolupráce — rok 2026, celoroční alokace 800 000 Kč (běh 1 = 1. kolo, běh 2 = 2. kolo).",
+      description: "Krátké projekty pro síťování, mobilitu a navázání spolupráce — celoroční alokace u běhu 1, další běhy čerpají automaticky „zbývá z alokace“.",
       sourceUrl: "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/uhk-connect",
       sourceNote: "pokyn prorektorky č. 06/2026, výzva č. 2/2026",
       rok: 2026,
@@ -713,18 +762,23 @@
   }
 
   async function saveCompetition(comp) {
+    let saved;
     if (useSupabase && window.kbSupabaseCompetitions) {
-      const saved = await window.kbSupabaseCompetitions.saveCompetition(comp);
+      saved = await window.kbSupabaseCompetitions.saveCompetition(comp);
       const idx = competitions.findIndex(c => c.id === saved.id);
       if (idx === -1) competitions.unshift(saved);
       else competitions[idx] = saved;
-      return saved;
+    } else {
+      const idx = competitions.findIndex(c => c.id === comp.id);
+      if (idx === -1) competitions.unshift(comp);
+      else competitions[idx] = comp;
+      persistLocal();
+      saved = comp;
     }
-    const idx = competitions.findIndex(c => c.id === comp.id);
-    if (idx === -1) competitions.unshift(comp);
-    else competitions[idx] = comp;
-    persistLocal();
-    return comp;
+    if (usesCascadingAllocation(saved.program_slug) && saved.rok) {
+      await syncCascadingAllocations(saved.program_slug, saved.rok);
+    }
+    return saved;
   }
 
   function renderProgramTabs() {
@@ -762,14 +816,13 @@
       return;
     }
     box.innerHTML = `<div class="competitionCards">${items.map(c => {
-      const used = sumSupported(c);
-      const alloc = Number(c.alokovana_castka) || 0;
-      const pct = alloc > 0 ? Math.round((used / alloc) * 100) : 0;
+      const { alloc, used, pct, allocLabel } = allocationStats(c);
+      const allocShort = allocLabel === "Zbývá z alokace" ? "zbývá" : "alokace";
       const active = c.id === activeCompetitionId ? "active" : "";
       return `<article class="competitionCard ${active}" data-comp-id="${html(c.id)}" tabindex="0" role="button">
         <strong>${html(c.nazev)}</strong>
         <span class="competitionCardMeta">${c.rok || "—"} · běh ${c.beh_cislo || 1} · ${(c.applications || []).length} přihlášek</span>
-        <span class="competitionCardMoney">${fmtMoney(alloc)} alokace · ${fmtMoney(used)} čerpáno (${pct}%)</span>
+        <span class="competitionCardMoney">${fmtMoney(alloc)} ${allocShort} · ${fmtMoney(used)} čerpáno (${pct}%)</span>
         <span class="badge">${html(c.stav || "")}</span>
       </article>`;
     }).join("")}</div>`;
@@ -786,17 +839,18 @@
       box.innerHTML = `<p class="hint">Vyberte běh / výzvu vlevo, nebo vytvořte nový.</p>`;
       return;
     }
-    const alloc = Number(c.alokovana_castka) || 0;
-    const used = sumSupported(c);
-    const requested = sumApplications(c);
-    const remaining = alloc - used;
+    const { alloc, used, requested, remaining, annual, allocLabel } = allocationStats(c);
     const behCount = competitionsForProgram(c.program_slug).length;
+    const cascadeHint = usesCascadingAllocation(c.program_slug) && (c.beh_cislo || 1) > 1 && annual > 0
+      ? `<p class="hint">Celoroční alokace ${c.rok}: ${fmtMoney(annual)} · pro tento běh zbývá ${fmtMoney(alloc)} z předchozích kol</p>`
+      : "";
 
     box.innerHTML = `
       <div class="competitionDetailHead">
         <div>
           <h2>${html(c.nazev)}</h2>
           <p class="hint">${html(getProgram(c.program_slug).title)} · rok ${c.rok || "—"} · běh ${c.beh_cislo || 1} · celkem běhů programu: ${behCount}</p>
+          ${cascadeHint}
         </div>
         <div class="competitionDetailActions">
           <button type="button" class="button small secondary" id="editCompetitionBtn">Upravit běh</button>
@@ -804,7 +858,7 @@
         </div>
       </div>
       <div class="competitionMetrics">
-        <article class="metric"><span>${fmtMoney(alloc)}</span><small>alokovaná částka</small></article>
+        <article class="metric"><span>${fmtMoney(alloc)}</span><small>${html(allocLabel.toLowerCase())}</small></article>
         <article class="metric"><span>${fmtMoney(requested)}</span><small>požadováno (přihlášky)</small></article>
         <article class="metric"><span>${fmtMoney(used)}</span><small>podpořeno celkem</small></article>
         <article class="metric"><span>${fmtMoney(remaining)}</span><small>zbývá z alokace</small></article>
@@ -895,14 +949,68 @@
       </tr>`).join("")}</tbody></table></div>`;
   }
 
+  function updateCompetitionAlokaceField() {
+    const program = el("compProgram")?.value || activeProgram;
+    const rok = Number(el("compRok")?.value) || null;
+    const beh = Number(el("compBeh")?.value) || 1;
+    const allocInput = el("compAlokace");
+    const allocLabel = el("compAlokaceLabel");
+    if (!allocInput || !allocLabel) return;
+    const cascade = usesCascadingAllocation(program) && beh > 1 && rok;
+    if (cascade) {
+      const remaining = remainingForBeh(program, rok, beh);
+      allocLabel.textContent = "Zbývá z alokace (Kč)";
+      allocInput.value = remaining;
+      allocInput.readOnly = true;
+      allocInput.title = remaining === 0
+        ? "Z předchozích kol nezbývá rozpočet — nové běhy až v dalším roce nebo po navýšení alokace u běhu 1."
+        : "Automaticky z celoroční alokace mínus čerpání předchozích běhů stejného roku.";
+    } else {
+      allocLabel.textContent = usesCascadingAllocation(program) && beh === 1
+        ? "Celoroční alokace (Kč)"
+        : "Alokovaná částka (Kč)";
+      allocInput.readOnly = false;
+      allocInput.removeAttribute("title");
+      if (allocInput.readOnly === false && document.activeElement !== allocInput && !allocInput.dataset.userEdited) {
+        // keep user value when switching back from cascade
+      }
+    }
+  }
+
+  async function syncCascadingAllocations(programSlug, rok) {
+    if (!usesCascadingAllocation(programSlug) || !rok) return;
+    for (const run of runsForYear(programSlug, rok)) {
+      if ((run.beh_cislo || 1) <= 1) continue;
+      const eff = remainingForBeh(programSlug, rok, run.beh_cislo);
+      if (Number(run.alokovana_castka) === eff) continue;
+      const updated = { ...run, alokovana_castka: eff, __existing: true };
+      if (useSupabase && window.kbSupabaseCompetitions) {
+        const saved = await window.kbSupabaseCompetitions.saveCompetition(updated);
+        const idx = competitions.findIndex(c => c.id === saved.id);
+        if (idx >= 0) competitions[idx] = saved;
+      } else {
+        const idx = competitions.findIndex(c => c.id === updated.id);
+        if (idx >= 0) competitions[idx] = updated;
+        persistLocal();
+      }
+    }
+  }
+
   function openCompetitionDialog(existing) {
+    const yearRuns = runsForYear(activeProgram, new Date().getFullYear());
+    const nextBeh = yearRuns.length
+      ? Math.max(...yearRuns.map(r => r.beh_cislo || 1)) + 1
+      : 1;
+    const defaultRok = yearRuns[0]?.rok || new Date().getFullYear();
     const c = existing || {
       id: uuid(),
       program_slug: activeProgram,
-      nazev: `${getProgram(activeProgram).title} – běh ${competitionsForProgram(activeProgram).length + 1}`,
-      rok: new Date().getFullYear(),
-      beh_cislo: competitionsForProgram(activeProgram).length + 1,
-      alokovana_castka: 0,
+      nazev: `${getProgram(activeProgram).title} – běh ${nextBeh}`,
+      rok: defaultRok,
+      beh_cislo: nextBeh,
+      alokovana_castka: usesCascadingAllocation(activeProgram) && nextBeh > 1
+        ? remainingForBeh(activeProgram, defaultRok, nextBeh)
+        : 0,
       pokyn: "",
       pokyn_nazev: "",
       vyvza: "",
@@ -919,7 +1027,9 @@
     el("compNazev").value = c.nazev;
     el("compRok").value = c.rok || "";
     el("compBeh").value = c.beh_cislo || 1;
-    el("compAlokace").value = c.alokovana_castka || "";
+    el("compAlokace").value = existing ? effectiveAllocation(c) : (c.alokovana_castka || "");
+    el("compAlokace").dataset.userEdited = "";
+    updateCompetitionAlokaceField();
     resetPdfDialogState(c);
     el("compHodnoceni").value = c.hodnoceni_prodekanu || "";
     el("compRozhodnuti").value = c.rozhodnuti_prorektorky || "";
@@ -940,13 +1050,19 @@
       alert("PDF se nepodařilo nahrát: " + (err.message || err));
       return;
     }
+    const programSlug = el("compProgram").value || activeProgram;
+    const rok = Number(el("compRok").value) || null;
+    const behCislo = Number(el("compBeh").value) || 1;
+    const alokace = usesCascadingAllocation(programSlug) && behCislo > 1 && rok
+      ? remainingForBeh(programSlug, rok, behCislo)
+      : Number(el("compAlokace").value) || 0;
     const comp = {
       id,
-      program_slug: el("compProgram").value || activeProgram,
+      program_slug: programSlug,
       nazev: n(el("compNazev").value) || "Bez názvu",
-      rok: Number(el("compRok").value) || null,
-      beh_cislo: Number(el("compBeh").value) || 1,
-      alokovana_castka: Number(el("compAlokace").value) || 0,
+      rok,
+      beh_cislo: behCislo,
+      alokovana_castka: alokace,
       pokyn: pdfFields.pokyn,
       pokyn_nazev: pdfFields.pokyn_nazev,
       vyvza: pdfFields.vyvza,
@@ -1215,7 +1331,7 @@
           <div class="grid2">
             <label>Rok<input id="compRok" type="number" min="2020" max="2040" /></label>
             <label>Číslo běhu<input id="compBeh" type="number" min="1" value="1" /></label>
-            <label>Alokovaná částka (Kč)<input id="compAlokace" type="number" min="0" step="1000" /></label>
+            <label><span id="compAlokaceLabel">Alokovaná částka (Kč)</span><input id="compAlokace" type="number" min="0" step="1000" /></label>
             <label>Stav<select id="compStav"><option>Aktivní</option><option>Hodnocení</option><option>Rozhodnuto</option><option>Uzavřeno</option></select></label>
           </div>
           <label>Pokyn (PDF)
@@ -1321,6 +1437,13 @@
       removeVyvzaPdf = true;
       el("compVyvzaFile").value = "";
       updatePdfFieldPreview("vyvza", "", "");
+    });
+    ["compProgram", "compRok", "compBeh"].forEach((id) => {
+      el(id)?.addEventListener("change", updateCompetitionAlokaceField);
+      el(id)?.addEventListener("input", updateCompetitionAlokaceField);
+    });
+    el("compAlokace")?.addEventListener("input", () => {
+      if (!el("compAlokace").readOnly) el("compAlokace").dataset.userEdited = "1";
     });
     el("appResitelId")?.addEventListener("change", (e) => fillResitelFromPerson(e.target));
     el("suppResitelId")?.addEventListener("change", (e) => fillSuppResitelFromPerson(e.target));
