@@ -49,6 +49,14 @@
       icon: "🔬"
     },
     {
+      slug: "osoby",
+      title: "Osoby",
+      description: "Centrální databáze osob UHK — řešitelé a kontakty pro soutěže, DKRVO, PPK a další moduly.",
+      status: "active",
+      icon: "👤",
+      stats: ["personsTotal"]
+    },
+    {
       slug: "interni-souteze",
       title: "Interní soutěže",
       description: "UHK Connect, Prestige, Horizon, Rega, Návraty, PhD Seed — alokace, výzvy, přihlášky a podpora.",
@@ -116,6 +124,7 @@
     }).length;
     const comps = window.kbCompetitions?.getCompetitions?.() || [];
     const activeComps = comps.filter(c => !["uzavřeno", "archiv"].includes(lower(c.stav))).length;
+    const personCount = window.kbPersons?.getPersons?.().length || 0;
 
     return {
       emailsTotal: data.length,
@@ -125,7 +134,8 @@
       deadlinesTotal: deadlines.length,
       deadlinesOverdue: overdue,
       competitionsTotal: comps.length,
-      competitionsActive: activeComps
+      competitionsActive: activeComps,
+      personsTotal: personCount
     };
   }
 
@@ -138,7 +148,8 @@
       deadlinesTotal: `${value} termínů`,
       deadlinesOverdue: `${value} po termínu`,
       competitionsTotal: `${value} běhů soutěží`,
-      competitionsActive: `${value} aktivních běhů`
+      competitionsActive: `${value} aktivních běhů`,
+      personsTotal: `${value} osob`
     };
     return labels[key] || String(value);
   }
@@ -299,6 +310,7 @@
     });
     document.addEventListener("kb:records-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:competitions-loaded", () => setTimeout(renderModulesGrid, 60));
+    document.addEventListener("kb:persons-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("input", () => setTimeout(renderModulesGrid, 120));
   }
 
