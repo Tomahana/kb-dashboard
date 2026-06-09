@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>KB Dashboard – Znalostní báze</title>
-  <link rel="stylesheet" href="styles.css?v=21" />
+  <link rel="stylesheet" href="styles.css?v=22" />
 </head>
 <body class="app-shell">
   <aside class="sidebar">
@@ -258,7 +258,7 @@
       </section>
       <section class="panel">
         <h2>Interní soutěže v Supabase</h2>
-        <p class="hint">Nejdříve <code>supabase/persons-schema.sql</code>, poté <code>supabase/competitions-schema.sql</code>. Migrace: <code>competitions-migrate-pdf.sql</code>, <code>competitions-persons-migrate.sql</code> (ID projektů, katedra, hodnocení komise).</p>
+        <p class="hint">Nejdříve <code>supabase/persons-schema.sql</code>, poté <code>supabase/competitions-schema.sql</code>. Pokud tabulka už existuje a ukládání hlásí chybějící sloupec (např. <code>pokyn_nazev</code>), spusťte <strong><code>supabase/competitions-migrate-v3.sql</code></strong>.</p>
         <p class="hint">Pro nahrávání PDF souborů spusťte <code>supabase/competitions-storage.sql</code> (bucket <code>kb-competition-docs</code>). Poté <code>supabase/security-rls.sql</code>.</p>
       </section>
     </section>
@@ -496,25 +496,25 @@
   </datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=21"></script>
-  <script src="auth.js?v=21"></script>
-  <script src="form-pickers.js?v=21"></script>
-  <script src="layout.js?v=21"></script>
-  <script src="modules.js?v=21"></script>
-  <script src="app.js?v=21"></script>
-  <script src="enhancements.js?v=21"></script>
-  <script src="supabase-loader.js?v=21"></script>
-  <script src="ai-classify.js?v=21"></script>
-  <script src="task-export.js?v=21"></script>
-  <script src="notion.js?v=21"></script>
-  <script src="supabase-topics.js?v=21"></script>
-  <script src="topics.js?v=21"></script>
-  <script src="supabase-deadlines.js?v=21"></script>
-  <script src="record-click-fix.js?v=21"></script>
-  <script src="deadlines.js?v=21"></script>
-  <script src="supabase-persons.js?v=21"></script>
-  <script src="persons.js?v=21"></script>
-  <script src="supabase-competitions.js?v=21"></script>
-  <script src="interni-souteze.js?v=21"></script>
+  <script src="supabase-config.js?v=22"></script>
+  <script src="auth.js?v=22"></script>
+  <script src="form-pickers.js?v=22"></script>
+  <script src="layout.js?v=22"></script>
+  <script src="modules.js?v=22"></script>
+  <script src="app.js?v=22"></script>
+  <script src="enhancements.js?v=22"></script>
+  <script src="supabase-loader.js?v=22"></script>
+  <script src="ai-classify.js?v=22"></script>
+  <script src="task-export.js?v=22"></script>
+  <script src="notion.js?v=22"></script>
+  <script src="supabase-topics.js?v=22"></script>
+  <script src="topics.js?v=22"></script>
+  <script src="supabase-deadlines.js?v=22"></script>
+  <script src="record-click-fix.js?v=22"></script>
+  <script src="deadlines.js?v=22"></script>
+  <script src="supabase-persons.js?v=22"></script>
+  <script src="persons.js?v=22"></script>
+  <script src="supabase-competitions.js?v=22"></script>
+  <script src="interni-souteze.js?v=22"></script>
 </body>
 </html>
