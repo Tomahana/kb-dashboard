@@ -16,6 +16,9 @@
   let loading = false;
   let activeProgram = PROGRAMS[0].slug;
   let activeCompetitionId = null;
+  let overviewFilterRok = "";
+  let overviewFilterBeh = "";
+  let overviewFilterStav = "";
   let pendingPokynFile = null;
   let pendingVyvzaFile = null;
   let removePokynPdf = false;
@@ -45,6 +48,163 @@
 
   function sumApplications(comp) {
     return (comp?.applications || []).reduce((s, r) => s + (Number(r.financni_pozadavek) || 0), 0);
+  }
+
+  function stavBucket(stav) {
+    const s = n(stav).toLowerCase();
+    if (["aktivní", "hodnocení"].includes(s)) return "bezi";
+    if (s === "rozhodnuto") return "rozhodnuto";
+    if (s === "uzavřeno") return "uzavreno";
+    return "bezi";
+  }
+
+  function stavLabel(stav) {
+    const map = { bezi: "Běží", rozhodnuto: "Rozhodnuto", uzavreno: "Uzavřeno" };
+    return map[stavBucket(stav)] || html(stav);
+  }
+
+  function allocationStats(c) {
+    const alloc = Number(c.alokovana_castka) || 0;
+    const used = sumSupported(c);
+    const requested = sumApplications(c);
+    const remaining = alloc - used;
+    const pct = alloc > 0 ? Math.round((used / alloc) * 100) : 0;
+    return { alloc, used, requested, remaining, pct };
+  }
+
+  function renderAllocationSummary(c, options = {}) {
+    const { alloc, used, requested, remaining, pct } = allocationStats(c);
+    const bar = alloc > 0 ? `
+      <div class="allocationBar" aria-hidden="true">
+        <div class="allocationBarFill" style="width:${Math.min(pct, 100)}%"></div>
+      </div>
+      <p class="allocationBarLabel">${pct} % čerpáno · ${fmtMoney(used)} z ${fmtMoney(alloc)}</p>` : "";
+    return `
+      ${options.showBar !== false ? bar : ""}
+      <table class="competitionTable competitionSummaryTable">
+        <tr><td>Alokovaná částka</td><td class="money">${fmtMoney(alloc)}</td></tr>
+        <tr><td>Celkem požadováno v přihláškách</td><td class="money">${fmtMoney(requested)}</td></tr>
+        <tr><td>Celkem podpořeno</td><td class="money">${fmtMoney(used)}</td></tr>
+        <tr><td><strong>Zbývá / přebytek</strong></td><td class="money"><strong>${fmtMoney(remaining)}</strong></td></tr>
+        <tr><td>Využití alokace</td><td>${alloc > 0 ? `<strong>${pct} %</strong>` : "—"}</td></tr>
+      </table>`;
+  }
+
+  function filteredCompetitionsOverview() {
+    return competitions.filter(c => {
+      if (overviewFilterRok && String(c.rok) !== String(overviewFilterRok)) return false;
+      if (overviewFilterBeh && String(c.beh_cislo) !== String(overviewFilterBeh)) return false;
+      if (overviewFilterStav && stavBucket(c.stav) !== overviewFilterStav) return false;
+      return true;
+    }).sort((a, b) => (b.rok || 0) - (a.rok || 0) || (b.beh_cislo || 0) - (a.beh_cislo || 0) || n(a.nazev).localeCompare(n(b.nazev), "cs"));
+  }
+
+  function uniqueYears() {
+    return [...new Set(competitions.map(c => c.rok).filter(Boolean))].sort((a, b) => b - a);
+  }
+
+  function uniqueBeh() {
+    const src = overviewFilterRok
+      ? competitions.filter(c => String(c.rok) === String(overviewFilterRok))
+      : competitions;
+    return [...new Set(src.map(c => c.beh_cislo).filter(Boolean))].sort((a, b) => a - b);
+  }
+
+  function renderCompetitionOverview() {
+    const grid = el("competitionOverviewGrid");
+    const rokSel = el("overviewRokFilter");
+    const behSel = el("overviewBehFilter");
+    const stavSel = el("overviewStavFilter");
+    if (!grid) return;
+
+    if (rokSel) {
+      const years = uniqueYears();
+      rokSel.innerHTML = `<option value="">Vše</option>${years.map(y => `<option value="${y}" ${String(y) === String(overviewFilterRok) ? "selected" : ""}>${y}</option>`).join("")}`;
+    }
+    if (behSel) {
+      const behs = uniqueBeh();
+      behSel.innerHTML = `<option value="">Vše</option>${behs.map(b => `<option value="${b}" ${String(b) === String(overviewFilterBeh) ? "selected" : ""}>Běh ${b}</option>`).join("")}`;
+    }
+    if (stavSel) stavSel.value = overviewFilterStav;
+
+    if (loading) {
+      grid.innerHTML = `<p class="hint">Načítám přehled…</p>`;
+      return;
+    }
+
+    const items = filteredCompetitionsOverview();
+    if (!items.length) {
+      grid.innerHTML = `<p class="hint">${competitions.length ? "Žádný běh nevyhovuje filtrům." : "Zatím žádné soutěže — vytvořte běh nebo načtěte šablonu ReGa."}</p>`;
+      return;
+    }
+
+    const totals = items.reduce((t, c) => {
+      const s = allocationStats(c);
+      t.alloc += s.alloc;
+      t.used += s.used;
+      t.requested += s.requested;
+      return t;
+    }, { alloc: 0, used: 0, requested: 0 });
+    const totalPct = totals.alloc > 0 ? Math.round((totals.used / totals.alloc) * 100) : 0;
+
+    grid.innerHTML = `
+      ${items.length > 1 ? `
+        <article class="competitionOverviewCard competitionOverviewTotal">
+          <h3>Celkem ve filtru (${items.length} běhů)</h3>
+          ${renderAllocationSummary({ alokovana_castka: totals.alloc, applications: [], supported: items.flatMap(c => c.supported || []) }, { showBar: true })}
+        </article>` : ""}
+      <div class="competitionOverviewGrid">
+        ${items.map(c => {
+          const prog = getProgram(c.program_slug);
+          const { pct } = allocationStats(c);
+          const active = c.id === activeCompetitionId ? "active" : "";
+          return `<article class="competitionOverviewCard ${active}" data-comp-id="${html(c.id)}" data-program="${html(c.program_slug)}" tabindex="0" role="button">
+            <div class="competitionOverviewHead">
+              <span class="competitionOverviewProgram">${prog.icon} ${html(prog.title)}</span>
+              <span class="competitionOverviewStav stav-${stavBucket(c.stav)}">${html(stavLabel(c.stav))}</span>
+            </div>
+            <h3 class="competitionOverviewTitle">${html(c.nazev)}</h3>
+            <p class="hint competitionOverviewMeta">Rok ${c.rok || "—"} · běh ${c.beh_cislo || 1} · ${(c.applications || []).length} přihlášek · ${(c.supported || []).length} podpořených</p>
+            <h4 class="competitionOverviewSummaryTitle">Souhrn využití alokace</h4>
+            ${renderAllocationSummary(c)}
+            <span class="competitionOverviewCta">Otevřít detail →</span>
+          </article>`;
+        }).join("")}
+      </div>`;
+
+    grid.querySelectorAll(".competitionOverviewCard[data-comp-id]").forEach(card => {
+      const open = () => {
+        activeProgram = card.dataset.program;
+        activeCompetitionId = card.dataset.compId;
+        render();
+        el("competitionDetail")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      };
+      card.addEventListener("click", open);
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+      });
+    });
+  }
+
+  function bindOverviewFilters() {
+    const rokSel = el("overviewRokFilter");
+    const behSel = el("overviewBehFilter");
+    const stavSel = el("overviewStavFilter");
+    if (!rokSel || rokSel.__bound) return;
+    rokSel.addEventListener("change", () => {
+      overviewFilterRok = rokSel.value;
+      overviewFilterBeh = "";
+      renderCompetitionOverview();
+    });
+    behSel.addEventListener("change", () => {
+      overviewFilterBeh = behSel.value;
+      renderCompetitionOverview();
+    });
+    stavSel.addEventListener("change", () => {
+      overviewFilterStav = stavSel.value;
+      renderCompetitionOverview();
+    });
+    rokSel.__bound = true;
   }
 
   function personLabel(p) {
@@ -547,13 +707,7 @@
       </section>
       <section class="competitionSection panel competitionSummary">
         <h3>Souhrn využití alokace</h3>
-        <table class="competitionTable">
-          <tr><td>Alokovaná částka</td><td class="money">${fmtMoney(alloc)}</td></tr>
-          <tr><td>Celkem požadováno v přihláškách</td><td class="money">${fmtMoney(requested)}</td></tr>
-          <tr><td>Celkem podpořeno</td><td class="money">${fmtMoney(used)}</td></tr>
-          <tr><td><strong>Zbývá / přebytek</strong></td><td class="money"><strong>${fmtMoney(remaining)}</strong></td></tr>
-          <tr><td>Využití alokace</td><td>${alloc > 0 ? `${Math.round((used / alloc) * 100)} %` : "—"}</td></tr>
-        </table>
+        ${renderAllocationSummary(c)}
       </section>
     `;
     el("editCompetitionBtn")?.addEventListener("click", () => openCompetitionDialog(c));
@@ -871,6 +1025,34 @@
           </div>
         </div>
         <p id="competitionsStatus" class="competitionsStatus hint">Načítám…</p>
+      </section>
+      <section class="panel competitionOverviewPanel">
+        <div class="sectionHeader">
+          <div>
+            <h3>Přehled čerpání alokací</h3>
+            <p class="hint">Filtrujte běhy a hned vidíte využití rozpočtu u každé soutěže.</p>
+          </div>
+        </div>
+        <div class="competitionOverviewFilters">
+          <label>Rok
+            <select id="overviewRokFilter"><option value="">Vše</option></select>
+          </label>
+          <label>Běh
+            <select id="overviewBehFilter"><option value="">Vše</option></select>
+          </label>
+          <label>Stav
+            <select id="overviewStavFilter">
+              <option value="">Vše</option>
+              <option value="bezi">Běží</option>
+              <option value="rozhodnuto">Rozhodnuto</option>
+              <option value="uzavreno">Uzavřeno</option>
+            </select>
+          </label>
+        </div>
+        <div id="competitionOverviewGrid"></div>
+      </section>
+      <section class="panel competitionProgramsPanel">
+        <h3>Programy a detail běhu</h3>
         <div id="competitionProgramTabs" class="competitionProgramTabs"></div>
         <div id="competitionRegaBanner" hidden></div>
       </section>
@@ -886,6 +1068,7 @@
     `;
     el("competitionsReloadBtn").addEventListener("click", loadCompetitions);
     el("newCompetitionBtn").addEventListener("click", () => openCompetitionDialog());
+    bindOverviewFilters();
   }
 
   function injectDialogs() {
@@ -1071,14 +1254,46 @@
       .competitionRegaSeedBox { margin: .75rem 0 0; padding: .85rem 1rem; border: 1px solid var(--line); border-radius: 10px; background: #f0f9ff; }
       .competitionRegaSeedBox p { margin: 0 0 .6rem; line-height: 1.5; }
       .competitionRegaSeedActions { display: flex; flex-wrap: wrap; gap: .5rem; }
+      .competitionOverviewPanel { margin-bottom: 1rem; }
+      .competitionOverviewFilters { display: flex; flex-wrap: wrap; gap: .75rem 1rem; margin-bottom: 1rem; }
+      .competitionOverviewFilters label { min-width: 120px; }
+      .competitionOverviewGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+      .competitionOverviewCard {
+        border: 1px solid var(--line); border-radius: 12px; padding: 1rem; background: white;
+        cursor: pointer; transition: border-color .15s, box-shadow .15s;
+      }
+      .competitionOverviewCard:hover, .competitionOverviewCard.active, .competitionOverviewCard:focus-visible {
+        border-color: var(--accent); box-shadow: 0 4px 14px rgba(0,0,0,.06); outline: none;
+      }
+      .competitionOverviewCard.active { border-left: 4px solid var(--accent); }
+      .competitionOverviewTotal { grid-column: 1 / -1; background: #f8fafc; cursor: default; }
+      .competitionOverviewTotal:hover { border-color: var(--line); box-shadow: none; }
+      .competitionOverviewHead { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+      .competitionOverviewProgram { font-size: .82rem; font-weight: 700; color: var(--muted); }
+      .competitionOverviewStav { font-size: .75rem; font-weight: 700; padding: .15rem .45rem; border-radius: 999px; }
+      .stav-bezi { background: #ecfdf3; color: #027a48; }
+      .stav-rozhodnuto { background: #eff8ff; color: #175cd3; }
+      .stav-uzavreno { background: #f2f4f7; color: #475467; }
+      .competitionOverviewTitle { margin: 0 0 .25rem; font-size: 1.05rem; }
+      .competitionOverviewMeta { margin: 0 0 .65rem; }
+      .competitionOverviewSummaryTitle { margin: 0 0 .4rem; font-size: .88rem; font-weight: 800; color: var(--text); }
+      .competitionOverviewCta { display: block; margin-top: .65rem; font-size: .82rem; font-weight: 700; color: var(--accent); text-align: right; }
+      .competitionSummaryTable { width: 100%; font-size: .85rem; }
+      .competitionSummaryTable td { padding: .3rem .35rem; }
+      .allocationBar { height: 8px; background: #e4e7ec; border-radius: 999px; overflow: hidden; margin: .5rem 0 .25rem; }
+      .allocationBarFill { height: 100%; background: linear-gradient(90deg, var(--accent), #3b82f6); border-radius: 999px; }
+      .allocationBarLabel { margin: 0 0 .5rem; font-size: .8rem; color: var(--muted); font-weight: 600; }
+      .competitionProgramsPanel { margin-bottom: 1rem; }
+      .competitionProgramsPanel h3 { margin: 0 0 .65rem; }
       @media (max-width: 900px) {
-        .competitionLayout, .competitionDocs, .competitionMetrics { grid-template-columns: 1fr; }
+        .competitionLayout, .competitionDocs, .competitionMetrics, .competitionOverviewGrid { grid-template-columns: 1fr; }
       }
     `;
     document.head.appendChild(style);
   }
 
   function render() {
+    renderCompetitionOverview();
     renderProgramTabs();
     renderRegaBanner();
     renderCompetitionList();
