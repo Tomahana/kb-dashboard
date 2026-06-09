@@ -298,6 +298,7 @@
       }
     });
     document.addEventListener("kb:records-loaded", () => setTimeout(renderModulesGrid, 60));
+    document.addEventListener("kb:competitions-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("input", () => setTimeout(renderModulesGrid, 120));
   }
 
