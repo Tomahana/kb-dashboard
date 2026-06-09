@@ -399,27 +399,114 @@
     ].join("\n");
   }
 
-  async function importRegaProjects() {
-    let data;
+  function scoreLabel(v) {
+    return v == null || v === "" ? "—" : v;
+  }
+
+  function buildConnectHodnoceni(row) {
+    const s = row.skore || {};
+    const lines = [
+      `Kolo hodnocení: ${row.kolo || "—"}`,
+      `Skóre fakult: HT ${scoreLabel(s.ht)}, PřF ${scoreLabel(s.prf)}, PdF ${scoreLabel(s.pdf)}, FF ${scoreLabel(s.ff)}, FIM ${scoreLabel(s.fim)}`,
+      `Průměr: ${row.prumer ?? "—"}`,
+      `Rozhodnutí: ${row.rozhodnuti || "—"}`
+    ];
+    if (row.podporit && Number(row.castka_alokovana) !== Number(row.financni_pozadavek)) {
+      lines.push(`Alokováno ${row.castka_alokovana} Kč (požadováno ${row.financni_pozadavek} Kč)`);
+    }
+    return lines.join("\n");
+  }
+
+  async function importCompetitionSeed(seedPath, pdfNames, programSlug) {
+    let seed;
     try {
-      const res = await fetch("data/competitions/rega-2026-projects.json");
-      if (!res.ok) throw new Error("Soubor rega-2026-projects.json nenalezen.");
-      data = await res.json();
+      const seedRes = await fetch(seedPath);
+      if (!seedRes.ok) throw new Error(`Soubor ${seedPath} nenalezen.`);
+      seed = await seedRes.json();
     } catch (err) {
-      alert("Projekty ReGa se nepodařilo načíst: " + (err.message || err));
+      alert("Šablonu se nepodařilo načíst: " + (err.message || err));
       return;
     }
-    let comp = competitions.find(c => c.program_slug === "rega" && c.rok === 2026 && c.beh_cislo === 1);
+    const s = seed.competition;
+    const existing = competitions.find(c => c.program_slug === s.program_slug && c.rok === s.rok && c.beh_cislo === s.beh_cislo);
+    if (existing?.applications?.length) {
+      if (!confirm(`Běh ${s.nazev} už obsahuje přihlášky. Aktualizovat metadata a PDF (pokyn, výzva)? Projekty zůstanou.`)) return;
+    } else if (existing && !confirm(`Běh ${s.nazev} už existuje. Nahradit pokynem a výzvou ze šablony?`)) {
+      return;
+    }
+    setStatus(`Načítám šablonu ${s.nazev}…`);
+    loading = true;
+    render();
+    try {
+      const compId = existing?.id || uuid();
+      const pokynFile = await fetchPdfAsFile(s.pokyn_file, pdfNames.pokyn);
+      const vyvzaFile = await fetchPdfAsFile(s.vyvza_file, pdfNames.vyvza);
+      const api = window.kbSupabaseCompetitions;
+      let pokyn = existing?.pokyn || "";
+      let vyvza = existing?.vyvza || "";
+      if (api?.uploadPdf) {
+        const upP = await api.uploadPdf(compId, "pokyn", pokynFile);
+        const upV = await api.uploadPdf(compId, "vyvza", vyvzaFile);
+        pokyn = upP.path;
+        vyvza = upV.path;
+      }
+      const comp = {
+        id: compId,
+        program_slug: s.program_slug,
+        nazev: s.nazev,
+        rok: s.rok,
+        beh_cislo: s.beh_cislo,
+        alokovana_castka: Number(s.alokovana_castka) || existing?.alokovana_castka || 0,
+        pokyn,
+        pokyn_nazev: s.pokyn_nazev,
+        vyvza,
+        vyvza_nazev: s.vyvza_nazev,
+        poznamka: s.poznamka,
+        stav: s.stav || existing?.stav || "Aktivní",
+        hodnoceni_prodekanu: existing?.hodnoceni_prodekanu || "",
+        rozhodnuti_prorektorky: existing?.rozhodnuti_prorektorky || "",
+        applications: existing?.applications || [],
+        supported: existing?.supported || [],
+        created_at: existing?.created_at || new Date().toISOString(),
+        __existing: !!existing
+      };
+      const saved = await saveCompetition(comp);
+      activeProgram = programSlug;
+      activeCompetitionId = saved.id;
+      setStatus(`Šablona načtena (${s.rok}, běh ${s.beh_cislo}).`);
+    } catch (err) {
+      console.error(err);
+      alert("Import šablony selhal: " + formatSaveError(err));
+      setStatus("Import šablony selhal.", true);
+    } finally {
+      loading = false;
+      render();
+      document.dispatchEvent(new CustomEvent("kb:competitions-loaded"));
+    }
+  }
+
+  async function importCompetitionProjects(dataPath, programSlug, rok, behCislo, buildHodnoceni, supportedNote) {
+    let data;
+    try {
+      const res = await fetch(dataPath);
+      if (!res.ok) throw new Error(`Soubor ${dataPath} nenalezen.`);
+      data = await res.json();
+    } catch (err) {
+      alert("Projekty se nepodařilo načíst: " + (err.message || err));
+      return;
+    }
+    let comp = competitions.find(c => c.program_slug === programSlug && c.rok === rok && c.beh_cislo === behCislo);
     if (!comp) {
-      if (!confirm("Běh ReGa 2026 ještě neexistuje. Načíst nejdřív šablonu (PDF pokyn + výzva)?")) return;
-      await importRegaSeed();
-      comp = competitions.find(c => c.program_slug === "rega" && c.rok === 2026 && c.beh_cislo === 1);
+      if (!confirm("Běh ještě neexistuje. Načíst nejdřív šablonu (pokyn + výzva)?")) return;
+      if (programSlug === "rega") await importRegaSeed();
+      else if (programSlug === "connect") await importConnectSeed();
+      comp = competitions.find(c => c.program_slug === programSlug && c.rok === rok && c.beh_cislo === behCislo);
       if (!comp) return;
     }
     if (comp.applications?.length && !confirm(`Běh už má ${comp.applications.length} přihlášek. Nahradit importem ${data.applications.length} projektů z tabulky?`)) {
       return;
     }
-    setStatus("Importuji osoby a projekty ReGa 2026…");
+    setStatus("Importuji osoby a projekty…");
     loading = true;
     render();
     try {
@@ -438,31 +525,36 @@
           resitel_id: person?.id || null,
           resitel: person ? personLabel(person) : "",
           fakulta: row.fakulta,
-          katedra: row.katedra,
+          katedra: row.katedra || "",
           financni_pozadavek: row.financni_pozadavek,
-          hodnoceni: `Pořadí ${row.poradi}/8`,
-          hodnoceni_komise: buildKomiseHodnoceni(row),
+          hodnoceni: row.kolo ? `Kolo ${row.kolo}` : (row.poradi ? `Pořadí ${row.poradi}/8` : ""),
+          hodnoceni_komise: buildHodnoceni(row),
           stav: row.stav,
-          poznamka: `EPZ ${row.epz_id}`,
+          poznamka: row.poznamka || (row.kolo ? `Kolo ${row.kolo} · ${row.rozhodnuti || ""}` : ""),
           created_at: new Date().toISOString(),
           __existing: false
         };
       });
-      const supported = applications
-        .filter(a => data.applications.find(r => r.id === a.id)?.podporit)
-        .map(a => ({
-          id: uuid(),
-          application_id: a.id,
-          projekt_id: a.projekt_id,
-          nazev_projektu: a.nazev_projektu,
-          resitel_id: a.resitel_id,
-          resitel: a.resitel,
-          fakulta: a.fakulta,
-          katedra: a.katedra,
-          castka_podpory: a.financni_pozadavek,
-          poznamka: "Podpořeno – výzva ReGa 2026/1",
-          created_at: new Date().toISOString()
-        }));
+      const supported = (data.applications || [])
+        .filter(row => row.podporit)
+        .map(row => {
+          const person = personByKey[row.person_key];
+          const app = applications.find(a => a.id === row.id);
+          const castka = Number(row.castka_alokovana ?? row.financni_pozadavek) || 0;
+          return {
+            id: uuid(),
+            application_id: row.id,
+            projekt_id: row.projekt_id,
+            nazev_projektu: row.nazev_projektu,
+            resitel_id: person?.id || app?.resitel_id || null,
+            resitel: person ? personLabel(person) : app?.resitel || "",
+            fakulta: row.fakulta,
+            katedra: row.katedra || "",
+            castka_podpory: castka,
+            poznamka: `${supportedNote}${row.kolo ? ` · kolo ${row.kolo}` : ""}${row.rozhodnuti === "Cut" ? " (snížená alokace)" : ""}`,
+            created_at: new Date().toISOString()
+          };
+        });
       const upd = data.competition_updates || {};
       const updated = {
         ...comp,
@@ -475,7 +567,7 @@
         __existing: true
       };
       const saved = await saveCompetition(updated);
-      activeProgram = "rega";
+      activeProgram = programSlug;
       activeCompetitionId = saved.id;
       setStatus(`Import dokončen: ${applications.length} přihlášek, ${supported.length} podpořených projektů, ${(data.persons || []).length} osob.`);
     } catch (err) {
@@ -490,96 +582,93 @@
     }
   }
 
-  async function importRegaSeed() {
-    let seed;
-    try {
-      const seedRes = await fetch("data/competitions/rega-seed.json");
-      if (!seedRes.ok) throw new Error("Soubor rega-seed.json nenalezen.");
-      seed = await seedRes.json();
-    } catch (err) {
-      alert("Šablonu ReGa se nepodařilo načíst: " + (err.message || err));
-      return;
-    }
-    const s = seed.competition;
-    const existing = competitions.find(c => c.program_slug === "rega" && c.rok === s.rok && c.beh_cislo === s.beh_cislo);
-    if (existing?.applications?.length) {
-      if (!confirm("Běh ReGa 2026 už obsahuje přihlášky. Aktualizovat metadata a PDF (pokyn, výzva)? Projekty zůstanou.")) return;
-    } else if (existing && !confirm("Běh ReGa 2026 už existuje. Nahradit pokynem a výzvou ze šablony?")) {
-      return;
-    }
-    setStatus("Načítám šablonu UHK ReGa a PDF…");
-    loading = true;
-    render();
-    try {
-      const compId = existing?.id || uuid();
-      const pokynFile = await fetchPdfAsFile(s.pokyn_file, "pokyn-rega-2026.pdf");
-      const vyvzaFile = await fetchPdfAsFile(s.vyvza_file, "vyvza-rega-2026.pdf");
-      const api = window.kbSupabaseCompetitions;
-      let pokyn = "";
-      let vyvza = "";
-      if (api?.uploadPdf) {
-        const upP = await api.uploadPdf(compId, "pokyn", pokynFile);
-        const upV = await api.uploadPdf(compId, "vyvza", vyvzaFile);
-        pokyn = upP.path;
-        vyvza = upV.path;
-      }
-      const comp = {
-        id: compId,
-        program_slug: s.program_slug,
-        nazev: s.nazev,
-        rok: s.rok,
-        beh_cislo: s.beh_cislo,
-        alokovana_castka: Number(s.alokovana_castka) || 0,
-        pokyn,
-        pokyn_nazev: s.pokyn_nazev,
-        vyvza,
-        vyvza_nazev: s.vyvza_nazev,
-        poznamka: s.poznamka,
-        stav: s.stav || "Aktivní",
-        hodnoceni_prodekanu: existing?.hodnoceni_prodekanu || "",
-        rozhodnuti_prorektorky: existing?.rozhodnuti_prorektorky || "",
-        applications: existing?.applications || [],
-        supported: existing?.supported || [],
-        created_at: existing?.created_at || new Date().toISOString(),
-        __existing: !!existing
-      };
-      const saved = await saveCompetition(comp);
-      activeProgram = "rega";
-      activeCompetitionId = saved.id;
-      setStatus("Šablona ReGa načtena. Klikněte „Importovat podané projekty (8)“ pro naplnění přihlášek.");
-    } catch (err) {
-      console.error(err);
-      alert("Import ReGa selhal: " + formatSaveError(err));
-      setStatus("Import ReGa selhal.", true);
-    } finally {
-      loading = false;
-      render();
-      document.dispatchEvent(new CustomEvent("kb:competitions-loaded"));
-    }
+  function importRegaProjects() {
+    return importCompetitionProjects(
+      "data/competitions/rega-2026-projects.json",
+      "rega",
+      2026,
+      1,
+      buildKomiseHodnoceni,
+      "Podpořeno – výzva ReGa 2026/1"
+    );
   }
 
-  function renderRegaBanner() {
-    const box = el("competitionRegaBanner");
+  function importRegaSeed() {
+    return importCompetitionSeed(
+      "data/competitions/rega-seed.json",
+      { pokyn: "pokyn-rega-2026.pdf", vyvza: "vyvza-rega-2026.pdf" },
+      "rega"
+    );
+  }
+
+  function importConnectProjects() {
+    return importCompetitionProjects(
+      "data/competitions/connect-2026-run3-projects.json",
+      "connect",
+      2026,
+      3,
+      buildConnectHodnoceni,
+      "Podpořeno – UHK Connect 2026/3"
+    );
+  }
+
+  function importConnectSeed() {
+    return importCompetitionSeed(
+      "data/competitions/connect-seed.json",
+      { pokyn: "pokyn-connect-2026.pdf", vyvza: "vyvza-connect-2026.pdf" },
+      "connect"
+    );
+  }
+
+  const PROGRAM_SEED_BANNERS = {
+    rega: {
+      title: "UHK ReGa",
+      description: "Interní soutěž pro dopracování nezafinancovaných projektů základního výzkumu.",
+      sourceUrl: "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/re_ga_uhk",
+      sourceNote: "pokyn prorektorky č. 5/2026, výzva č. 1/2026",
+      rok: 2026,
+      beh: 1,
+      seedBtn: { id: "importRegaSeedBtn", labelNew: "1. Načíst šablonu ReGa", labelUpdate: "Aktualizovat šablonu ReGa" },
+      projectsBtn: { id: "importRegaProjectsBtn", label: "2. Importovat podané projekty (8)" },
+      onSeed: importRegaSeed,
+      onProjects: importRegaProjects
+    },
+    connect: {
+      title: "UHK Connect",
+      description: "Krátké projekty pro síťování, mobilitu a navázání spolupráce — aktuálně 3. běh roku 2026.",
+      sourceUrl: "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/uhk-connect",
+      sourceNote: "pokyn prorektorky č. 06/2026, výzva č. 2/2026",
+      rok: 2026,
+      beh: 3,
+      seedBtn: { id: "importConnectSeedBtn", labelNew: "1. Načíst šablonu Connect (běh 3)", labelUpdate: "Aktualizovat šablonu Connect" },
+      projectsBtn: { id: "importConnectProjectsBtn", label: "2. Importovat hodnocení z exportu (10)" },
+      onSeed: importConnectSeed,
+      onProjects: importConnectProjects
+    }
+  };
+
+  function renderProgramSeedBanner() {
+    const box = el("competitionProgramBanner");
     if (!box) return;
-    if (activeProgram !== "rega") {
+    const cfg = PROGRAM_SEED_BANNERS[activeProgram];
+    if (!cfg) {
       box.hidden = true;
       return;
     }
     box.hidden = false;
-    const hasRun = competitions.some(c => c.program_slug === "rega" && c.rok === 2026 && c.beh_cislo === 1);
-    const sourceUrl = "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/re_ga_uhk";
+    const hasRun = competitions.some(c => c.program_slug === activeProgram && c.rok === cfg.rok && c.beh_cislo === cfg.beh);
     box.innerHTML = `
       <div class="competitionRegaSeedBox">
-        <p><strong>UHK ReGa</strong> — interní soutěž pro dopracování nezafinancovaných projektů základního výzkumu.
-          Údaje a PDF podle <a href="${sourceUrl}" target="_blank" rel="noopener">oficiální stránky UHK</a>
-          (pokyn prorektorky č. 5/2026, výzva č. 1/2026).</p>
+        <p><strong>${cfg.title}</strong> — ${cfg.description}
+          Údaje a PDF podle <a href="${cfg.sourceUrl}" target="_blank" rel="noopener">oficiální stránky UHK</a>
+          (${cfg.sourceNote}).</p>
         <div class="competitionRegaSeedActions">
-          <button type="button" id="importRegaSeedBtn" class="button small accent">${hasRun ? "Aktualizovat šablonu" : "1. Načíst šablonu ReGa"}</button>
-          <button type="button" id="importRegaProjectsBtn" class="button small secondary">2. Importovat podané projekty (8)</button>
+          <button type="button" id="${cfg.seedBtn.id}" class="button small accent">${hasRun ? cfg.seedBtn.labelUpdate : cfg.seedBtn.labelNew}</button>
+          <button type="button" id="${cfg.projectsBtn.id}" class="button small secondary">${cfg.projectsBtn.label}</button>
         </div>
       </div>`;
-    el("importRegaSeedBtn")?.addEventListener("click", importRegaSeed);
-    el("importRegaProjectsBtn")?.addEventListener("click", importRegaProjects);
+    el(cfg.seedBtn.id)?.addEventListener("click", cfg.onSeed);
+    el(cfg.projectsBtn.id)?.addEventListener("click", cfg.onProjects);
   }
 
   async function saveCompetition(comp) {
@@ -624,8 +713,9 @@
       return;
     }
     if (!items.length) {
-      const hint = activeProgram === "rega"
-        ? `<p class="hint">Zatím žádný běh ReGa. Použijte <strong>Načíst šablonu ReGa 2026</strong> výše (pokyn + výzva v PDF), nebo vytvořte běh ručně.</p>`
+      const seedCfg = PROGRAM_SEED_BANNERS[activeProgram];
+      const hint = seedCfg
+        ? `<p class="hint">Zatím žádný běh ${html(prog.title)}. Použijte <strong>${html(seedCfg.seedBtn.labelNew)}</strong> výše (pokyn + výzva v PDF), nebo vytvořte běh ručně.</p>`
         : `<p class="hint">Zatím žádný běh pro ${html(prog.title)}. Klikněte „Nový běh / výzva“.</p>`;
       box.innerHTML = hint;
       return;
@@ -1054,7 +1144,7 @@
       <section class="panel competitionProgramsPanel">
         <h3>Programy a detail běhu</h3>
         <div id="competitionProgramTabs" class="competitionProgramTabs"></div>
-        <div id="competitionRegaBanner" hidden></div>
+        <div id="competitionProgramBanner" hidden></div>
       </section>
       <div class="competitionLayout">
         <section class="panel competitionListPanel">
@@ -1295,7 +1385,7 @@
   function render() {
     renderCompetitionOverview();
     renderProgramTabs();
-    renderRegaBanner();
+    renderProgramSeedBanner();
     renderCompetitionList();
     renderCompetitionDetail();
   }

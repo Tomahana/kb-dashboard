@@ -1,0 +1,16 @@
+{
+  "source_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/uhk-connect",
+  "competition": {
+    "program_slug": "connect",
+    "nazev": "Interní soutěž UHK Connect – výzva č. 2/2026 (3. běh)",
+    "rok": 2026,
+    "beh_cislo": 3,
+    "alokovana_castka": 0,
+    "stav": "Aktivní",
+    "poznamka": "Interní soutěž UHK Connect – krátké projekty pro síťování, mobilitu a navázání spolupráce. Aktuálně 3. běh roku 2026.\n\nKontakt: Ing. Veronika Hrůzová, Oddělení vědy a transferu znalostí — veronika.hruzova@uhk.cz, +420 777 147 670\n\nZdroj: https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/uhk-connect",
+    "pokyn_nazev": "Pokyn prorektorky č. 06/2026 – Interní soutěž UHK Connect",
+    "vyvza_nazev": "Vyhlášení výzvy č. 2 – Interní soutěž UHK Connect",
+    "pokyn_file": "data/competitions/connect/pokyn.pdf",
+    "vyvza_file": "data/competitions/connect/vyvza.pdf"
+  }
+}
