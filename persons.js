@@ -189,6 +189,28 @@
     }
   }
 
+  async function upsertPerson(person) {
+    const existing = getPerson(person.id) || persons.find(p => p.osobni_cislo && p.osobni_cislo === person.osobni_cislo);
+    const record = {
+      ...person,
+      id: existing?.id || person.id || uuid(),
+      created_at: existing?.created_at || person.created_at || new Date().toISOString(),
+      __existing: !!existing
+    };
+    if (useSupabase && window.kbSupabasePersons) {
+      const saved = await window.kbSupabasePersons.savePerson(record);
+      const idx = persons.findIndex(p => p.id === saved.id);
+      if (idx === -1) persons.push(saved);
+      else persons[idx] = saved;
+      return saved;
+    }
+    const idx = persons.findIndex(p => p.id === record.id);
+    if (idx === -1) persons.push(record);
+    else persons[idx] = record;
+    persistLocal();
+    return record;
+  }
+
   async function deletePerson(id) {
     if (!confirm("Smazat osobu? Moduly si ponechají textový název, ale vazba na osobu se zruší.")) return;
     try {
@@ -294,6 +316,7 @@
     renderPersonOptions,
     fillSelect,
     openDialog,
+    upsertPerson,
     deletePerson
   };
 

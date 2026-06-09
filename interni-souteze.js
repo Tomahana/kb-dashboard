@@ -230,6 +230,106 @@
     return new File([blob], filename, { type: "application/pdf" });
   }
 
+  function buildKomiseHodnoceni(row) {
+    return [
+      `Pořadí: ${row.poradi}/8 · Průměr hodnocení komise: ${row.prumer}`,
+      `EPZ ID: ${row.epz_id}`,
+      `Období: ${row.obdobi || "15.04.2026 – 30.11.2026"}`,
+      `Původní stav v evidenci: ${row.podporit ? "V realizaci (podpořeno)" : "Nepodpořen"}`
+    ].join("\n");
+  }
+
+  async function importRegaProjects() {
+    let data;
+    try {
+      const res = await fetch("data/competitions/rega-2026-projects.json");
+      if (!res.ok) throw new Error("Soubor rega-2026-projects.json nenalezen.");
+      data = await res.json();
+    } catch (err) {
+      alert("Projekty ReGa se nepodařilo načíst: " + (err.message || err));
+      return;
+    }
+    let comp = competitions.find(c => c.program_slug === "rega" && c.rok === 2026 && c.beh_cislo === 1);
+    if (!comp) {
+      if (!confirm("Běh ReGa 2026 ještě neexistuje. Načíst nejdřív šablonu (PDF pokyn + výzva)?")) return;
+      await importRegaSeed();
+      comp = competitions.find(c => c.program_slug === "rega" && c.rok === 2026 && c.beh_cislo === 1);
+      if (!comp) return;
+    }
+    if (comp.applications?.length && !confirm(`Běh už má ${comp.applications.length} přihlášek. Nahradit importem ${data.applications.length} projektů z tabulky?`)) {
+      return;
+    }
+    setStatus("Importuji osoby a projekty ReGa 2026…");
+    loading = true;
+    render();
+    try {
+      await window.kbPersons?.ensureLoaded?.();
+      const personByKey = {};
+      for (const p of data.persons || []) {
+        const saved = await window.kbPersons.upsertPerson(p);
+        personByKey[p.key] = saved;
+      }
+      const applications = (data.applications || []).map(row => {
+        const person = personByKey[row.person_key];
+        return {
+          id: row.id,
+          projekt_id: row.projekt_id,
+          nazev_projektu: row.nazev_projektu,
+          resitel_id: person?.id || null,
+          resitel: person ? personLabel(person) : "",
+          fakulta: row.fakulta,
+          katedra: row.katedra,
+          financni_pozadavek: row.financni_pozadavek,
+          hodnoceni: `Pořadí ${row.poradi}/8`,
+          hodnoceni_komise: buildKomiseHodnoceni(row),
+          stav: row.stav,
+          poznamka: `EPZ ${row.epz_id}`,
+          created_at: new Date().toISOString(),
+          __existing: false
+        };
+      });
+      const supported = applications
+        .filter(a => data.applications.find(r => r.id === a.id)?.podporit)
+        .map(a => ({
+          id: uuid(),
+          application_id: a.id,
+          projekt_id: a.projekt_id,
+          nazev_projektu: a.nazev_projektu,
+          resitel_id: a.resitel_id,
+          resitel: a.resitel,
+          fakulta: a.fakulta,
+          katedra: a.katedra,
+          castka_podpory: a.financni_pozadavek,
+          poznamka: "Podpořeno – výzva ReGa 2026/1",
+          created_at: new Date().toISOString()
+        }));
+      const upd = data.competition_updates || {};
+      const updated = {
+        ...comp,
+        alokovana_castka: upd.alokovana_castka ?? comp.alokovana_castka,
+        stav: upd.stav || comp.stav,
+        hodnoceni_prodekanu: upd.hodnoceni_prodekanu || comp.hodnoceni_prodekanu,
+        rozhodnuti_prorektorky: upd.rozhodnuti_prorektorky || comp.rozhodnuti_prorektorky,
+        applications,
+        supported,
+        __existing: true
+      };
+      const saved = await saveCompetition(updated);
+      activeProgram = "rega";
+      activeCompetitionId = saved.id;
+      setStatus(`Import dokončen: ${applications.length} přihlášek, ${supported.length} podpořených projektů, ${(data.persons || []).length} osob.`);
+    } catch (err) {
+      console.error(err);
+      alert("Import projektů selhal: " + formatSaveError(err));
+      setStatus("Import projektů selhal.", true);
+    } finally {
+      loading = false;
+      render();
+      document.dispatchEvent(new CustomEvent("kb:competitions-loaded"));
+      document.dispatchEvent(new CustomEvent("kb:persons-loaded"));
+    }
+  }
+
   async function importRegaSeed() {
     let seed;
     try {
@@ -286,7 +386,7 @@
       const saved = await saveCompetition(comp);
       activeProgram = "rega";
       activeCompetitionId = saved.id;
-      setStatus("Šablona UHK ReGa 2026 načtena včetně PDF pokynu a výzvy. Nyní doplňte projekty.");
+      setStatus("Šablona ReGa načtena. Klikněte „Importovat podané projekty (8)“ pro naplnění přihlášek.");
     } catch (err) {
       console.error(err);
       alert("Import ReGa selhal: " + formatSaveError(err));
@@ -312,10 +412,14 @@
       <div class="competitionRegaSeedBox">
         <p><strong>UHK ReGa</strong> — interní soutěž pro dopracování nezafinancovaných projektů základního výzkumu.
           Údaje a PDF podle <a href="${sourceUrl}" target="_blank" rel="noopener">oficiální stránky UHK</a>
-          (pokyn prorektorky č. 5/2026, výzva č. 1/2026). Projekty doplníte v aplikaci.</p>
-        <button type="button" id="importRegaSeedBtn" class="button small accent">${hasRun ? "Aktualizovat šablonu ReGa 2026" : "Načíst šablonu ReGa 2026"}</button>
+          (pokyn prorektorky č. 5/2026, výzva č. 1/2026).</p>
+        <div class="competitionRegaSeedActions">
+          <button type="button" id="importRegaSeedBtn" class="button small accent">${hasRun ? "Aktualizovat šablonu" : "1. Načíst šablonu ReGa"}</button>
+          <button type="button" id="importRegaProjectsBtn" class="button small secondary">2. Importovat podané projekty (8)</button>
+        </div>
       </div>`;
     el("importRegaSeedBtn")?.addEventListener("click", importRegaSeed);
+    el("importRegaProjectsBtn")?.addEventListener("click", importRegaProjects);
   }
 
   async function saveCompetition(comp) {
@@ -966,6 +1070,7 @@
       .personSelectRow select { flex: 1; }
       .competitionRegaSeedBox { margin: .75rem 0 0; padding: .85rem 1rem; border: 1px solid var(--line); border-radius: 10px; background: #f0f9ff; }
       .competitionRegaSeedBox p { margin: 0 0 .6rem; line-height: 1.5; }
+      .competitionRegaSeedActions { display: flex; flex-wrap: wrap; gap: .5rem; }
       @media (max-width: 900px) {
         .competitionLayout, .competitionDocs, .competitionMetrics { grid-template-columns: 1fr; }
       }
