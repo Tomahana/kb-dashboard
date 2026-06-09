@@ -11,12 +11,15 @@
   ];
 
   const STORAGE_KEY = "kb-dashboard-competitions-v1";
+  const YEAR_BUDGET_KEY = "kb-dashboard-competitions-year-budgets";
   let competitions = [];
+  let yearBudgets = {};
   let useSupabase = false;
   let loading = false;
   let activeProgram = PROGRAMS[0].slug;
   let activeCompetitionId = null;
   let overviewFilterRok = "";
+  let overviewFilterProgram = "";
   let overviewFilterBeh = "";
   let overviewFilterStav = "";
   let pendingPokynFile = null;
@@ -108,6 +111,43 @@
     return map[stavBucket(stav)] || html(stav);
   }
 
+  function loadYearBudgets() {
+    try {
+      yearBudgets = JSON.parse(localStorage.getItem(YEAR_BUDGET_KEY) || "{}");
+      if (typeof yearBudgets !== "object" || !yearBudgets) yearBudgets = {};
+    } catch (_) {
+      yearBudgets = {};
+    }
+  }
+
+  function getYearBudgetTotal(rok) {
+    return Number(yearBudgets[String(rok)]) || 0;
+  }
+
+  function setYearBudgetTotal(rok, amount) {
+    yearBudgets[String(rok)] = Math.max(0, Number(amount) || 0);
+    localStorage.setItem(YEAR_BUDGET_KEY, JSON.stringify(yearBudgets));
+  }
+
+  function programAllocationStats(programSlug, rok, runs) {
+    const used = runs.reduce((s, c) => s + sumSupported(c), 0);
+    const requested = runs.reduce((s, c) => s + sumApplications(c), 0);
+    const alloc = usesCascadingAllocation(programSlug)
+      ? annualBudget(programSlug, rok)
+      : runs.reduce((s, c) => s + effectiveAllocation(c), 0);
+    const remaining = alloc - used;
+    const pct = alloc > 0 ? Math.round((used / alloc) * 100) : 0;
+    return {
+      alloc,
+      used,
+      requested,
+      remaining,
+      pct,
+      annual: usesCascadingAllocation(programSlug) ? alloc : null,
+      allocLabel: usesCascadingAllocation(programSlug) ? "Celková alokace" : "Alokovaná částka"
+    };
+  }
+
   function allocationStats(c) {
     const alloc = effectiveAllocation(c);
     const used = sumSupported(c);
@@ -118,20 +158,20 @@
     return { alloc, used, requested, remaining, pct, annual, allocLabel: allocationAllocLabel(c) };
   }
 
-  function renderAllocationSummary(c, options = {}) {
-    const { alloc, used, requested, remaining, pct, annual, allocLabel } = allocationStats(c);
+  function renderAllocationSummaryStats(stats, options = {}) {
+    const { alloc, used, requested, remaining, pct, allocLabel, annual } = stats;
     const bar = alloc > 0 ? `
       <div class="allocationBar" aria-hidden="true">
         <div class="allocationBarFill" style="width:${Math.min(pct, 100)}%"></div>
       </div>
       <p class="allocationBarLabel">${pct} % čerpáno · ${fmtMoney(used)} z ${fmtMoney(alloc)}</p>` : "";
-    const annualRow = usesCascadingAllocation(c?.program_slug) && annual > 0 && (c?.beh_cislo || 1) > 1
-      ? `<tr><td>Celoroční alokace ${c.rok || ""}</td><td class="money">${fmtMoney(annual)}</td></tr>` : "";
+    const annualRow = annual > 0 && allocLabel === "Zbývá z alokace"
+      ? `<tr><td>Celoroční alokace</td><td class="money">${fmtMoney(annual)}</td></tr>` : "";
     return `
       ${options.showBar !== false ? bar : ""}
       <table class="competitionTable competitionSummaryTable">
         ${annualRow}
-        <tr><td>${html(allocLabel)}</td><td class="money">${fmtMoney(alloc)}</td></tr>
+        <tr><td>${html(allocLabel || "Alokovaná částka")}</td><td class="money">${fmtMoney(alloc)}</td></tr>
         <tr><td>Celkem požadováno v přihláškách</td><td class="money">${fmtMoney(requested)}</td></tr>
         <tr><td>Celkem podpořeno</td><td class="money">${fmtMoney(used)}</td></tr>
         <tr><td><strong>Zbývá / přebytek</strong></td><td class="money"><strong>${fmtMoney(remaining)}</strong></td></tr>
@@ -139,9 +179,87 @@
       </table>`;
   }
 
+  function renderAllocationSummary(c, options = {}) {
+    const stats = typeof c?.program_slug === "string" && Array.isArray(c?.runs)
+      ? programAllocationStats(c.program_slug, c.rok, c.runs)
+      : allocationStats(c);
+    if (typeof c?.program_slug === "string" && Array.isArray(c?.runs)) {
+      return renderAllocationSummaryStats(stats, options);
+    }
+    const { annual, allocLabel } = stats;
+    const annualRow = usesCascadingAllocation(c?.program_slug) && annual > 0 && (c?.beh_cislo || 1) > 1
+      ? `<tr><td>Celoroční alokace ${c.rok || ""}</td><td class="money">${fmtMoney(annual)}</td></tr>` : "";
+    const bar = stats.alloc > 0 ? `
+      <div class="allocationBar" aria-hidden="true">
+        <div class="allocationBarFill" style="width:${Math.min(stats.pct, 100)}%"></div>
+      </div>
+      <p class="allocationBarLabel">${stats.pct} % čerpáno · ${fmtMoney(stats.used)} z ${fmtMoney(stats.alloc)}</p>` : "";
+    return `
+      ${options.showBar !== false ? bar : ""}
+      <table class="competitionTable competitionSummaryTable">
+        ${annualRow}
+        <tr><td>${html(allocLabel)}</td><td class="money">${fmtMoney(stats.alloc)}</td></tr>
+        <tr><td>Celkem požadováno v přihláškách</td><td class="money">${fmtMoney(stats.requested)}</td></tr>
+        <tr><td>Celkem podpořeno</td><td class="money">${fmtMoney(stats.used)}</td></tr>
+        <tr><td><strong>Zbývá / přebytek</strong></td><td class="money"><strong>${fmtMoney(stats.remaining)}</strong></td></tr>
+        <tr><td>Využití alokace</td><td>${stats.alloc > 0 ? `<strong>${stats.pct} %</strong>` : "—"}</td></tr>
+      </table>`;
+  }
+
+  function groupStavBucket(runs) {
+    const buckets = runs.map(r => stavBucket(r.stav));
+    if (buckets.some(b => b === "bezi")) return "bezi";
+    if (buckets.every(b => b === "uzavreno")) return "uzavreno";
+    if (buckets.every(b => b === "rozhodnuto")) return "rozhodnuto";
+    if (buckets.some(b => b === "rozhodnuto")) return "rozhodnuto";
+    return "bezi";
+  }
+
+  function overviewGroups(items) {
+    if (overviewFilterBeh) {
+      return items.map(c => ({
+        type: "beh",
+        key: c.id,
+        programSlug: c.program_slug,
+        rok: c.rok,
+        runs: [c],
+        primary: c
+      }));
+    }
+    const map = new Map();
+    items.forEach(c => {
+      const key = `${c.program_slug}::${c.rok}`;
+      if (!map.has(key)) {
+        map.set(key, { type: "program", key, programSlug: c.program_slug, rok: c.rok, runs: [] });
+      }
+      map.get(key).runs.push(c);
+    });
+    return [...map.values()]
+      .map(g => {
+        g.runs.sort((a, b) => (a.beh_cislo || 0) - (b.beh_cislo || 0));
+        g.primary = g.runs[g.runs.length - 1];
+        return g;
+      })
+      .sort((a, b) => (b.rok || 0) - (a.rok || 0) || n(getProgram(a.programSlug).title).localeCompare(n(getProgram(b.programSlug).title), "cs"));
+  }
+
+  function sumProgramsAllocation(groups) {
+    const seen = new Set();
+    return groups.reduce((s, g) => {
+      const budgetKey = `${g.programSlug}-${g.rok}`;
+      if (usesCascadingAllocation(g.programSlug)) {
+        if (seen.has(budgetKey)) return s;
+        seen.add(budgetKey);
+        return s + annualBudget(g.programSlug, g.rok);
+      }
+      return s + programAllocationStats(g.programSlug, g.rok, g.runs).alloc;
+    }, 0);
+  }
+
   function filteredCompetitionsOverview() {
     return competitions.filter(c => {
       if (overviewFilterRok && String(c.rok) !== String(overviewFilterRok)) return false;
+      if (overviewFilterProgram && c.program_slug !== overviewFilterProgram) return false;
       if (overviewFilterBeh && String(c.beh_cislo) !== String(overviewFilterBeh)) return false;
       if (overviewFilterStav && stavBucket(c.stav) !== overviewFilterStav) return false;
       return true;
@@ -153,28 +271,50 @@
   }
 
   function uniqueBeh() {
-    const src = overviewFilterRok
-      ? competitions.filter(c => String(c.rok) === String(overviewFilterRok))
-      : competitions;
+    const src = competitions.filter(c => {
+      if (overviewFilterRok && String(c.rok) !== String(overviewFilterRok)) return false;
+      if (overviewFilterProgram && c.program_slug !== overviewFilterProgram) return false;
+      return true;
+    });
     return [...new Set(src.map(c => c.beh_cislo).filter(Boolean))].sort((a, b) => a - b);
+  }
+
+  function programsInOverview() {
+    const slugs = [...new Set(competitions.map(c => c.program_slug).filter(Boolean))];
+    return PROGRAMS.filter(p => slugs.includes(p.slug));
   }
 
   function renderCompetitionOverview() {
     const grid = el("competitionOverviewGrid");
     const rokSel = el("overviewRokFilter");
+    const progSel = el("overviewProgramFilter");
     const behSel = el("overviewBehFilter");
     const stavSel = el("overviewStavFilter");
+    const yearBudgetRow = el("overviewYearBudgetRow");
+    const yearBudgetInput = el("overviewYearBudgetInput");
     if (!grid) return;
 
     if (rokSel) {
       const years = uniqueYears();
       rokSel.innerHTML = `<option value="">Vše</option>${years.map(y => `<option value="${y}" ${String(y) === String(overviewFilterRok) ? "selected" : ""}>${y}</option>`).join("")}`;
     }
+    if (progSel) {
+      const progs = programsInOverview();
+      progSel.innerHTML = `<option value="">Vše</option>${PROGRAMS.map(p => {
+        const count = competitions.filter(c => c.program_slug === p.slug).length;
+        if (!count && !competitions.length) return "";
+        return `<option value="${p.slug}" ${p.slug === overviewFilterProgram ? "selected" : ""}>${html(p.title)}</option>`;
+      }).join("")}`;
+    }
     if (behSel) {
       const behs = uniqueBeh();
       behSel.innerHTML = `<option value="">Vše</option>${behs.map(b => `<option value="${b}" ${String(b) === String(overviewFilterBeh) ? "selected" : ""}>Běh ${b}</option>`).join("")}`;
     }
     if (stavSel) stavSel.value = overviewFilterStav;
+    if (yearBudgetRow) yearBudgetRow.hidden = !overviewFilterRok;
+    if (yearBudgetInput && overviewFilterRok) {
+      yearBudgetInput.value = getYearBudgetTotal(overviewFilterRok) || "";
+    }
 
     if (loading) {
       grid.innerHTML = `<p class="hint">Načítám přehled…</p>`;
@@ -187,45 +327,70 @@
       return;
     }
 
-    const seenYearBudget = new Set();
-    const totals = items.reduce((t, c) => {
-      const s = allocationStats(c);
-      const budgetKey = `${c.program_slug}-${c.rok}`;
-      if (usesCascadingAllocation(c.program_slug)) {
-        if (!seenYearBudget.has(budgetKey)) {
-          seenYearBudget.add(budgetKey);
-          t.alloc += annualBudget(c.program_slug, c.rok) || s.alloc;
-        }
-      } else {
-        t.alloc += s.alloc;
-      }
-      t.used += s.used;
-      t.requested += s.requested;
-      return t;
-    }, { alloc: 0, used: 0, requested: 0 });
-    const totalPct = totals.alloc > 0 ? Math.round((totals.used / totals.alloc) * 100) : 0;
+    const groups = overviewGroups(items);
+    const used = items.reduce((s, c) => s + sumSupported(c), 0);
+    const requested = items.reduce((s, c) => s + sumApplications(c), 0);
+    const programsAlloc = sumProgramsAllocation(groups);
+    const yearAlloc = overviewFilterRok ? getYearBudgetTotal(overviewFilterRok) : 0;
+    const totalAlloc = overviewFilterRok && yearAlloc > 0 ? yearAlloc : programsAlloc;
+    const totalRemaining = totalAlloc - used;
+    const totalPct = totalAlloc > 0 ? Math.round((used / totalAlloc) * 100) : 0;
+    const totalStats = {
+      alloc: totalAlloc,
+      used,
+      requested,
+      remaining: totalRemaining,
+      pct: totalPct,
+      allocLabel: overviewFilterRok ? "Celková alokace roku" : "Celkem alokováno"
+    };
+    const showTotal = overviewFilterRok || groups.length > 1;
+    const totalTitle = overviewFilterRok
+      ? `Celkem za rok ${overviewFilterRok} (${groups.length} ${groups.length === 1 ? "soutěž" : "soutěže"}, ${items.length} běhů)`
+      : `Celkem ve filtru (${groups.length} soutěží, ${items.length} běhů)`;
+    const totalHint = overviewFilterRok && !yearAlloc
+      ? `<p class="hint competitionOverviewTotalHint">Zadejte celkovou alokaci roku výše — jinak se počítá součet alokací jednotlivých soutěží (${fmtMoney(programsAlloc)}).</p>`
+      : "";
 
     grid.innerHTML = `
-      ${items.length > 1 ? `
+      ${showTotal ? `
         <article class="competitionOverviewCard competitionOverviewTotal">
-          <h3>Celkem ve filtru (${items.length} běhů)</h3>
-          ${renderAllocationSummary({ alokovana_castka: totals.alloc, applications: [], supported: items.flatMap(c => c.supported || []) }, { showBar: true })}
+          <h3>${totalTitle}</h3>
+          ${totalHint}
+          ${renderAllocationSummaryStats(totalStats, { showBar: true })}
         </article>` : ""}
       <div class="competitionOverviewGrid">
-        ${items.map(c => {
-          const prog = getProgram(c.program_slug);
-          const { pct } = allocationStats(c);
-          const active = c.id === activeCompetitionId ? "active" : "";
-          return `<article class="competitionOverviewCard ${active}" data-comp-id="${html(c.id)}" data-program="${html(c.program_slug)}" tabindex="0" role="button">
+        ${groups.map(g => {
+          const prog = getProgram(g.programSlug);
+          const active = g.runs.some(r => r.id === activeCompetitionId) ? "active" : "";
+          if (g.type === "beh") {
+            const c = g.primary;
+            return `<article class="competitionOverviewCard ${active}" data-comp-id="${html(c.id)}" data-program="${html(c.program_slug)}" tabindex="0" role="button">
+              <div class="competitionOverviewHead">
+                <span class="competitionOverviewProgram">${prog.icon} ${html(prog.title)}</span>
+                <span class="competitionOverviewStav stav-${stavBucket(c.stav)}">${html(stavLabel(c.stav))}</span>
+              </div>
+              <h3 class="competitionOverviewTitle">${html(c.nazev)}</h3>
+              <p class="hint competitionOverviewMeta">Rok ${c.rok || "—"} · běh ${c.beh_cislo || 1} · ${(c.applications || []).length} přihlášek · ${(c.supported || []).length} podpořených</p>
+              <h4 class="competitionOverviewSummaryTitle">Souhrn využití alokace</h4>
+              ${renderAllocationSummary(c)}
+              <span class="competitionOverviewCta">Otevřít detail →</span>
+            </article>`;
+          }
+          const apps = g.runs.reduce((n, r) => n + (r.applications || []).length, 0);
+          const supp = g.runs.reduce((n, r) => n + (r.supported || []).length, 0);
+          const behLabel = g.runs.map(r => r.beh_cislo || 1).join(", ");
+          const stav = groupStavBucket(g.runs);
+          const stavText = { bezi: "Běží", rozhodnuto: "Rozhodnuto", uzavreno: "Uzavřeno" }[stav] || stav;
+          return `<article class="competitionOverviewCard ${active}" data-comp-id="${html(g.primary.id)}" data-program="${html(g.programSlug)}" tabindex="0" role="button">
             <div class="competitionOverviewHead">
               <span class="competitionOverviewProgram">${prog.icon} ${html(prog.title)}</span>
-              <span class="competitionOverviewStav stav-${stavBucket(c.stav)}">${html(stavLabel(c.stav))}</span>
+              <span class="competitionOverviewStav stav-${stav}">${html(stavText)}</span>
             </div>
-            <h3 class="competitionOverviewTitle">${html(c.nazev)}</h3>
-            <p class="hint competitionOverviewMeta">Rok ${c.rok || "—"} · běh ${c.beh_cislo || 1} · ${(c.applications || []).length} přihlášek · ${(c.supported || []).length} podpořených</p>
-            <h4 class="competitionOverviewSummaryTitle">Souhrn využití alokace</h4>
-            ${renderAllocationSummary(c)}
-            <span class="competitionOverviewCta">Otevřít detail →</span>
+            <h3 class="competitionOverviewTitle">${html(prog.title)} · ${g.rok || "—"}</h3>
+            <p class="hint competitionOverviewMeta">Běhy ${behLabel} · ${apps} přihlášek · ${supp} podpořených · ${g.runs.length} běhů</p>
+            <h4 class="competitionOverviewSummaryTitle">Souhrn využití alokace (všechny běhy)</h4>
+            ${renderAllocationSummary({ program_slug: g.programSlug, rok: g.rok, runs: g.runs })}
+            <span class="competitionOverviewCta">Otevřít program →</span>
           </article>`;
         }).join("")}
       </div>`;
@@ -246,11 +411,19 @@
 
   function bindOverviewFilters() {
     const rokSel = el("overviewRokFilter");
+    const progSel = el("overviewProgramFilter");
     const behSel = el("overviewBehFilter");
     const stavSel = el("overviewStavFilter");
+    const yearBudgetInput = el("overviewYearBudgetInput");
+    const yearBudgetSave = el("overviewYearBudgetSave");
     if (!rokSel || rokSel.__bound) return;
     rokSel.addEventListener("change", () => {
       overviewFilterRok = rokSel.value;
+      overviewFilterBeh = "";
+      renderCompetitionOverview();
+    });
+    progSel?.addEventListener("change", () => {
+      overviewFilterProgram = progSel.value;
       overviewFilterBeh = "";
       renderCompetitionOverview();
     });
@@ -260,6 +433,17 @@
     });
     stavSel.addEventListener("change", () => {
       overviewFilterStav = stavSel.value;
+      renderCompetitionOverview();
+    });
+    yearBudgetSave?.addEventListener("click", () => {
+      if (!overviewFilterRok) return;
+      setYearBudgetTotal(overviewFilterRok, yearBudgetInput?.value);
+      renderCompetitionOverview();
+      setStatus(`Celková alokace roku ${overviewFilterRok} uložena.`);
+    });
+    yearBudgetInput?.addEventListener("change", () => {
+      if (!overviewFilterRok) return;
+      setYearBudgetTotal(overviewFilterRok, yearBudgetInput.value);
       renderCompetitionOverview();
     });
     rokSel.__bound = true;
@@ -1277,12 +1461,15 @@
         <div class="sectionHeader">
           <div>
             <h3>Přehled čerpání alokací</h3>
-            <p class="hint">Filtrujte běhy a hned vidíte využití rozpočtu u každé soutěže.</p>
+            <p class="hint">Filtrujte podle roku a soutěže — dlaždice ukazují souhrn za všechny běhy dané soutěže. Celková alokace roku zadáváte ručně.</p>
           </div>
         </div>
         <div class="competitionOverviewFilters">
           <label>Rok
             <select id="overviewRokFilter"><option value="">Vše</option></select>
+          </label>
+          <label>Soutěž
+            <select id="overviewProgramFilter"><option value="">Vše</option></select>
           </label>
           <label>Běh
             <select id="overviewBehFilter"><option value="">Vše</option></select>
@@ -1294,6 +1481,14 @@
               <option value="rozhodnuto">Rozhodnuto</option>
               <option value="uzavreno">Uzavřeno</option>
             </select>
+          </label>
+        </div>
+        <div id="overviewYearBudgetRow" class="competitionYearBudgetRow" hidden>
+          <label>Celková alokace roku (všechny soutěže, Kč)
+            <div class="competitionYearBudgetInputRow">
+              <input id="overviewYearBudgetInput" type="number" min="0" step="1000" placeholder="např. 5000000" />
+              <button type="button" id="overviewYearBudgetSave" class="button small secondary">Uložit</button>
+            </div>
           </label>
         </div>
         <div id="competitionOverviewGrid"></div>
@@ -1511,6 +1706,11 @@
       .competitionOverviewPanel { margin-bottom: 1rem; }
       .competitionOverviewFilters { display: flex; flex-wrap: wrap; gap: .75rem 1rem; margin-bottom: 1rem; }
       .competitionOverviewFilters label { min-width: 120px; }
+      .competitionYearBudgetRow { margin: 0 0 1rem; padding: .75rem 1rem; background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; }
+      .competitionYearBudgetRow label { display: block; max-width: 420px; }
+      .competitionYearBudgetInputRow { display: flex; gap: .5rem; margin-top: .35rem; }
+      .competitionYearBudgetInputRow input { flex: 1; }
+      .competitionOverviewTotalHint { margin: 0 0 .65rem; }
       .competitionOverviewGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
       .competitionOverviewCard {
         border: 1px solid var(--line); border-radius: 12px; padding: 1rem; background: white;
@@ -1555,6 +1755,7 @@
   }
 
   function init() {
+    loadYearBudgets();
     injectStyles();
     injectPage();
     injectDialogs();
