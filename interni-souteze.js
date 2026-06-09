@@ -450,11 +450,26 @@
   }
 
   function resitelDisplay(item) {
+    if (window.kbPersonLinks?.personDisplay) {
+      return window.kbPersonLinks.personDisplay(item, "resitel");
+    }
     if (item?.resitel_id) {
       const p = getPerson(item.resitel_id);
       if (p) return personLabel(p);
     }
     return item?.resitel || "";
+  }
+
+  function applyResitelLink(item, person) {
+    if (window.kbPersonLinks?.applyPersonLink) {
+      return window.kbPersonLinks.applyPersonLink(item, person, "resitel");
+    }
+    return {
+      ...item,
+      resitel_id: person?.id || null,
+      resitel_osobni_cislo: person?.osobni_cislo || null,
+      resitel: person ? personLabel(person) : ""
+    };
   }
 
   function suggestProjektId(comp) {
@@ -781,8 +796,7 @@
           id: row.id,
           projekt_id: row.projekt_id,
           nazev_projektu: row.nazev_projektu,
-          resitel_id: person?.id || null,
-          resitel: person ? personLabel(person) : "",
+          ...applyResitelLink({}, person),
           fakulta: row.fakulta,
           katedra: row.katedra || "",
           financni_pozadavek: row.financni_pozadavek,
@@ -805,8 +819,7 @@
             application_id: row.id,
             projekt_id: row.projekt_id,
             nazev_projektu: row.nazev_projektu,
-            resitel_id: person?.id || app?.resitel_id || null,
-            resitel: person ? personLabel(person) : app?.resitel || "",
+            ...applyResitelLink(app || {}, person || (app?.resitel_id ? getPerson(app.resitel_id) : null)),
             fakulta: row.fakulta,
             katedra: row.katedra || "",
             castka_podpory: castka,
@@ -1281,14 +1294,14 @@
   function fillResitelFromPerson(selectEl) {
     const p = getPerson(selectEl.value);
     if (!p) return;
-    if (el("appFakulta")) el("appFakulta").value = p.fakulta || "";
+    if (el("appFakulta")) el("appFakulta").value = p.pracoviste || p.fakulta || "";
     if (el("appKatedra")) el("appKatedra").value = p.katedra || "";
   }
 
   function fillSuppResitelFromPerson(selectEl) {
     const p = getPerson(selectEl.value);
     if (!p) return;
-    if (el("suppFakulta")) el("suppFakulta").value = p.fakulta || "";
+    if (el("suppFakulta")) el("suppFakulta").value = p.pracoviste || p.fakulta || "";
     if (el("suppKatedra")) el("suppKatedra").value = p.katedra || "";
   }
 
@@ -1301,7 +1314,7 @@
     el("appCompId").value = compId;
     el("appProjektId").value = existing?.projekt_id || suggestProjektId(comp);
     el("appNazev").value = existing?.nazev_projektu || "";
-    window.kbPersons?.fillSelect?.(el("appResitelId"), existing?.resitel_id);
+    window.kbPersons?.fillSelect?.(el("appResitelId"), window.kbPersonLinks?.personSelectId?.(existing, "resitel") || existing?.resitel_id);
     el("appFakulta").value = existing?.fakulta || "";
     el("appKatedra").value = existing?.katedra || "";
     el("appCastka").value = existing?.financni_pozadavek || "";
@@ -1321,12 +1334,10 @@
     const existing = (comp.applications || []).find(a => a.id === id);
     const resitelId = el("appResitelId").value || null;
     const person = resitelId ? getPerson(resitelId) : null;
-    const app = {
+    const app = applyResitelLink({
       id,
       projekt_id: n(el("appProjektId").value),
       nazev_projektu: n(el("appNazev").value) || "Bez názvu",
-      resitel_id: resitelId,
-      resitel: person ? personLabel(person) : "",
       fakulta: n(el("appFakulta").value),
       katedra: n(el("appKatedra").value),
       financni_pozadavek: Number(el("appCastka").value) || 0,
@@ -1336,7 +1347,7 @@
       poznamka: n(el("appPoznamka").value),
       created_at: existing?.created_at || new Date().toISOString(),
       __existing: !!existing
-    };
+    }, person);
     const apps = [...(comp.applications || []).filter(a => a.id !== id), app];
     try {
       await saveCompetition({ ...comp, applications: apps, __existing: true });
@@ -1363,7 +1374,7 @@
     el("suppCompId").value = compId;
     el("suppProjektId").value = existing?.projekt_id || "";
     el("suppNazev").value = existing?.nazev_projektu || "";
-    window.kbPersons?.fillSelect?.(el("suppResitelId"), existing?.resitel_id);
+    window.kbPersons?.fillSelect?.(el("suppResitelId"), window.kbPersonLinks?.personSelectId?.(existing, "resitel") || existing?.resitel_id);
     el("suppFakulta").value = existing?.fakulta || "";
     el("suppKatedra").value = existing?.katedra || "";
     el("suppCastka").value = existing?.castka_podpory || "";
@@ -1380,12 +1391,10 @@
     const existing = (comp.supported || []).find(s => s.id === id);
     const resitelId = el("suppResitelId").value || null;
     const person = resitelId ? getPerson(resitelId) : null;
-    const item = {
+    const item = applyResitelLink({
       id,
       projekt_id: n(el("suppProjektId").value),
       nazev_projektu: n(el("suppNazev").value) || "Bez názvu",
-      resitel_id: resitelId,
-      resitel: person ? personLabel(person) : "",
       fakulta: n(el("suppFakulta").value),
       katedra: n(el("suppKatedra").value),
       castka_podpory: Number(el("suppCastka").value) || 0,
@@ -1393,7 +1402,7 @@
       application_id: existing?.application_id || null,
       created_at: existing?.created_at || new Date().toISOString(),
       __existing: !!existing
-    };
+    }, person);
     const supported = [...(comp.supported || []).filter(s => s.id !== id), item];
     try {
       await saveCompetition({ ...comp, supported, __existing: true });
@@ -1415,18 +1424,21 @@
     const comp = getCompetition(compId);
     const app = (comp?.applications || []).find(a => a.id === appId);
     if (!comp || !app) return;
+    const linkedPerson = window.kbPersonLinks?.resolvePerson?.(app, "resitel")
+      || (app.resitel_id ? getPerson(app.resitel_id) : null);
     const item = {
-      id: uuid(),
-      application_id: app.id,
-      projekt_id: app.projekt_id,
-      nazev_projektu: app.nazev_projektu,
-      resitel_id: app.resitel_id,
-      resitel: resitelDisplay(app),
-      fakulta: app.fakulta,
-      katedra: app.katedra,
-      castka_podpory: app.financni_pozadavek,
-      poznamka: `Z přihlášky: ${app.stav || ""}`,
-      created_at: new Date().toISOString()
+      ...applyResitelLink({
+        id: uuid(),
+        application_id: app.id,
+        projekt_id: app.projekt_id,
+        nazev_projektu: app.nazev_projektu,
+        fakulta: app.fakulta,
+        katedra: app.katedra,
+        castka_podpory: app.financni_pozadavek,
+        poznamka: `Z přihlášky: ${app.stav || ""}`,
+        created_at: new Date().toISOString()
+      }, linkedPerson),
+      resitel: resitelDisplay(app)
     };
     await saveCompetition({ ...comp, supported: [...(comp.supported || []), item], __existing: true });
     render();

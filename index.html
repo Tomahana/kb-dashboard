@@ -254,7 +254,7 @@
       </section>
       <section class="panel">
         <h2>Osoby v Supabase</h2>
-        <p class="hint">Centrální evidence osob: <code>supabase/persons-schema.sql</code>. Pokud máte starou tabulku <code>kb_competition_persons</code>, spusťte <code>supabase/persons-migrate-from-competitions.sql</code>.</p>
+        <p class="hint">Centrální evidence osob: <code>supabase/persons-schema.sql</code>. Propojení s projekty, termíny a e-maily: <code>supabase/persons-links-migrate.sql</code>.</p>
       </section>
       <section class="panel">
         <h2>Interní soutěže v Supabase</h2>
@@ -376,8 +376,14 @@
         <textarea id="deadlinePopis" rows="2"></textarea>
       </label>
       <div class="grid2">
-        <label>Kdo to hlídá na rektorátu
-          <input id="deadlineOdpovedna" type="text" />
+        <label>Osoba z evidence (volitelné)
+          <div class="personSelectRow">
+            <select id="deadlineOdpovednaPersonId"></select>
+            <button type="button" id="deadlineNewPersonBtn" class="button small secondary">+ Osoba</button>
+          </div>
+        </label>
+        <label>Kdo to hlídá na rektorátu (text / jednotka)
+          <input id="deadlineOdpovedna" type="text" placeholder="např. OVV nebo jméno z výběru výše" />
         </label>
         <label>Od koho potřebujeme data
           <input id="deadlinePotrebujemeOd" type="text" />
@@ -509,12 +515,13 @@
   <script src="notion.js?v=29"></script>
   <script src="supabase-topics.js?v=29"></script>
   <script src="topics.js?v=29"></script>
-  <script src="supabase-deadlines.js?v=29"></script>
   <script src="record-click-fix.js?v=29"></script>
-  <script src="deadlines.js?v=29"></script>
-  <script src="supabase-persons.js?v=31"></script>
-  <script src="persons.js?v=31"></script>
-  <script src="supabase-competitions.js?v=29"></script>
-  <script src="interni-souteze.js?v=29"></script>
+  <script src="supabase-persons.js?v=32"></script>
+  <script src="persons.js?v=32"></script>
+  <script src="person-links.js?v=32"></script>
+  <script src="supabase-competitions.js?v=32"></script>
+  <script src="interni-souteze.js?v=32"></script>
+  <script src="supabase-deadlines.js?v=32"></script>
+  <script src="deadlines.js?v=32"></script>
 </body>
 </html>

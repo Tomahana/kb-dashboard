@@ -368,7 +368,7 @@
           </div>
         </header>
         <div class="deadlineTitle">${html(item.nazev)}</div>
-        ${item.odpovedna_osoba ? `<div class="deadlineMeta">Hlídá na rektorátu: ${html(item.odpovedna_osoba)}</div>` : ""}
+        ${item.odpovedna_osoba || window.kbPersonLinks?.personDisplay?.(item, "odpovedna_osoba") ? `<div class="deadlineMeta">Hlídá na rektorátu: ${html(window.kbPersonLinks?.personDisplay?.(item, "odpovedna_osoba") || item.odpovedna_osoba)}</div>` : ""}
         ${item.popis ? `<p class="deadlineSummary">${html(item.popis)}</p>` : ""}
       </article>
     `;
@@ -425,7 +425,7 @@
                 <td>${html(formatDate(item.termin_sberu))}</td>
                 <td>${html(formatDate(item.termin_interni))}</td>
                 <td>${html(formatDate(item.termin_odeslani))}</td>
-                <td>${html(item.odpovedna_osoba)}</td>
+                <td>${html(window.kbPersonLinks?.personDisplay?.(item, "odpovedna_osoba") || item.odpovedna_osoba)}</td>
                 <td>${html(item.periodicita)}</td>
                 <td>${topicsForDeadline(item.id).length || "—"}</td>
                 <td><span class="openHint">Upravit →</span></td>
@@ -664,8 +664,19 @@
     });
   }
 
+  function odpovednaDisplay(item) {
+    return window.kbPersonLinks?.personDisplay?.(item, "odpovedna_osoba") || item?.odpovedna_osoba || "";
+  }
+
+  function fillDeadlinePersonFromSelect() {
+    const p = window.kbPersons?.getPerson?.(el("deadlineOdpovednaPersonId")?.value);
+    if (!p || !el("deadlineOdpovedna")) return;
+    el("deadlineOdpovedna").value = window.kbPersons.personLabel(p);
+  }
+
   async function openDialog(item) {
     await ensureTopicsLoaded();
+    await window.kbPersons?.ensureLoaded?.();
     const existing = item || null;
     el("deadlineEditId").value = existing?.id || "";
     FORM_FIELDS.forEach(([elementId, field]) => {
@@ -678,6 +689,11 @@
         node.value = raw || (field === "stav" && !existing ? "Aktivní" : field === "zdroj" && !existing ? "vlastní" : "");
       }
     });
+    window.kbPersons?.fillSelect?.(
+      el("deadlineOdpovednaPersonId"),
+      window.kbPersonLinks?.personSelectId?.(existing, "odpovedna_osoba") || ""
+    );
+    window.kbPickers?.refresh?.("deadlineOdpovednaPersonId");
     el("deadlineDialogTitle").textContent = existing ? "Upravit položku" : "Nová položka";
     el("deleteDeadlineBtn").hidden = !existing;
     renderDeadlineTopicsList(existing?.id);
@@ -707,6 +723,12 @@
     });
     if (!payload.nazev) payload.nazev = payload.id_polozky ? `Položka ${payload.id_polozky}` : "Bez názvu";
     if (!payload.stav) payload.stav = "Aktivní";
+    const personId = el("deadlineOdpovednaPersonId")?.value;
+    const person = personId ? window.kbPersons?.getPerson?.(personId) : null;
+    if (person && window.kbPersonLinks) {
+      return window.kbPersonLinks.applyPersonLink(payload, person, "odpovedna_osoba");
+    }
+    payload.odpovedna_osoba_osobni_cislo = "";
     return payload;
   }
 
@@ -867,6 +889,8 @@ ${lines}`;
       .deadlineTopicActions { display: flex; gap: .35rem; flex-shrink: 0; }
       #deadlineDialog { max-width: 760px; }
       #deadlineDialog form { max-height: 85vh; overflow-y: auto; }
+      .personSelectRow { display: flex; gap: .5rem; align-items: center; margin-top: .25rem; }
+      .personSelectRow select { flex: 1; }
       @media (max-width: 900px) {
         .deadlinesOverview, .deadlinesFilters { grid-template-columns: 1fr; }
       }
@@ -879,6 +903,16 @@ ${lines}`;
     el("deadlinesReloadBtn")?.addEventListener("click", loadDeadlines);
     el("deadlinesExportBtn")?.addEventListener("click", exportJson);
     el("deadlinesCopyPromptBtn")?.addEventListener("click", copyAiPrompt);
+    el("deadlineOdpovednaPersonId")?.addEventListener("change", fillDeadlinePersonFromSelect);
+    el("deadlineNewPersonBtn")?.addEventListener("click", () => {
+      window.kbPersons?.openDialog?.(null, {
+        onSaved: (p) => {
+          window.kbPersons.fillSelect(el("deadlineOdpovednaPersonId"), p.id);
+          window.kbPickers?.refresh?.("deadlineOdpovednaPersonId");
+          fillDeadlinePersonFromSelect();
+        }
+      });
+    });
     el("saveDeadlineBtn")?.addEventListener("click", saveDeadlineForm);
     el("deleteDeadlineBtn")?.addEventListener("click", deleteDeadline);
     el("deadlineGotoTopicsBtn")?.addEventListener("click", () => {

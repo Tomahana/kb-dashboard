@@ -57,6 +57,8 @@
       "Úkol / další krok": record.ukol_dalsi_krok || null,
       "Termín": record.termin || null,
       "Odpovědná osoba": record.odpovedna_osoba || null,
+      odesilatel_osobni_cislo: record.odesilatel_osobni_cislo || null,
+      odpovedna_osoba_osobni_cislo: record.odpovedna_osoba_osobni_cislo || null,
       "Poznámka": record.poznamka || null,
       "KB_SYNC": new Date().toISOString()
     };
@@ -95,6 +97,8 @@
       ukol_dalsi_krok: firstDefined(row, ["Úkol / další krok", "ukol_dalsi_krok"]),
       termin: firstDefined(row, ["Termín", "termin"]),
       odpovedna_osoba: firstDefined(row, ["Odpovědná osoba", "odpovedna_osoba"]),
+      odesilatel_osobni_cislo: firstDefined(row, ["odesilatel_osobni_cislo"]),
+      odpovedna_osoba_osobni_cislo: firstDefined(row, ["odpovedna_osoba_osobni_cislo"]),
       odkaz_na_email: firstDefined(row, ["Odkaz na e-mail", "odkaz_na_email"]),
       poznamka: firstDefined(row, ["Poznámka", "poznamka"]),
       kb_sync: firstDefined(row, ["KB_SYNC", "kb_sync"]),

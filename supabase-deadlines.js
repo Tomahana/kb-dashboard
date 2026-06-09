@@ -7,7 +7,7 @@
   let tablesAvailable = null;
 
   const FIELDS = [
-    "id_polozky", "oblast", "nazev", "popis", "odpovedna_osoba", "potrebujeme_od",
+    "id_polozky", "oblast", "nazev", "popis", "odpovedna_osoba", "odpovedna_osoba_osobni_cislo", "potrebujeme_od",
     "dodavatel_fakulta", "kam_vyplnit", "system_zdroj", "termin_sberu", "termin_interni",
     "termin_odeslani", "periodicita", "ucel", "navazny_proces", "riziko", "stav",
     "poznamka", "zdroj", "urad", "agenda", "typ", "kb_id"

@@ -14,6 +14,7 @@ create table if not exists public.kb_deadlines (
   nazev text not null,
   popis text,
   odpovedna_osoba text,
+  odpovedna_osoba_osobni_cislo text references public.kb_persons(osobni_cislo) on delete set null,
   potrebujeme_od text,
   dodavatel_fakulta text,
   kam_vyplnit text,
