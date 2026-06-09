@@ -11,7 +11,9 @@
   ];
 
   const STORAGE_KEY = "kb-dashboard-competitions-v1";
+  const PERSONS_KEY = "kb-dashboard-competition-persons-v1";
   let competitions = [];
+  let persons = [];
   let useSupabase = false;
   let loading = false;
   let activeProgram = PROGRAMS[0].slug;
@@ -45,6 +47,45 @@
 
   function sumApplications(comp) {
     return (comp?.applications || []).reduce((s, r) => s + (Number(r.financni_pozadavek) || 0), 0);
+  }
+
+  function personLabel(p) {
+    if (!p) return "";
+    return [p.titul_pred, p.jmeno, p.prijmeni, p.titul_za].map(n).filter(Boolean).join(" ").trim();
+  }
+
+  function getPerson(id) {
+    return persons.find(p => p.id === id) || null;
+  }
+
+  function resitelDisplay(item) {
+    if (item?.resitel_id) {
+      const p = getPerson(item.resitel_id);
+      if (p) return personLabel(p);
+    }
+    return item?.resitel || "";
+  }
+
+  function suggestProjektId(comp) {
+    const prog = getProgram(comp.program_slug);
+    const prefix = prog.slug.toUpperCase().replace(/-/g, "");
+    const year = comp.rok || new Date().getFullYear();
+    const seq = (comp.applications?.length || 0) + 1;
+    return `${prefix}-${year}-${String(seq).padStart(3, "0")}`;
+  }
+
+  function persistLocalPersons() {
+    localStorage.setItem(PERSONS_KEY, JSON.stringify(persons, null, 2));
+    if (window.kbSupabaseCompetitions?.saveLocalPersons) window.kbSupabaseCompetitions.saveLocalPersons(persons);
+  }
+
+  function renderPersonOptions(selectedId) {
+    const sorted = [...persons].sort((a, b) => personLabel(a).localeCompare(personLabel(b), "cs"));
+    const opts = sorted.map(p => {
+      const label = `${personLabel(p)}${p.fakulta ? ` · ${p.fakulta}` : ""}`;
+      return `<option value="${html(p.id)}" ${p.id === selectedId ? "selected" : ""}>${html(label)}</option>`;
+    }).join("");
+    return `<option value="">— vyberte osobu —</option>${opts}`;
   }
 
   function pdfHref(path) {
@@ -160,7 +201,9 @@
       if (!window.kbSupabaseCompetitions) {
         useSupabase = false;
         competitions = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+        persons = JSON.parse(localStorage.getItem(PERSONS_KEY) || "[]");
         if (!Array.isArray(competitions)) competitions = [];
+        if (!Array.isArray(persons)) persons = [];
         setStatus("Data v prohlížeči. Pro Supabase spusťte supabase/competitions-schema.sql.");
         return;
       }
@@ -168,16 +211,23 @@
       if (!available) {
         useSupabase = false;
         competitions = window.kbSupabaseCompetitions.loadLocal();
+        persons = window.kbSupabaseCompetitions.loadLocalPersons?.() || [];
         setStatus("Tabulky v Supabase zatím neexistují. Spusťte supabase/competitions-schema.sql.");
         return;
       }
       useSupabase = true;
       competitions = await window.kbSupabaseCompetitions.loadAll();
-      setStatus(`Načteno ze Supabase: ${competitions.length} běhů soutěží.`);
+      try {
+        persons = await window.kbSupabaseCompetitions.loadPersons();
+      } catch (_) {
+        persons = window.kbSupabaseCompetitions.loadLocalPersons?.() || [];
+      }
+      setStatus(`Načteno ze Supabase: ${competitions.length} běhů, ${persons.length} osob.`);
     } catch (e) {
       console.error(e);
       useSupabase = false;
       competitions = window.kbSupabaseCompetitions?.loadLocal?.() || [];
+      persons = window.kbSupabaseCompetitions?.loadLocalPersons?.() || [];
       setStatus(`Chyba: ${e.message || e}`, true);
     } finally {
       loading = false;
@@ -332,31 +382,37 @@
     const apps = c.applications || [];
     if (!apps.length) return `<p class="hint">Žádné přihlášky.</p>`;
     return `<div class="competitionTableWrap"><table class="competitionTable">
-      <thead><tr><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Požadavek</th><th>Hodnocení</th><th>Stav</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Katedra</th><th>Požadavek</th><th>Stav</th><th></th></tr></thead>
       <tbody>${apps.map(a => `<tr>
+        <td><code class="projektId">${html(a.projekt_id) || "—"}</code></td>
         <td><strong>${html(a.nazev_projektu)}</strong></td>
-        <td>${html(a.resitel)}</td>
+        <td>${html(resitelDisplay(a))}</td>
         <td>${html(a.fakulta)}</td>
+        <td>${html(a.katedra)}</td>
         <td class="money">${fmtMoney(a.financni_pozadavek)}</td>
-        <td>${html(a.hodnoceni)}</td>
         <td>${html(a.stav)}</td>
         <td class="rowActions">
           <button type="button" class="button small secondary" data-edit-app="${html(a.id)}">Upravit</button>
           <button type="button" class="button small accent" data-promote-app="${html(a.id)}">Podpořit</button>
           <button type="button" class="button small secondary" data-del-app="${html(a.id)}">×</button>
         </td>
-      </tr>`).join("")}</tbody></table></div>`;
+      </tr>${a.hodnoceni || a.hodnoceni_komise ? `<tr class="appEvalRow"><td colspan="8">
+        ${a.hodnoceni ? `<div><strong>Proděkan:</strong> ${html(a.hodnoceni)}</div>` : ""}
+        ${a.hodnoceni_komise ? `<div class="appKomiseBlock"><strong>Hodnocení komise:</strong><p class="competitionTextBlock">${html(a.hodnoceni_komise)}</p></div>` : ""}
+      </td></tr>` : ""}`).join("")}</tbody></table></div>`;
   }
 
   function renderSupportedTable(c) {
     const items = c.supported || [];
     if (!items.length) return `<p class="hint">Žádné podpořené projekty.</p>`;
     return `<div class="competitionTableWrap"><table class="competitionTable">
-      <thead><tr><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Částka podpory</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Katedra</th><th>Částka podpory</th><th></th></tr></thead>
       <tbody>${items.map(s => `<tr>
+        <td><code class="projektId">${html(s.projekt_id) || "—"}</code></td>
         <td><strong>${html(s.nazev_projektu)}</strong></td>
-        <td>${html(s.resitel)}</td>
+        <td>${html(resitelDisplay(s))}</td>
         <td>${html(s.fakulta)}</td>
+        <td>${html(s.katedra)}</td>
         <td class="money">${fmtMoney(s.castka_podpory)}</td>
         <td class="rowActions">
           <button type="button" class="button small secondary" data-edit-supp="${html(s.id)}">Upravit</button>
@@ -456,17 +512,34 @@
     }
   }
 
+  function fillResitelFromPerson(selectEl) {
+    const p = getPerson(selectEl.value);
+    if (!p) return;
+    if (el("appFakulta")) el("appFakulta").value = p.fakulta || "";
+    if (el("appKatedra")) el("appKatedra").value = p.katedra || "";
+  }
+
+  function fillSuppResitelFromPerson(selectEl) {
+    const p = getPerson(selectEl.value);
+    if (!p) return;
+    if (el("suppFakulta")) el("suppFakulta").value = p.fakulta || "";
+    if (el("suppKatedra")) el("suppKatedra").value = p.katedra || "";
+  }
+
   function openApplicationDialog(compId, appId) {
     const comp = getCompetition(compId);
     if (!comp) return;
     const existing = appId ? (comp.applications || []).find(a => a.id === appId) : null;
     el("appEditId").value = existing?.id || "";
     el("appCompId").value = compId;
+    el("appProjektId").value = existing?.projekt_id || suggestProjektId(comp);
     el("appNazev").value = existing?.nazev_projektu || "";
-    el("appResitel").value = existing?.resitel || "";
+    el("appResitelId").innerHTML = renderPersonOptions(existing?.resitel_id);
     el("appFakulta").value = existing?.fakulta || "";
+    el("appKatedra").value = existing?.katedra || "";
     el("appCastka").value = existing?.financni_pozadavek || "";
     el("appHodnoceni").value = existing?.hodnoceni || "";
+    el("appHodnoceniKomise").value = existing?.hodnoceni_komise || "";
     el("appStav").value = existing?.stav || "Přihláška";
     el("appPoznamka").value = existing?.poznamka || "";
     el("applicationDialog").showModal();
@@ -479,13 +552,19 @@
     if (!comp) return;
     const id = el("appEditId").value || uuid();
     const existing = (comp.applications || []).find(a => a.id === id);
+    const resitelId = el("appResitelId").value || null;
+    const person = resitelId ? getPerson(resitelId) : null;
     const app = {
       id,
+      projekt_id: n(el("appProjektId").value),
       nazev_projektu: n(el("appNazev").value) || "Bez názvu",
-      resitel: n(el("appResitel").value),
+      resitel_id: resitelId,
+      resitel: person ? personLabel(person) : "",
       fakulta: n(el("appFakulta").value),
+      katedra: n(el("appKatedra").value),
       financni_pozadavek: Number(el("appCastka").value) || 0,
       hodnoceni: n(el("appHodnoceni").value),
+      hodnoceni_komise: n(el("appHodnoceniKomise").value),
       stav: n(el("appStav").value) || "Přihláška",
       poznamka: n(el("appPoznamka").value),
       created_at: existing?.created_at || new Date().toISOString(),
@@ -514,9 +593,11 @@
     const existing = suppId ? (comp.supported || []).find(s => s.id === suppId) : null;
     el("suppEditId").value = existing?.id || "";
     el("suppCompId").value = compId;
+    el("suppProjektId").value = existing?.projekt_id || "";
     el("suppNazev").value = existing?.nazev_projektu || "";
-    el("suppResitel").value = existing?.resitel || "";
+    el("suppResitelId").innerHTML = renderPersonOptions(existing?.resitel_id);
     el("suppFakulta").value = existing?.fakulta || "";
+    el("suppKatedra").value = existing?.katedra || "";
     el("suppCastka").value = existing?.castka_podpory || "";
     el("suppPoznamka").value = existing?.poznamka || "";
     el("supportedDialog").showModal();
@@ -529,11 +610,16 @@
     if (!comp) return;
     const id = el("suppEditId").value || uuid();
     const existing = (comp.supported || []).find(s => s.id === id);
+    const resitelId = el("suppResitelId").value || null;
+    const person = resitelId ? getPerson(resitelId) : null;
     const item = {
       id,
+      projekt_id: n(el("suppProjektId").value),
       nazev_projektu: n(el("suppNazev").value) || "Bez názvu",
-      resitel: n(el("suppResitel").value),
+      resitel_id: resitelId,
+      resitel: person ? personLabel(person) : "",
       fakulta: n(el("suppFakulta").value),
+      katedra: n(el("suppKatedra").value),
       castka_podpory: Number(el("suppCastka").value) || 0,
       poznamka: n(el("suppPoznamka").value),
       application_id: existing?.application_id || null,
@@ -564,15 +650,118 @@
     const item = {
       id: uuid(),
       application_id: app.id,
+      projekt_id: app.projekt_id,
       nazev_projektu: app.nazev_projektu,
-      resitel: app.resitel,
+      resitel_id: app.resitel_id,
+      resitel: resitelDisplay(app),
       fakulta: app.fakulta,
+      katedra: app.katedra,
       castka_podpory: app.financni_pozadavek,
       poznamka: `Z přihlášky: ${app.stav || ""}`,
       created_at: new Date().toISOString()
     };
     await saveCompetition({ ...comp, supported: [...(comp.supported || []), item], __existing: true });
     render();
+  }
+
+  function renderPersonsPanel() {
+    const box = el("competitionPersonsList");
+    if (!box) return;
+    if (!persons.length) {
+      box.innerHTML = `<p class="hint">Zatím žádné osoby. Přidejte řešitele do databáze — pak je vyberete u přihlášek.</p>`;
+      return;
+    }
+    const sorted = [...persons].sort((a, b) => personLabel(a).localeCompare(personLabel(b), "cs"));
+    box.innerHTML = `<div class="competitionTableWrap"><table class="competitionTable">
+      <thead><tr><th>ID</th><th>Jméno</th><th>E-mail</th><th>Fakulta</th><th>Katedra</th><th></th></tr></thead>
+      <tbody>${sorted.map(p => `<tr>
+        <td><code class="projektId">${html(p.osobni_cislo) || "—"}</code></td>
+        <td><strong>${html(personLabel(p))}</strong></td>
+        <td>${html(p.email)}</td>
+        <td>${html(p.fakulta)}</td>
+        <td>${html(p.katedra)}</td>
+        <td class="rowActions">
+          <button type="button" class="button small secondary" data-edit-person="${html(p.id)}">Upravit</button>
+          <button type="button" class="button small secondary" data-del-person="${html(p.id)}">×</button>
+        </td>
+      </tr>`).join("")}</tbody></table></div>`;
+    box.querySelectorAll("[data-edit-person]").forEach(btn => btn.addEventListener("click", () => openPersonDialog(btn.dataset.editPerson)));
+    box.querySelectorAll("[data-del-person]").forEach(btn => btn.addEventListener("click", () => deletePerson(btn.dataset.delPerson)));
+  }
+
+  function openPersonDialog(personId) {
+    const existing = personId ? getPerson(personId) : null;
+    el("personEditId").value = existing?.id || "";
+    el("personCislo").value = existing?.osobni_cislo || "";
+    el("personTitulPred").value = existing?.titul_pred || "";
+    el("personJmeno").value = existing?.jmeno || "";
+    el("personPrijmeni").value = existing?.prijmeni || "";
+    el("personTitulZa").value = existing?.titul_za || "";
+    el("personEmail").value = existing?.email || "";
+    el("personTelefon").value = existing?.telefon || "";
+    el("personFakulta").value = existing?.fakulta || "";
+    el("personKatedra").value = existing?.katedra || "";
+    el("personPoznamka").value = existing?.poznamka || "";
+    el("personDialogTitle").textContent = existing ? "Upravit osobu" : "Nová osoba";
+    el("personDialog").showModal();
+  }
+
+  async function savePersonDialog(e) {
+    e.preventDefault();
+    const id = el("personEditId").value || uuid();
+    const existing = getPerson(id);
+    const person = {
+      id,
+      osobni_cislo: n(el("personCislo").value),
+      titul_pred: n(el("personTitulPred").value),
+      jmeno: n(el("personJmeno").value),
+      prijmeni: n(el("personPrijmeni").value),
+      titul_za: n(el("personTitulZa").value),
+      email: n(el("personEmail").value),
+      telefon: n(el("personTelefon").value),
+      fakulta: n(el("personFakulta").value),
+      katedra: n(el("personKatedra").value),
+      poznamka: n(el("personPoznamka").value),
+      created_at: existing?.created_at || new Date().toISOString(),
+      __existing: !!existing
+    };
+    if (!person.jmeno || !person.prijmeni) {
+      alert("Vyplňte jméno a příjmení.");
+      return;
+    }
+    try {
+      if (useSupabase && window.kbSupabaseCompetitions?.savePerson) {
+        const saved = await window.kbSupabaseCompetitions.savePerson(person);
+        const idx = persons.findIndex(p => p.id === saved.id);
+        if (idx === -1) persons.push(saved);
+        else persons[idx] = saved;
+      } else {
+        const idx = persons.findIndex(p => p.id === id);
+        if (idx === -1) persons.push(person);
+        else persons[idx] = person;
+        persistLocalPersons();
+      }
+      el("personDialog").close();
+      renderPersonsPanel();
+      render();
+    } catch (err) {
+      alert("Uložení osoby selhalo: " + (err.message || err));
+    }
+  }
+
+  async function deletePerson(id) {
+    if (!confirm("Smazat osobu z databáze? (Přihlášky si ponechají text řešitele.)")) return;
+    try {
+      if (useSupabase && window.kbSupabaseCompetitions?.deletePerson) {
+        await window.kbSupabaseCompetitions.deletePerson(id);
+      }
+      persons = persons.filter(p => p.id !== id);
+      if (!useSupabase) persistLocalPersons();
+      renderPersonsPanel();
+      render();
+    } catch (err) {
+      alert("Smazání selhalo: " + (err.message || err));
+    }
   }
 
   function injectPage() {
@@ -593,6 +782,16 @@
         <p id="competitionsStatus" class="competitionsStatus hint">Načítám…</p>
         <div id="competitionProgramTabs" class="competitionProgramTabs"></div>
       </section>
+      <section class="panel competitionPersonsPanel">
+        <div class="sectionHeader">
+          <div>
+            <h3>Databáze osob</h3>
+            <p class="hint">Řešitelé projektů — jméno, fakulta, katedra. Vyberete je u přihlášek.</p>
+          </div>
+          <button type="button" id="newPersonBtn" class="button small accent">+ Osoba</button>
+        </div>
+        <div id="competitionPersonsList"></div>
+      </section>
       <div class="competitionLayout">
         <section class="panel competitionListPanel">
           <h3>Běhy / výzvy</h3>
@@ -605,6 +804,8 @@
     `;
     el("competitionsReloadBtn").addEventListener("click", loadCompetitions);
     el("newCompetitionBtn").addEventListener("click", () => openCompetitionDialog());
+    el("newPersonBtn").addEventListener("click", () => openPersonDialog());
+    renderPersonsPanel();
   }
 
   function injectDialogs() {
@@ -646,18 +847,45 @@
           </div>
         </form>
       </dialog>
+      <dialog id="personDialog">
+        <form method="dialog">
+          <div class="dialogHeader"><h2 id="personDialogTitle">Nová osoba</h2><button class="iconButton" value="cancel">×</button></div>
+          <input type="hidden" id="personEditId" />
+          <div class="grid2">
+            <label>ID / osobní číslo<input id="personCislo" placeholder="např. OV-001" /></label>
+            <label>Titul před<input id="personTitulPred" placeholder="doc., prof." /></label>
+            <label>Jméno<input id="personJmeno" required /></label>
+            <label>Příjmení<input id="personPrijmeni" required /></label>
+            <label>Titul za<input id="personTitulZa" placeholder="Ph.D., CSc." /></label>
+            <label>E-mail<input id="personEmail" type="email" /></label>
+            <label>Telefon<input id="personTelefon" /></label>
+            <label>Fakulta<input id="personFakulta" /></label>
+            <label>Katedra<input id="personKatedra" /></label>
+          </div>
+          <label>Poznámka<textarea id="personPoznamka" rows="2"></textarea></label>
+          <div class="dialogActions">
+            <button value="cancel" class="button secondary">Zavřít</button>
+            <button id="savePersonBtn" type="button" class="button accent">Uložit</button>
+          </div>
+        </form>
+      </dialog>
       <dialog id="applicationDialog">
         <form method="dialog">
           <div class="dialogHeader"><h2>Přihláška projektu</h2><button class="iconButton" value="cancel">×</button></div>
           <input type="hidden" id="appEditId" /><input type="hidden" id="appCompId" />
-          <label>Název projektu<input id="appNazev" required /></label>
           <div class="grid2">
-            <label>Řešitel<input id="appResitel" /></label>
-            <label>Fakulta / součást<input id="appFakulta" /></label>
+            <label>ID projektu<input id="appProjektId" placeholder="CONNECT-2025-001" required /></label>
+            <label>Název projektu<input id="appNazev" required /></label>
+          </div>
+          <label>Řešitel (z databáze osob)<select id="appResitelId"></select></label>
+          <div class="grid2">
+            <label>Fakulta<input id="appFakulta" /></label>
+            <label>Katedra<input id="appKatedra" /></label>
             <label>Finanční požadavek (Kč)<input id="appCastka" type="number" min="0" step="1000" /></label>
             <label>Stav<select id="appStav"><option>Přihláška</option><option>Hodnoceno</option><option>Podpořeno</option><option>Zamítnuto</option></select></label>
           </div>
-          <label>Hodnocení (proděkan)<textarea id="appHodnoceni" rows="2"></textarea></label>
+          <label>Hodnocení proděkana<textarea id="appHodnoceni" rows="2" placeholder="Krátké hodnocení proděkana…"></textarea></label>
+          <label>Hodnocení komise<textarea id="appHodnoceniKomise" rows="8" placeholder="Delší text hodnocení komise…"></textarea></label>
           <label>Poznámka<textarea id="appPoznamka" rows="2"></textarea></label>
           <div class="dialogActions">
             <button value="cancel" class="button secondary">Zavřít</button>
@@ -669,10 +897,14 @@
         <form method="dialog">
           <div class="dialogHeader"><h2>Podpořený projekt</h2><button class="iconButton" value="cancel">×</button></div>
           <input type="hidden" id="suppEditId" /><input type="hidden" id="suppCompId" />
-          <label>Název projektu<input id="suppNazev" required /></label>
           <div class="grid2">
-            <label>Řešitel<input id="suppResitel" /></label>
+            <label>ID projektu<input id="suppProjektId" /></label>
+            <label>Název projektu<input id="suppNazev" required /></label>
+          </div>
+          <label>Řešitel<select id="suppResitelId"></select></label>
+          <div class="grid2">
             <label>Fakulta<input id="suppFakulta" /></label>
+            <label>Katedra<input id="suppKatedra" /></label>
             <label>Částka podpory (Kč)<input id="suppCastka" type="number" min="0" step="1000" /></label>
           </div>
           <label>Poznámka<textarea id="suppPoznamka" rows="2"></textarea></label>
@@ -708,7 +940,10 @@
       el("compVyvzaFile").value = "";
       updatePdfFieldPreview("vyvza", "", "");
     });
+    el("appResitelId")?.addEventListener("change", (e) => fillResitelFromPerson(e.target));
+    el("suppResitelId")?.addEventListener("change", (e) => fillSuppResitelFromPerson(e.target));
     el("saveCompBtn").addEventListener("click", saveCompetitionDialog);
+    el("savePersonBtn").addEventListener("click", savePersonDialog);
     el("saveAppBtn").addEventListener("click", saveApplicationDialog);
     el("saveSuppBtn").addEventListener("click", saveSupportedDialog);
   }
@@ -745,6 +980,10 @@
       .competitionSummary table { max-width: 480px; }
       .competitionsStatus { margin: .35rem 0 .75rem; }
       .competitionsStatusError { color: #b42318; }
+      .projektId { font-size: .82rem; background: #f2f4f7; padding: .1rem .35rem; border-radius: 4px; }
+      .appEvalRow td { background: #f8fafc; font-size: .88rem; }
+      .appKomiseBlock { margin-top: .5rem; }
+      .competitionPersonsPanel { margin-bottom: 1rem; }
       @media (max-width: 900px) {
         .competitionLayout, .competitionDocs, .competitionMetrics { grid-template-columns: 1fr; }
       }
@@ -756,6 +995,7 @@
     renderProgramTabs();
     renderCompetitionList();
     renderCompetitionDetail();
+    renderPersonsPanel();
   }
 
   function init() {
@@ -768,7 +1008,7 @@
     });
   }
 
-  window.kbCompetitions = { PROGRAMS, loadCompetitions, getCompetitions: () => competitions };
+  window.kbCompetitions = { PROGRAMS, loadCompetitions, getCompetitions: () => competitions, getPersons: () => persons };
 
   document.addEventListener("DOMContentLoaded", init);
 })();

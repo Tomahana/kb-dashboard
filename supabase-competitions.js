@@ -2,6 +2,7 @@
 
 (function () {
   const STORAGE_KEY = "kb-dashboard-competitions-v1";
+  const PERSONS_KEY = "kb-dashboard-competition-persons-v1";
   const PDF_BUCKET = "kb-competition-docs";
   const PDF_MAX_BYTES = 15 * 1024 * 1024;
   let client = null;
@@ -15,6 +16,61 @@
     if (!window.KB_SUPABASE?.url || !window.KB_SUPABASE?.anonKey) throw new Error("Chybí supabase-config.js.");
     client = window.supabase.createClient(window.KB_SUPABASE.url, window.KB_SUPABASE.anonKey);
     return client;
+  }
+
+  function mapPerson(row) {
+    return {
+      id: row.id,
+      osobni_cislo: row.osobni_cislo || "",
+      titul_pred: row.titul_pred || "",
+      jmeno: row.jmeno || "",
+      prijmeni: row.prijmeni || "",
+      titul_za: row.titul_za || "",
+      email: row.email || "",
+      telefon: row.telefon || "",
+      fakulta: row.fakulta || "",
+      katedra: row.katedra || "",
+      poznamka: row.poznamka || "",
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      __source: "supabase"
+    };
+  }
+
+  function mapApplication(row) {
+    return {
+      id: row.id,
+      competition_id: row.competition_id,
+      projekt_id: row.projekt_id || "",
+      nazev_projektu: row.nazev_projektu,
+      resitel_id: row.resitel_id || null,
+      resitel: row.resitel || "",
+      fakulta: row.fakulta || "",
+      katedra: row.katedra || "",
+      financni_pozadavek: Number(row.financni_pozadavek) || 0,
+      hodnoceni: row.hodnoceni || "",
+      hodnoceni_komise: row.hodnoceni_komise || "",
+      stav: row.stav || "Přihláška",
+      poznamka: row.poznamka || "",
+      created_at: row.created_at
+    };
+  }
+
+  function mapSupported(row) {
+    return {
+      id: row.id,
+      competition_id: row.competition_id,
+      application_id: row.application_id || null,
+      projekt_id: row.projekt_id || "",
+      nazev_projektu: row.nazev_projektu,
+      resitel_id: row.resitel_id || null,
+      resitel: row.resitel || "",
+      fakulta: row.fakulta || "",
+      katedra: row.katedra || "",
+      castka_podpory: Number(row.castka_podpory) || 0,
+      poznamka: row.poznamka || "",
+      created_at: row.created_at
+    };
   }
 
   function mapCompetition(row, applications, supported) {
@@ -54,6 +110,39 @@
     return tablesAvailable;
   }
 
+  async function loadPersons() {
+    const supa = getClient();
+    const { data, error } = await supa.from("kb_competition_persons").select("*").order("prijmeni").order("jmeno");
+    if (error) throw error;
+    return (data || []).map(mapPerson);
+  }
+
+  async function savePerson(person) {
+    const payload = {
+      id: person.id,
+      osobni_cislo: person.osobni_cislo || null,
+      titul_pred: person.titul_pred || null,
+      jmeno: person.jmeno,
+      prijmeni: person.prijmeni,
+      titul_za: person.titul_za || null,
+      email: person.email || null,
+      telefon: person.telefon || null,
+      fakulta: person.fakulta || null,
+      katedra: person.katedra || null,
+      poznamka: person.poznamka || null,
+      updated_at: new Date().toISOString()
+    };
+    if (!person.__existing) payload.created_at = person.created_at || new Date().toISOString();
+    const { data, error } = await getClient().from("kb_competition_persons").upsert(payload, { onConflict: "id" }).select("*").single();
+    if (error) throw error;
+    return mapPerson(data);
+  }
+
+  async function deletePerson(id) {
+    const { error } = await getClient().from("kb_competition_persons").delete().eq("id", id);
+    if (error) throw error;
+  }
+
   async function loadAll() {
     const supa = getClient();
     const { data: comps, error: cErr } = await supa.from("kb_competitions").select("*").order("rok", { ascending: false });
@@ -63,9 +152,9 @@
     const { data: supp, error: sErr } = await supa.from("kb_competition_supported").select("*");
     if (sErr) throw sErr;
     const appsBy = {};
-    (apps || []).forEach(a => { appsBy[a.competition_id] ||= []; appsBy[a.competition_id].push(a); });
+    (apps || []).forEach(a => { appsBy[a.competition_id] ||= []; appsBy[a.competition_id].push(mapApplication(a)); });
     const suppBy = {};
-    (supp || []).forEach(s => { suppBy[s.competition_id] ||= []; suppBy[s.competition_id].push(s); });
+    (supp || []).forEach(s => { suppBy[s.competition_id] ||= []; suppBy[s.competition_id].push(mapSupported(s)); });
     return (comps || []).map(c => mapCompetition(c, appsBy[c.id], suppBy[c.id]));
   }
 
@@ -173,11 +262,15 @@
       const row = {
         id: item.id,
         competition_id: compId,
+        projekt_id: item.projekt_id || null,
         nazev_projektu: item.nazev_projektu,
+        resitel_id: item.resitel_id || null,
         resitel: item.resitel || null,
         fakulta: item.fakulta || null,
+        katedra: item.katedra || null,
         financni_pozadavek: item.financni_pozadavek || 0,
         hodnoceni: item.hodnoceni || null,
+        hodnoceni_komise: item.hodnoceni_komise || null,
         stav: item.stav || "Přihláška",
         poznamka: item.poznamka || null
       };
@@ -198,9 +291,12 @@
         id: item.id,
         competition_id: compId,
         application_id: item.application_id || null,
+        projekt_id: item.projekt_id || null,
         nazev_projektu: item.nazev_projektu,
+        resitel_id: item.resitel_id || null,
         resitel: item.resitel || null,
         fakulta: item.fakulta || null,
+        katedra: item.katedra || null,
         castka_podpory: item.castka_podpory || 0,
         poznamka: item.poznamka || null
       };
@@ -222,10 +318,26 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items, null, 2));
   }
 
+  function loadLocalPersons() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PERSONS_KEY) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveLocalPersons(items) {
+    localStorage.setItem(PERSONS_KEY, JSON.stringify(items, null, 2));
+  }
+
   window.kbSupabaseCompetitions = {
     probeTables,
     probeStorage,
     loadAll,
+    loadPersons,
+    savePerson,
+    deletePerson,
     saveCompetition,
     deleteCompetition,
     uploadPdf,
@@ -233,6 +345,8 @@
     deleteCompetitionDocs,
     resolvePdfUrl,
     loadLocal,
-    saveLocal
+    saveLocal,
+    loadLocalPersons,
+    saveLocalPersons
   };
 })();
