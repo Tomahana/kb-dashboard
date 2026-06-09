@@ -6,6 +6,12 @@
   let client = null;
   let tablesAvailable = null;
 
+  const PERSON_FIELDS = [
+    "prijmeni", "jmeno", "tituly", "osobni_cislo", "stav_osoby", "pracoviste",
+    "rodne_cislo", "email", "telefon", "datum_narozeni", "obcanstvi", "pohlavi",
+    "orcid", "researcher_id", "scopus_id"
+  ];
+
   function getClient() {
     if (window.kbAuth?.getClient) return window.kbAuth.getClient();
     if (client) return client;
@@ -15,24 +21,41 @@
     return client;
   }
 
-  function mapPerson(row) {
+  function n(s) {
+    return (s || "").toString().trim();
+  }
+
+  function normalizePerson(person) {
+    const tituly = n(person.tituly) || [person.titul_pred, person.titul_za].map(n).filter(Boolean).join(", ");
+    const pracoviste = n(person.pracoviste) || [person.fakulta, person.katedra, person.soucast].map(n).filter(Boolean).join(" · ");
     return {
-      id: row.id,
-      osobni_cislo: row.osobni_cislo || "",
-      titul_pred: row.titul_pred || "",
-      jmeno: row.jmeno || "",
-      prijmeni: row.prijmeni || "",
-      titul_za: row.titul_za || "",
-      email: row.email || "",
-      telefon: row.telefon || "",
-      fakulta: row.fakulta || "",
-      katedra: row.katedra || "",
-      soucast: row.soucast || "",
-      poznamka: row.poznamka || "",
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      __source: "supabase"
+      id: person.id,
+      prijmeni: n(person.prijmeni),
+      jmeno: n(person.jmeno),
+      tituly,
+      osobni_cislo: n(person.osobni_cislo),
+      stav_osoby: n(person.stav_osoby),
+      pracoviste,
+      rodne_cislo: n(person.rodne_cislo),
+      email: n(person.email),
+      telefon: n(person.telefon),
+      datum_narozeni: person.datum_narozeni || null,
+      obcanstvi: n(person.obcanstvi),
+      pohlavi: n(person.pohlavi),
+      orcid: n(person.orcid),
+      researcher_id: n(person.researcher_id),
+      scopus_id: n(person.scopus_id),
+      created_at: person.created_at,
+      updated_at: person.updated_at,
+      __source: person.__source
     };
+  }
+
+  function mapPerson(row) {
+    return normalizePerson({
+      ...row,
+      __source: "supabase"
+    });
   }
 
   async function probeTables() {
@@ -58,21 +81,16 @@
   }
 
   async function savePerson(person) {
+    const normalized = normalizePerson(person);
     const payload = {
-      id: person.id,
-      osobni_cislo: person.osobni_cislo || null,
-      titul_pred: person.titul_pred || null,
-      jmeno: person.jmeno,
-      prijmeni: person.prijmeni,
-      titul_za: person.titul_za || null,
-      email: person.email || null,
-      telefon: person.telefon || null,
-      fakulta: person.fakulta || null,
-      katedra: person.katedra || null,
-      soucast: person.soucast || null,
-      poznamka: person.poznamka || null,
+      id: normalized.id,
       updated_at: new Date().toISOString()
     };
+    const required = new Set(["prijmeni", "jmeno", "osobni_cislo"]);
+    for (const field of PERSON_FIELDS) {
+      const value = normalized[field];
+      payload[field] = required.has(field) ? value : (value || null);
+    }
     if (!person.__existing) payload.created_at = person.created_at || new Date().toISOString();
     const { data, error } = await getClient()
       .from("kb_persons")
@@ -92,7 +110,7 @@
     migrateLegacyLocal();
     try {
       const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.map(normalizePerson) : [];
     } catch (_) {
       return [];
     }
@@ -121,6 +139,7 @@
     deletePerson,
     loadLocal,
     saveLocal,
-    migrateLegacyLocal
+    migrateLegacyLocal,
+    normalizePerson
   };
 })();
