@@ -170,6 +170,14 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(competitions, null, 2));
   }
 
+  function formatSaveError(err) {
+    const msg = (err?.message || err || "").toString();
+    if (/schema cache|could not find the .* column/i.test(msg)) {
+      return `${msg}\n\nV Supabase chybí nové sloupce tabulky kb_competitions.\nSpusťte v SQL Editoru soubor:\nsupabase/competitions-migrate-v3.sql\n\nPoté obnovte stránku (Ctrl+F5) a zkuste uložit znovu.`;
+    }
+    return msg;
+  }
+
   function setStatus(text, isError) {
     const node = el("competitionsStatus");
     if (!node) return;
@@ -281,7 +289,7 @@
       setStatus("Šablona UHK ReGa 2026 načtena včetně PDF pokynu a výzvy. Nyní doplňte projekty.");
     } catch (err) {
       console.error(err);
-      alert("Import ReGa selhal: " + (err.message || err));
+      alert("Import ReGa selhal: " + formatSaveError(err));
       setStatus("Import ReGa selhal.", true);
     } finally {
       loading = false;
@@ -572,7 +580,7 @@
       setStatus("Běh soutěže uložen.");
       render();
     } catch (err) {
-      alert("Uložení selhalo: " + (err.message || err));
+      alert("Uložení selhalo: " + formatSaveError(err));
     }
   }
 
