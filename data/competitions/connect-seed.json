@@ -19,9 +19,9 @@
       "nazev": "UHK Connect 2026 – 2. kolo",
       "rok": 2026,
       "beh_cislo": 2,
-      "alokovana_castka": 800000,
+      "alokovana_castka": 0,
       "stav": "Hodnocení",
-      "poznamka": "2. kolo interní soutěže UHK Connect 2026.\n\nCeloroční alokace programu Connect 2026: 800 000 Kč (společná pro 1. a 2. kolo).\n\nKontakt: Ing. Veronika Hrůzová — veronika.hruzova@uhk.cz, +420 777 147 670"
+      "poznamka": "2. kolo interní soutěže UHK Connect 2026.\n\nAlokace běhu = zbývá z celoroční alokace po 1. kole (počítáno automaticky z běhu 1).\n\nKontakt: Ing. Veronika Hrůzová — veronika.hruzova@uhk.cz, +420 777 147 670"
     }
   ]
 }
