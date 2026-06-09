@@ -3,6 +3,24 @@
 
 (function () {
   const STORAGE_KEY = "kb-dashboard-persons-v1";
+  const IMPORT_ALIASES = {
+    prijmeni: ["Příjmení", "prijmeni", "Prijmeni"],
+    jmeno: ["Jméno", "jmeno", "Jmeno"],
+    tituly: ["Tituly", "tituly"],
+    osobni_cislo: ["Osobní číslo", "osobni_cislo", "Osobni cislo", "ID"],
+    stav_osoby: ["Stav osoby", "stav_osoby"],
+    pracoviste: ["Pracoviště", "pracoviste", "Pracoviste"],
+    rodne_cislo: ["Rodné číslo", "rodne_cislo", "Rodne cislo"],
+    email: ["E-mail", "email", "Email"],
+    telefon: ["Telefon", "telefon"],
+    datum_narozeni: ["Datum narození", "Datum narozeni", "datum_narozeni"],
+    obcanstvi: ["Občanství/Státní příslušnost", "Občanství", "obcanstvi", "Státní příslušnost"],
+    pohlavi: ["Pohlaví", "pohlavi"],
+    orcid: ["ORCID", "orcid"],
+    researcher_id: ["Researcher ID", "researcher_id"],
+    scopus_id: ["Scopus ID", "scopus_id"]
+  };
+
   const TABLE_COLUMNS = [
     { key: "prijmeni", label: "Příjmení" },
     { key: "jmeno", label: "Jméno" },
@@ -280,6 +298,240 @@
     return record;
   }
 
+  function normalizeHeaderKey(s) {
+    return n(s).replace(/^\uFEFF/, "").replace(/^"|"$/g, "").replace(/\s+/g, " ").toLowerCase();
+  }
+
+  function getFieldFromRow(row, field) {
+    const aliases = IMPORT_ALIASES[field] || [field];
+    for (const key of aliases) {
+      if (row[key] != null && n(row[key])) return n(row[key]);
+    }
+    const byNorm = {};
+    Object.entries(row).forEach(([k, v]) => { byNorm[normalizeHeaderKey(k)] = v; });
+    for (const key of aliases) {
+      const nk = normalizeHeaderKey(key);
+      if (byNorm[nk] != null && n(byNorm[nk])) return n(byNorm[nk]);
+    }
+    for (const [hdr, val] of Object.entries(byNorm)) {
+      if (!n(val)) continue;
+      for (const key of aliases) {
+        const nk = normalizeHeaderKey(key);
+        if (hdr === nk || hdr.includes(nk) || nk.includes(hdr)) return n(val);
+      }
+    }
+    return "";
+  }
+
+  function parseImportDate(value) {
+    const v = n(value).replace(/^"|"$/g, "");
+    if (!v || v === "-" || v === "—") return "";
+    if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+    const cz = v.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})/);
+    if (cz) return `${cz[3]}-${cz[2].padStart(2, "0")}-${cz[1].padStart(2, "0")}`;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  }
+
+  function parseCsvRecords(text, delimiter) {
+    const records = [];
+    let row = [];
+    let field = "";
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { field += '"'; i += 1; }
+          else inQuotes = false;
+        } else field += ch;
+      } else if (ch === '"') inQuotes = true;
+      else if (ch === delimiter) { row.push(field); field = ""; }
+      else if (ch === "\n") {
+        row.push(field); field = "";
+        if (row.some(cell => n(cell))) records.push(row);
+        row = [];
+      } else if (ch === "\r") {
+        if (text[i + 1] === "\n") i += 1;
+        row.push(field); field = "";
+        if (row.some(cell => n(cell))) records.push(row);
+        row = [];
+      } else field += ch;
+    }
+    row.push(field);
+    if (row.some(cell => n(cell))) records.push(row);
+    return records;
+  }
+
+  function detectDelimiter(sampleLine) {
+    const line = sampleLine.replace(/^\uFEFF/, "");
+    const counts = [["\t", (line.match(/\t/g) || []).length], [";", (line.match(/;/g) || []).length], [",", (line.match(/,/g) || []).length]];
+    counts.sort((a, b) => b[1] - a[1]);
+    return counts[0][1] > 0 ? counts[0][0] : ";";
+  }
+
+  function headerRowScore(cells) {
+    const joined = cells.map(normalizeHeaderKey).join(" ");
+    const markers = ["prijmen", "jmeno", "osobni", "titul", "pracovi", "rodne"];
+    return markers.reduce((score, m) => score + (joined.includes(m) ? 1 : 0), 0);
+  }
+
+  function findHeaderRowIndex(records) {
+    let bestIdx = 0;
+    let bestScore = -1;
+    records.slice(0, 8).forEach((row, idx) => {
+      const score = headerRowScore(row);
+      if (score > bestScore) { bestScore = score; bestIdx = idx; }
+    });
+    return bestScore >= 2 ? bestIdx : 0;
+  }
+
+  function parseDelimitedTable(text) {
+    const clean = text.replace(/^\uFEFF/, "").trim();
+    if (!clean) return { rows: [], meta: { headers: [], delimiter: ";", headerRow: 0 } };
+    const firstLine = clean.split(/\r?\n/).find(line => n(line)) || clean;
+    const delimiter = detectDelimiter(firstLine);
+    const records = parseCsvRecords(clean, delimiter);
+    if (!records.length) return { rows: [], meta: { headers: [], delimiter, headerRow: 0 } };
+    const headerIdx = findHeaderRowIndex(records);
+    const headers = records[headerIdx].map(h => n(h).replace(/^\uFEFF/, "").replace(/^"|"$/g, ""));
+    const rows = records.slice(headerIdx + 1).map(cols => {
+      const row = {};
+      headers.forEach((header, i) => {
+        if (header) row[header] = (cols[i] ?? "").replace(/^"|"$/g, "").trim();
+      });
+      return row;
+    }).filter(row => Object.values(row).some(v => n(v)));
+    return { rows, meta: { headers, delimiter, headerRow: headerIdx + 1 } };
+  }
+
+  async function readImportFileText(file) {
+    const buffer = await file.arrayBuffer();
+    const encodings = ["utf-8", "windows-1250", "iso-8859-2"];
+    let bestText = "";
+    let bestScore = -1;
+    for (const encoding of encodings) {
+      try {
+        const text = new TextDecoder(encoding).decode(buffer);
+        const bad = (text.match(/\uFFFD/g) || []).length;
+        const czech = (text.match(/[ěščřžýáíéúůďťň]/gi) || []).length;
+        const score = czech * 3 - bad * 10;
+        if (score > bestScore) { bestScore = score; bestText = text; }
+      } catch (_) {}
+    }
+    return (bestText || new TextDecoder("utf-8").decode(buffer)).replace(/^\uFEFF/, "");
+  }
+
+  function normalizeImportRow(row) {
+    const item = {
+      prijmeni: getFieldFromRow(row, "prijmeni"),
+      jmeno: getFieldFromRow(row, "jmeno"),
+      tituly: getFieldFromRow(row, "tituly"),
+      osobni_cislo: getFieldFromRow(row, "osobni_cislo"),
+      stav_osoby: getFieldFromRow(row, "stav_osoby"),
+      pracoviste: getFieldFromRow(row, "pracoviste"),
+      rodne_cislo: getFieldFromRow(row, "rodne_cislo"),
+      email: getFieldFromRow(row, "email"),
+      telefon: getFieldFromRow(row, "telefon"),
+      datum_narozeni: parseImportDate(getFieldFromRow(row, "datum_narozeni")),
+      obcanstvi: getFieldFromRow(row, "obcanstvi"),
+      pohlavi: getFieldFromRow(row, "pohlavi"),
+      orcid: getFieldFromRow(row, "orcid"),
+      researcher_id: getFieldFromRow(row, "researcher_id"),
+      scopus_id: getFieldFromRow(row, "scopus_id")
+    };
+    if (!item.prijmeni && !item.jmeno && !item.osobni_cislo) return null;
+    return normalizePerson(item);
+  }
+
+  function parseImportRows(text, fileName) {
+    const lower = (fileName || "").toLowerCase();
+    if (lower.endsWith(".json")) {
+      const parsed = JSON.parse(text);
+      const rows = Array.isArray(parsed) ? parsed : (parsed.persons || []);
+      return { rows, meta: { format: "json" } };
+    }
+    const parsed = parseDelimitedTable(text);
+    return { rows: parsed.rows, meta: { format: "csv", ...parsed.meta } };
+  }
+
+  async function ensureAuth() {
+    if (!window.kbAuth?.requireAuth?.()) return true;
+    const session = await window.kbAuth.getSession();
+    if (session) return true;
+    setStatus("Pro import do Supabase se nejdříve přihlaste v Nastavení.", true);
+    return false;
+  }
+
+  async function importRows(rows, meta = {}) {
+    const normalized = rows.map(normalizeImportRow).filter(Boolean);
+    const valid = normalized.filter(p => p.osobni_cislo && p.prijmeni && p.jmeno);
+    const skipped = rows.length - normalized.length;
+    const incomplete = normalized.length - valid.length;
+    if (!valid.length) {
+      const headers = meta.headers?.slice(0, 6).join(", ") || "neznámé";
+      alert(
+        `V souboru nejsou platné řádky (chybí příjmení, jméno nebo osobní číslo).\n` +
+        `Rozpoznaná záhlaví: ${headers}\n` +
+        `Oddělovač: ${meta.delimiter || "?"}\n\n` +
+        `Tip: Uložte z Excelu jako CSV UTF-8 (oddělovač středník) s českými hlavičkami.`
+      );
+      return;
+    }
+    if (!confirm(`Importovat ${valid.length} osob?${incomplete ? `\n(${incomplete} řádků přeskočeno – chybí povinné údaje)` : ""}\n\nExistující záznamy se aktualizují podle osobního čísla.`)) return;
+    loading = true;
+    setStatus(`Importuji 0 / ${valid.length}…`);
+    renderList();
+    try {
+      if (useSupabase && window.kbSupabasePersons && await ensureAuth()) {
+        const saved = await window.kbSupabasePersons.upsertPersonsBatch(valid, (done, total) => {
+          setStatus(`Importuji ${done} / ${total}…`);
+        });
+        saved.forEach(p => {
+          const idx = persons.findIndex(x => x.osobni_cislo === p.osobni_cislo);
+          if (idx === -1) persons.push(p);
+          else persons[idx] = p;
+        });
+        setStatus(`Importováno do Supabase: ${saved.length} osob.${skipped ? ` Přeskočeno ${skipped} prázdných řádků.` : ""}`);
+      } else {
+        valid.forEach(p => {
+          const idx = persons.findIndex(x => x.osobni_cislo === p.osobni_cislo);
+          if (idx === -1) persons.push({ ...p, id: uuid(), created_at: new Date().toISOString() });
+          else persons[idx] = { ...persons[idx], ...p };
+        });
+        persistLocal();
+        setStatus(`Importováno lokálně: ${valid.length} osob.`);
+      }
+      renderList();
+      document.dispatchEvent(new CustomEvent("kb:persons-loaded", { detail: { persons } }));
+    } catch (err) {
+      console.error(err);
+      alert(`Import selhal: ${err.message || err}\n\nAlternativa: použijte supabase/persons-import-staging.sql v SQL Editoru.`);
+      setStatus(`Import selhal: ${err.message || err}`, true);
+    } finally {
+      loading = false;
+      renderList();
+    }
+  }
+
+  async function importFile(file) {
+    let text;
+    try {
+      text = await readImportFileText(file);
+    } catch (_) {
+      alert("Soubor se nepodařilo přečíst.");
+      return;
+    }
+    let parsed;
+    try {
+      parsed = parseImportRows(text, file.name);
+    } catch (err) {
+      alert(`Soubor se nepodařilo zpracovat: ${err.message || err}\n\nPodporované formáty: CSV, TSV, JSON.`);
+      return;
+    }
+    await importRows(parsed.rows, parsed.meta);
+  }
+
   async function deletePerson(id) {
     if (!confirm("Smazat osobu? Moduly si ponechají textový název, ale vazba na osobu se zruší.")) return;
     try {
@@ -304,6 +556,8 @@
             <p class="hint">Interní databáze osob UHK (15 sloupců). Osobní číslo je klíčové pro napojení projektů, soutěží a dalších analýz.</p>
           </div>
           <div class="sectionActions">
+            <input id="personsImportFile" type="file" accept=".csv,.tsv,.txt,.json,application/json,text/csv" hidden />
+            <button type="button" id="personsImportBtn" class="button small secondary">Import CSV</button>
             <button type="button" id="personsReloadBtn" class="button small secondary">Načíst ze Supabase</button>
             <button type="button" id="newPersonBtn" class="button accent">+ Osoba</button>
           </div>
@@ -314,6 +568,13 @@
         </label>
         <div id="personsList"></div>
       </section>`;
+    el("personsImportBtn")?.addEventListener("click", () => el("personsImportFile")?.click());
+    el("personsImportFile")?.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      await importFile(file);
+      e.target.value = "";
+    });
     el("personsReloadBtn").addEventListener("click", loadPersons);
     el("newPersonBtn").addEventListener("click", () => openDialog());
     el("personsSearch")?.addEventListener("input", renderList);
@@ -381,6 +642,7 @@
     fillSelect,
     openDialog,
     upsertPerson,
+    importFile,
     deletePerson
   };
 
