@@ -1174,14 +1174,14 @@
     },
     prestige: {
       title: "UHK Prestige",
-      description: "Podpora přípravy návrhů do ERC, Horizon Europe a dalších prestižních programů. Jeden běh výzvy 1/2026 — tabulka podaných projektů s hodnocením K1–K7.",
+      description: "Podpora přípravy návrhů do ERC, Horizon Europe a dalších prestižních programů. Jeden běh výzvy 1/2026 — tabulka 11 podaných projektů s hodnocením K1–K7. Pro přesná data (včetně rozhodnutí podpořit/nepodpořit) použijte Import z CSV.",
       sourceUrl: "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/soutez-uhk-prestige",
       sourceNote: "pokyn prorektorky č. 11/2026, výzva č. 1/2026",
       rok: 2026,
       beh: 1,
       seedBtn: { id: "importPrestigeSeedBtn", labelNew: "1. Načíst šablonu Prestige", labelUpdate: "Aktualizovat šablonu Prestige" },
-      projectsBtn: { id: "importPrestigeProjectsBtn", label: "2. Importovat podané projekty (11)" },
-      csvBtn: { id: "importPrestigeCsvBtn", inputId: "importPrestigeCsvInput", label: "Import z CSV (Excel)" },
+      projectsBtn: { id: "importPrestigeProjectsBtn", label: "2. Načíst šablonu projektů (11)" },
+      csvBtn: { id: "importPrestigeCsvBtn", inputId: "importPrestigeCsvInput", label: "Import z CSV (Excel) — doporučeno" },
       onSeed: importPrestigeSeed,
       onProjects: importPrestigeProjects,
       onCsv: importPrestigeFromCsv

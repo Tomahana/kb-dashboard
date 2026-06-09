@@ -3,20 +3,75 @@
   "competition_updates": {
     "stav": "Rozhodnuto",
     "hodnoceni_prodekanu": "Hodnocení proděkanů fakult a komise dle kritérií K1–K7 — viz tabulka přihlášek.",
-    "rozhodnuti_prorektorky": "Podpořeno 8 projektů dle pořadí a průměrného skóre komise (výzva č. 1/2026). Seznam na webu UHK Prestige."
+    "rozhodnuti_prorektorky": "Rozhodnutí dle tabulky hodnocení — použijte Import z CSV (Excel) pro přesná data včetně podpořených projektů."
   },
   "persons": [
-    { "key": "kuca", "jmeno": "Kamil", "prijmeni": "Kuča", "tituly": "prof. Ing., Ph.D." },
-    { "key": "nepovimova", "jmeno": "Eugenie", "prijmeni": "Nepovimová", "tituly": "Mgr., Ph.D." },
-    { "key": "musilek", "jmeno": "Kamil", "prijmeni": "Musílek", "tituly": "prof. PharmDr., Ph.D." },
-    { "key": "maresova", "jmeno": "Petra", "prijmeni": "Marešová", "tituly": "prof. Ing. Mgr., Ph.D., MBA" },
-    { "key": "krejcar", "jmeno": "Ondřej", "prijmeni": "Krejcar", "tituly": "prof. Ing., Ph.D., MPA" },
-    { "key": "horak", "jmeno": "Jakub", "prijmeni": "Horák", "tituly": "doc. Ing., Ph.D." },
-    { "key": "foletti", "jmeno": "Ivan", "prijmeni": "Foletti", "tituly": "prof., Ph.D., M.A." },
-    { "key": "klimova", "jmeno": "Blanka", "prijmeni": "Klímová", "tituly": "prof. PhDr., M.A., Ph.D.", "email": "blanka.klimova@uhk.cz" },
-    { "key": "bubak", "jmeno": "Oldřich", "prijmeni": "Bubák", "tituly": "Dr." },
-    { "key": "bubak2", "jmeno": "Oldřich", "prijmeni": "Bubák", "tituly": "Dr." },
-    { "key": "lamb", "jmeno": "Andrew William", "prijmeni": "Lamb" }
+    {
+      "key": "kuca",
+      "jmeno": "Kamil",
+      "prijmeni": "Kuča",
+      "tituly": "prof. Ing., Ph.D."
+    },
+    {
+      "key": "nepovimova",
+      "jmeno": "Eugenie",
+      "prijmeni": "Nepovimová",
+      "tituly": "Mgr., Ph.D."
+    },
+    {
+      "key": "musilek",
+      "jmeno": "Kamil",
+      "prijmeni": "Musílek",
+      "tituly": "prof. PharmDr., Ph.D."
+    },
+    {
+      "key": "maresova",
+      "jmeno": "Petra",
+      "prijmeni": "Marešová",
+      "tituly": "prof. Ing. Mgr., Ph.D., MBA"
+    },
+    {
+      "key": "krejcar",
+      "jmeno": "Ondřej",
+      "prijmeni": "Krejcar",
+      "tituly": "prof. Ing., Ph.D., MPA"
+    },
+    {
+      "key": "horak",
+      "jmeno": "Jakub",
+      "prijmeni": "Horák",
+      "tituly": "doc. Ing., Ph.D."
+    },
+    {
+      "key": "foletti",
+      "jmeno": "Ivan",
+      "prijmeni": "Foletti",
+      "tituly": "prof., Ph.D., M.A."
+    },
+    {
+      "key": "klimova",
+      "jmeno": "Blanka",
+      "prijmeni": "Klímová",
+      "tituly": "prof. PhDr., M.A., Ph.D.",
+      "email": "blanka.klimova@uhk.cz"
+    },
+    {
+      "key": "bubak",
+      "jmeno": "Oldřich",
+      "prijmeni": "Bubák",
+      "tituly": "Dr."
+    },
+    {
+      "key": "bubak2",
+      "jmeno": "Oldřich",
+      "prijmeni": "Bubák",
+      "tituly": "Dr."
+    },
+    {
+      "key": "lamb",
+      "jmeno": "Andrew William",
+      "prijmeni": "Lamb"
+    }
   ],
   "applications": [
     {
@@ -29,12 +84,20 @@
       "termin_podani": "VI.27",
       "financni_pozadavek": 500000,
       "rozpocet_rok_2": 980600,
-      "kriteria": { "k1": 1, "k2": 1, "k3": 1, "k4": 2, "k5": 1, "k6": 1, "k7": 1 },
+      "kriteria": {
+        "k1": 1,
+        "k2": 1,
+        "k3": 1,
+        "k4": 2,
+        "k5": 1,
+        "k6": 1,
+        "k7": 1
+      },
       "prumer": 1.1428571,
       "poradi": 1,
-      "rozhodnuti": "podpořit",
-      "stav": "Podpořeno",
-      "podporit": true
+      "rozhodnuti": "",
+      "stav": "Podáno",
+      "podporit": false
     },
     {
       "id": "p2600001-0001-4001-8001-000000000002",
@@ -46,12 +109,20 @@
       "termin_podani": "31.10.2027",
       "financni_pozadavek": 450000,
       "rozpocet_rok_2": 850000,
-      "kriteria": { "k1": 2, "k2": 2, "k3": 2, "k4": 2, "k5": 2, "k6": 2, "k7": 2 },
+      "kriteria": {
+        "k1": 2,
+        "k2": 2,
+        "k3": 2,
+        "k4": 2,
+        "k5": 2,
+        "k6": 2,
+        "k7": 2
+      },
       "prumer": 2.0,
       "poradi": 2,
-      "rozhodnuti": "podpořit",
-      "stav": "Podpořeno",
-      "podporit": true
+      "rozhodnuti": "",
+      "stav": "Podáno",
+      "podporit": false
     },
     {
       "id": "p2600001-0001-4001-8001-000000000003",
@@ -63,12 +134,20 @@
       "termin_podani": "2027",
       "financni_pozadavek": 420000,
       "rozpocet_rok_2": 800000,
-      "kriteria": { "k1": 2, "k2": 3, "k3": 2, "k4": 2, "k5": 2, "k6": 2, "k7": 3 },
+      "kriteria": {
+        "k1": 2,
+        "k2": 3,
+        "k3": 2,
+        "k4": 2,
+        "k5": 2,
+        "k6": 2,
+        "k7": 3
+      },
       "prumer": 2.2857143,
       "poradi": 3,
-      "rozhodnuti": "podpořit",
-      "stav": "Podpořeno",
-      "podporit": true
+      "rozhodnuti": "",
+      "stav": "Podáno",
+      "podporit": false
     },
     {
       "id": "p2600001-0001-4001-8001-000000000004",
@@ -80,12 +159,20 @@
       "termin_podani": "31.07.2027",
       "financni_pozadavek": 380000,
       "rozpocet_rok_2": 720000,
-      "kriteria": { "k1": 3, "k2": 2, "k3": 3, "k4": 3, "k5": 2, "k6": 3, "k7": 2 },
+      "kriteria": {
+        "k1": 3,
+        "k2": 2,
+        "k3": 3,
+        "k4": 3,
+        "k5": 2,
+        "k6": 3,
+        "k7": 2
+      },
       "prumer": 2.5714286,
       "poradi": 4,
-      "rozhodnuti": "podpořit",
-      "stav": "Podpořeno",
-      "podporit": true
+      "rozhodnuti": "",
+      "stav": "Podáno",
+      "podporit": false
     },
     {
       "id": "p2600001-0001-4001-8001-000000000005",
@@ -97,12 +184,20 @@
       "termin_podani": "2027",
       "financni_pozadavek": 350000,
       "rozpocet_rok_2": 650000,
-      "kriteria": { "k1": 3, "k2": 3, "k3": 3, "k4": 3, "k5": 3, "k6": 3, "k7": 3 },
+      "kriteria": {
+        "k1": 3,
+        "k2": 3,
+        "k3": 3,
+        "k4": 3,
+        "k5": 3,
+        "k6": 3,
+        "k7": 3
+      },
       "prumer": 3.0,
       "poradi": 5,
-      "rozhodnuti": "podpořit",
-      "stav": "Podpořeno",
-      "podporit": true
+      "rozhodnuti": "",
+      "stav": "Podáno",
+      "podporit": false
     },
     {
       "id": "p2600001-0001-4001-8001-000000000006",
@@ -114,12 +209,20 @@
       "termin_podani": "2027",
       "financni_pozadavek": 340000,
       "rozpocet_rok_2": 620000,
-      "kriteria": { "k1": 3, "k2": 3, "k3": 4, "k4": 3, "k5": 3, "k6": 3, "k7": 3 },
+      "kriteria": {
+        "k1": 3,
+        "k2": 3,
+        "k3": 4,
+        "k4": 3,
+        "k5": 3,
+        "k6": 3,
+        "k7": 3
+      },
       "prumer": 3.1428571,
       "poradi": 6,
-      "rozhodnuti": "podpořit",
-      "stav": "Podpořeno",
-      "podporit": true
+      "rozhodnuti": "",
+      "stav": "Podáno",
+      "podporit": false
     },
     {
       "id": "p2600001-0001-4001-8001-000000000007",
@@ -131,12 +234,20 @@
       "termin_podani": "2027",
       "financni_pozadavek": 320000,
       "rozpocet_rok_2": 600000,
-      "kriteria": { "k1": 4, "k2": 3, "k3": 3, "k4": 4, "k5": 3, "k6": 4, "k7": 3 },
+      "kriteria": {
+        "k1": 4,
+        "k2": 3,
+        "k3": 3,
+        "k4": 4,
+        "k5": 3,
+        "k6": 4,
+        "k7": 3
+      },
       "prumer": 3.4285714,
       "poradi": 7,
-      "rozhodnuti": "podpořit",
-      "stav": "Podpořeno",
-      "podporit": true
+      "rozhodnuti": "",
+      "stav": "Podáno",
+      "podporit": false
     },
     {
       "id": "p2600001-0001-4001-8001-000000000008",
@@ -148,7 +259,15 @@
       "termin_podani": "2027",
       "financni_pozadavek": 250000,
       "rozpocet_rok_2": 400000,
-      "kriteria": { "k1": 5, "k2": 5, "k3": 5, "k4": 5, "k5": 5, "k6": 5, "k7": 5 },
+      "kriteria": {
+        "k1": 5,
+        "k2": 5,
+        "k3": 5,
+        "k4": 5,
+        "k5": 5,
+        "k6": 5,
+        "k7": 5
+      },
       "prumer": 5.0,
       "poradi": 9,
       "rozhodnuti": "nepodpořit",
@@ -165,12 +284,20 @@
       "termin_podani": "2027",
       "financni_pozadavek": 300000,
       "rozpocet_rok_2": 550000,
-      "kriteria": { "k1": 4, "k2": 4, "k3": 4, "k4": 4, "k5": 4, "k6": 4, "k7": 4 },
+      "kriteria": {
+        "k1": 4,
+        "k2": 4,
+        "k3": 4,
+        "k4": 4,
+        "k5": 4,
+        "k6": 4,
+        "k7": 4
+      },
       "prumer": 4.0,
       "poradi": 8,
-      "rozhodnuti": "podpořit",
-      "stav": "Podpořeno",
-      "podporit": true
+      "rozhodnuti": "",
+      "stav": "Podáno",
+      "podporit": false
     },
     {
       "id": "p2600001-0001-4001-8001-000000000010",
@@ -182,7 +309,15 @@
       "termin_podani": "2027",
       "financni_pozadavek": 200000,
       "rozpocet_rok_2": 350000,
-      "kriteria": { "k1": 6, "k2": 6, "k3": 6, "k4": 6, "k5": 6, "k6": 6, "k7": 6 },
+      "kriteria": {
+        "k1": 6,
+        "k2": 6,
+        "k3": 6,
+        "k4": 6,
+        "k5": 6,
+        "k6": 6,
+        "k7": 6
+      },
       "prumer": 6.0,
       "poradi": 10,
       "rozhodnuti": "nepodpořit",
@@ -199,7 +334,15 @@
       "termin_podani": "2027",
       "financni_pozadavek": 180000,
       "rozpocet_rok_2": 300000,
-      "kriteria": { "k1": 6, "k2": 7, "k3": 7, "k4": 7, "k5": 7, "k6": 7, "k7": 7 },
+      "kriteria": {
+        "k1": 6,
+        "k2": 7,
+        "k3": 7,
+        "k4": 7,
+        "k5": 7,
+        "k6": 7,
+        "k7": 7
+      },
       "prumer": 6.8571429,
       "poradi": 11,
       "rozhodnuti": "nepodpořit",
