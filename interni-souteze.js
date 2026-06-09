@@ -906,7 +906,7 @@
       rok: 2026,
       behs: [1, 2],
       seedBtn: { id: "importConnectSeedBtn", labelNew: "1. Načíst šablony Connect (běh 1 + 2)", labelUpdate: "Aktualizovat šablony Connect" },
-      projectsBtn: { id: "importConnectProjectsBtn", label: "2. Importovat projekty (kolo 1: 7, kolo 2: 3)" },
+      projectsBtn: { id: "importConnectProjectsBtn", label: "2. Importovat projekty (kolo 1: 7, kolo 2: 7)" },
       onSeed: importConnectSeed,
       onProjects: importConnectProjects
     }

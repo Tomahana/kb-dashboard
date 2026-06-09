@@ -1,12 +1,28 @@
 {
-  "source": "Export hodnocení UHK Connect 2026 – 2. kolo (běh 2). Zbývající řádky a názvy projektů doplnit ručně.",
+  "source": "Export hodnocení UHK Connect 2026 – 2. kolo (běh 2)",
   "competition_updates": {
     "alokovana_castka": 0,
-    "stav": "Hodnocení",
+    "stav": "Rozhodnuto",
     "hodnoceni_prodekanu": "Hodnocení HT a proděkanů fakult (PřF, PdF, FF, FIM) – viz skóre u přihlášek.",
-    "rozhodnuti_prorektorky": "2. kolo – část rozhodnutí z exportu, doplnění zbývajících přihlášek ručně."
+    "rozhodnuti_prorektorky": "2. kolo rozhodnuto dle průměrného skóre a rozhodnutí komise (Schváleno / Rejected / Cut)."
   },
   "persons": [
+    {
+      "key": "palla",
+      "id": "c2000001-0001-4001-8001-000000000009",
+      "prijmeni": "Palla",
+      "jmeno": "Dominik",
+      "titul_pred": "Ing.",
+      "titul_za": "Ph.D.",
+      "fakulta": "FIM"
+    },
+    {
+      "key": "nyok",
+      "id": "c2000001-0001-4001-8001-000000000011",
+      "prijmeni": "Nyok",
+      "jmeno": "Maurine Ekun",
+      "fakulta": "FF"
+    },
     {
       "key": "oleksak",
       "id": "c2000001-0001-4001-8001-000000000008",
@@ -17,26 +33,73 @@
       "fakulta": "PřF"
     },
     {
-      "key": "palla",
-      "id": "c2000001-0001-4001-8001-000000000009",
-      "prijmeni": "Palla",
-      "jmeno": "Dominik",
-      "titul_pred": "Ing.",
-      "titul_za": "Ph.D.",
+      "key": "kudrna",
+      "id": "c2000001-0001-4001-8001-000000000012",
+      "prijmeni": "Kudrna",
+      "jmeno": "Jiří",
+      "titul_pred": "Mgr.",
       "fakulta": "PdF"
     },
     {
-      "key": "rejected2",
-      "id": "c2000001-0001-4001-8001-000000000010",
-      "prijmeni": "—",
-      "jmeno": "Žadatel",
-      "fakulta": "FF",
-      "poznamka": "Doplnit z exportu (APP-260424-483FB)"
+      "key": "havrdova",
+      "id": "c2000001-0001-4001-8001-000000000013",
+      "prijmeni": "Havrdová",
+      "jmeno": "Alena",
+      "titul_pred": "Ing.",
+      "titul_za": "Ph.D.",
+      "fakulta": "PřF"
+    },
+    {
+      "key": "jas",
+      "id": "c2000001-0001-4001-8001-000000000002",
+      "prijmeni": "Jas",
+      "jmeno": "Emanuel",
+      "fakulta": "FF"
+    },
+    {
+      "key": "markos",
+      "id": "c2000001-0001-4001-8001-000000000014",
+      "prijmeni": "Markoš",
+      "jmeno": "Martin",
+      "titul_pred": "Mgr.",
+      "titul_za": "Ph.D.",
+      "fakulta": "PdF"
     }
   ],
   "applications": [
     {
       "id": "c2000001-0001-4001-8001-000000000201",
+      "projekt_id": "APP-260428-B1F6C",
+      "person_key": "palla",
+      "nazev_projektu": "— doplnit název projektu",
+      "fakulta": "FIM",
+      "katedra": "",
+      "financni_pozadavek": 70500,
+      "castka_alokovana": 65500,
+      "skore": { "ht": 18, "prf": null, "pdf": null, "ff": 19, "fim": null },
+      "prumer": 18.6,
+      "rozhodnuti": "Cut",
+      "stav": "Podpořeno",
+      "podporit": true,
+      "poznamka": "Snížení alokace oproti požadavku (Cut)"
+    },
+    {
+      "id": "c2000001-0001-4001-8001-000000000202",
+      "projekt_id": "APP-260424-483FB",
+      "person_key": "nyok",
+      "nazev_projektu": "— doplnit název projektu",
+      "fakulta": "FF",
+      "katedra": "",
+      "financni_pozadavek": 54600,
+      "castka_alokovana": 0,
+      "skore": { "ht": null, "prf": null, "pdf": null, "ff": null, "fim": 12 },
+      "prumer": 15.8,
+      "rozhodnuti": "Rejected",
+      "stav": "Zamítnuto",
+      "podporit": false
+    },
+    {
+      "id": "c2000001-0001-4001-8001-000000000203",
       "projekt_id": "APP-260515-06BCB",
       "person_key": "oleksak",
       "nazev_projektu": "— doplnit název projektu",
@@ -48,40 +111,67 @@
       "prumer": 22.4,
       "rozhodnuti": "Schváleno",
       "stav": "Podpořeno",
-      "podporit": true,
-      "poznamka": "Skóre fakult doplnit z exportu"
+      "podporit": true
     },
     {
-      "id": "c2000001-0001-4001-8001-000000000202",
-      "projekt_id": "APP-260428-B1F6C",
-      "person_key": "palla",
+      "id": "c2000001-0001-4001-8001-000000000204",
+      "projekt_id": "APP-260515-FCF3F",
+      "person_key": "kudrna",
       "nazev_projektu": "— doplnit název projektu",
       "fakulta": "PdF",
       "katedra": "",
-      "financni_pozadavek": 70500,
-      "castka_alokovana": 65500,
+      "financni_pozadavek": 8000,
+      "castka_alokovana": 8000,
       "skore": { "ht": null, "prf": null, "pdf": null, "ff": null, "fim": null },
       "prumer": 18.6,
-      "rozhodnuti": "Cut",
+      "rozhodnuti": "Schváleno",
       "stav": "Podpořeno",
-      "podporit": true,
-      "poznamka": "Snížení alokace oproti požadavku (Cut)"
+      "podporit": true
     },
     {
-      "id": "c2000001-0001-4001-8001-000000000203",
-      "projekt_id": "APP-260424-483FB",
-      "person_key": "rejected2",
+      "id": "c2000001-0001-4001-8001-000000000205",
+      "projekt_id": "APP-260429-0212D",
+      "person_key": "havrdova",
+      "nazev_projektu": "— doplnit název projektu",
+      "fakulta": "PřF",
+      "katedra": "",
+      "financni_pozadavek": 36000,
+      "castka_alokovana": 36000,
+      "skore": { "ht": null, "prf": null, "pdf": null, "ff": null, "fim": null },
+      "prumer": 22.4,
+      "rozhodnuti": "Schváleno",
+      "stav": "Podpořeno",
+      "podporit": true
+    },
+    {
+      "id": "c2000001-0001-4001-8001-000000000206",
+      "projekt_id": "APP-260430-1713D",
+      "person_key": "jas",
       "nazev_projektu": "— doplnit název projektu",
       "fakulta": "FF",
       "katedra": "",
-      "financni_pozadavek": 0,
-      "castka_alokovana": 0,
-      "skore": { "ht": null, "prf": null, "pdf": null, "ff": 12, "fim": null },
-      "prumer": 15.8,
-      "rozhodnuti": "Rejected",
-      "stav": "Zamítnuto",
-      "podporit": false,
-      "poznamka": "Žadatele a finance doplnit z exportu"
+      "financni_pozadavek": 27493,
+      "castka_alokovana": 27493,
+      "skore": { "ht": null, "prf": null, "pdf": null, "ff": null, "fim": 12 },
+      "prumer": 16.2,
+      "rozhodnuti": "Schváleno",
+      "stav": "Podpořeno",
+      "podporit": true
+    },
+    {
+      "id": "c2000001-0001-4001-8001-000000000207",
+      "projekt_id": "APP-260514-3E645",
+      "person_key": "markos",
+      "nazev_projektu": "— doplnit název projektu",
+      "fakulta": "PdF",
+      "katedra": "",
+      "financni_pozadavek": 11317,
+      "castka_alokovana": 11317,
+      "skore": { "ht": null, "prf": 11, "pdf": null, "ff": null, "fim": null },
+      "prumer": 16.2,
+      "rozhodnuti": "Schváleno",
+      "stav": "Podpořeno",
+      "podporit": true
     }
   ]
 }
