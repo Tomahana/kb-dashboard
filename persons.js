@@ -115,6 +115,42 @@
     return persons.find(p => p.osobni_cislo === key) || null;
   }
 
+  function normalizeNamePart(s) {
+    return n(s).toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+  }
+
+  function matchPersonFromRegistry(ref) {
+    if (!ref) return null;
+    const email = n(ref.email).toLowerCase();
+    if (email) {
+      const byEmail = persons.find(p => n(p.email).toLowerCase() === email);
+      if (byEmail) return byEmail;
+    }
+    const osobni = n(ref.osobni_cislo);
+    if (osobni) {
+      const byCislo = getPersonByOsobniCislo(osobni);
+      if (byCislo) return byCislo;
+    }
+    const prijmeni = normalizeNamePart(ref.prijmeni);
+    const jmeno = normalizeNamePart(ref.jmeno);
+    if (!prijmeni && !jmeno) return null;
+    const jmenoFirst = jmeno.split(/\s+/)[0];
+    const matches = persons.filter(p => {
+      const pP = normalizeNamePart(p.prijmeni);
+      const pJ = normalizeNamePart(p.jmeno);
+      if (prijmeni && pP !== prijmeni) return false;
+      if (!jmeno) return true;
+      return pJ === jmeno || pJ.startsWith(jmenoFirst) || jmeno.startsWith(pJ);
+    });
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1 && ref.fakulta) {
+      const fac = n(ref.fakulta).toLowerCase();
+      const byFac = matches.find(p => n(p.pracoviste).toLowerCase().includes(fac));
+      if (byFac) return byFac;
+    }
+    return matches[0] || null;
+  }
+
   function getPersons() {
     return persons;
   }
@@ -913,6 +949,7 @@
     getPersons,
     getPerson,
     getPersonByOsobniCislo,
+    matchPersonFromRegistry,
     personLabel,
     normalizePerson,
     renderPersonOptions,
