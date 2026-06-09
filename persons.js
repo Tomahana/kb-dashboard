@@ -950,6 +950,7 @@
     getPerson,
     getPersonByOsobniCislo,
     matchPersonFromRegistry,
+    parseDelimitedTable,
     personLabel,
     normalizePerson,
     renderPersonOptions,
