@@ -1,0 +1,87 @@
+{
+  "source": "Export hodnocení UHK Connect 2026 – 2. kolo (běh 2). Zbývající řádky a názvy projektů doplnit ručně.",
+  "competition_updates": {
+    "alokovana_castka": 800000,
+    "stav": "Hodnocení",
+    "hodnoceni_prodekanu": "Hodnocení HT a proděkanů fakult (PřF, PdF, FF, FIM) – viz skóre u přihlášek.",
+    "rozhodnuti_prorektorky": "2. kolo – část rozhodnutí z exportu, doplnění zbývajících přihlášek ručně."
+  },
+  "persons": [
+    {
+      "key": "oleksak",
+      "id": "c2000001-0001-4001-8001-000000000008",
+      "prijmeni": "Oleksák",
+      "jmeno": "Patrik",
+      "titul_pred": "RNDr.",
+      "titul_za": "Ph.D.",
+      "fakulta": "PřF"
+    },
+    {
+      "key": "palla",
+      "id": "c2000001-0001-4001-8001-000000000009",
+      "prijmeni": "Palla",
+      "jmeno": "Dominik",
+      "titul_pred": "Ing.",
+      "titul_za": "Ph.D.",
+      "fakulta": "PdF"
+    },
+    {
+      "key": "rejected2",
+      "id": "c2000001-0001-4001-8001-000000000010",
+      "prijmeni": "—",
+      "jmeno": "Žadatel",
+      "fakulta": "FF",
+      "poznamka": "Doplnit z exportu (APP-260424-483FB)"
+    }
+  ],
+  "applications": [
+    {
+      "id": "c2000001-0001-4001-8001-000000000201",
+      "projekt_id": "APP-260515-06BCB",
+      "person_key": "oleksak",
+      "nazev_projektu": "— doplnit název projektu",
+      "fakulta": "PřF",
+      "katedra": "",
+      "financni_pozadavek": 80000,
+      "castka_alokovana": 80000,
+      "skore": { "ht": null, "prf": null, "pdf": null, "ff": null, "fim": null },
+      "prumer": 22.4,
+      "rozhodnuti": "Schváleno",
+      "stav": "Podpořeno",
+      "podporit": true,
+      "poznamka": "Skóre fakult doplnit z exportu"
+    },
+    {
+      "id": "c2000001-0001-4001-8001-000000000202",
+      "projekt_id": "APP-260428-B1F6C",
+      "person_key": "palla",
+      "nazev_projektu": "— doplnit název projektu",
+      "fakulta": "PdF",
+      "katedra": "",
+      "financni_pozadavek": 70500,
+      "castka_alokovana": 65500,
+      "skore": { "ht": null, "prf": null, "pdf": null, "ff": null, "fim": null },
+      "prumer": 18.6,
+      "rozhodnuti": "Cut",
+      "stav": "Podpořeno",
+      "podporit": true,
+      "poznamka": "Snížení alokace oproti požadavku (Cut)"
+    },
+    {
+      "id": "c2000001-0001-4001-8001-000000000203",
+      "projekt_id": "APP-260424-483FB",
+      "person_key": "rejected2",
+      "nazev_projektu": "— doplnit název projektu",
+      "fakulta": "FF",
+      "katedra": "",
+      "financni_pozadavek": 0,
+      "castka_alokovana": 0,
+      "skore": { "ht": null, "prf": null, "pdf": null, "ff": 12, "fim": null },
+      "prumer": 15.8,
+      "rozhodnuti": "Rejected",
+      "stav": "Zamítnuto",
+      "podporit": false,
+      "poznamka": "Žadatele a finance doplnit z exportu"
+    }
+  ]
+}

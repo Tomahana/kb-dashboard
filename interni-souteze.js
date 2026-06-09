@@ -138,9 +138,18 @@
       return;
     }
 
+    const seenYearBudget = new Set();
     const totals = items.reduce((t, c) => {
       const s = allocationStats(c);
-      t.alloc += s.alloc;
+      const budgetKey = `${c.program_slug}-${c.rok}`;
+      if (c.program_slug === "connect") {
+        if (!seenYearBudget.has(budgetKey)) {
+          seenYearBudget.add(budgetKey);
+          t.alloc += s.alloc;
+        }
+      } else {
+        t.alloc += s.alloc;
+      }
       t.used += s.used;
       t.requested += s.requested;
       return t;
@@ -417,6 +426,19 @@
     return lines.join("\n");
   }
 
+  function seedEntriesFromFile(seed) {
+    const shared = {
+      pokyn_file: seed.pokyn_file,
+      vyvza_file: seed.vyvza_file,
+      pokyn_nazev: seed.pokyn_nazev,
+      vyvza_nazev: seed.vyvza_nazev
+    };
+    if (seed.competitions?.length) {
+      return seed.competitions.map((c) => ({ ...shared, ...c }));
+    }
+    return [{ ...shared, ...seed.competition }];
+  }
+
   async function importCompetitionSeed(seedPath, pdfNames, programSlug) {
     let seed;
     try {
@@ -427,53 +449,65 @@
       alert("Šablonu se nepodařilo načíst: " + (err.message || err));
       return;
     }
-    const s = seed.competition;
-    const existing = competitions.find(c => c.program_slug === s.program_slug && c.rok === s.rok && c.beh_cislo === s.beh_cislo);
-    if (existing?.applications?.length) {
-      if (!confirm(`Běh ${s.nazev} už obsahuje přihlášky. Aktualizovat metadata a PDF (pokyn, výzva)? Projekty zůstanou.`)) return;
-    } else if (existing && !confirm(`Běh ${s.nazev} už existuje. Nahradit pokynem a výzvou ze šablony?`)) {
+    const entries = seedEntriesFromFile(seed);
+    const withApps = entries.filter((s) => {
+      const ex = competitions.find(c => c.program_slug === s.program_slug && c.rok === s.rok && c.beh_cislo === s.beh_cislo);
+      return ex?.applications?.length;
+    });
+    if (withApps.length && !confirm(`Některé běhy už obsahují přihlášky. Aktualizovat metadata a PDF (pokyn, výzva)? Projekty zůstanou.`)) {
       return;
     }
-    setStatus(`Načítám šablonu ${s.nazev}…`);
+    const existingOnly = entries.filter((s) => {
+      const ex = competitions.find(c => c.program_slug === s.program_slug && c.rok === s.rok && c.beh_cislo === s.beh_cislo);
+      return ex && !ex.applications?.length;
+    });
+    if (existingOnly.length && !withApps.length && !confirm(`Některé běhy už existují. Nahradit pokynem a výzvou ze šablony?`)) {
+      return;
+    }
+    setStatus(`Načítám šablonu (${entries.length} běhů)…`);
     loading = true;
     render();
     try {
-      const compId = existing?.id || uuid();
-      const pokynFile = await fetchPdfAsFile(s.pokyn_file, pdfNames.pokyn);
-      const vyvzaFile = await fetchPdfAsFile(s.vyvza_file, pdfNames.vyvza);
+      const pokynFile = await fetchPdfAsFile(seed.pokyn_file || entries[0].pokyn_file, pdfNames.pokyn);
+      const vyvzaFile = await fetchPdfAsFile(seed.vyvza_file || entries[0].vyvza_file, pdfNames.vyvza);
       const api = window.kbSupabaseCompetitions;
-      let pokyn = existing?.pokyn || "";
-      let vyvza = existing?.vyvza || "";
-      if (api?.uploadPdf) {
-        const upP = await api.uploadPdf(compId, "pokyn", pokynFile);
-        const upV = await api.uploadPdf(compId, "vyvza", vyvzaFile);
-        pokyn = upP.path;
-        vyvza = upV.path;
+      let lastSaved = null;
+      for (const s of entries) {
+        const existing = competitions.find(c => c.program_slug === s.program_slug && c.rok === s.rok && c.beh_cislo === s.beh_cislo);
+        const compId = existing?.id || uuid();
+        let pokyn = existing?.pokyn || "";
+        let vyvza = existing?.vyvza || "";
+        if (api?.uploadPdf) {
+          const upP = await api.uploadPdf(compId, "pokyn", pokynFile);
+          const upV = await api.uploadPdf(compId, "vyvza", vyvzaFile);
+          pokyn = upP.path;
+          vyvza = upV.path;
+        }
+        const comp = {
+          id: compId,
+          program_slug: s.program_slug,
+          nazev: s.nazev,
+          rok: s.rok,
+          beh_cislo: s.beh_cislo,
+          alokovana_castka: Number(s.alokovana_castka) || existing?.alokovana_castka || 0,
+          pokyn,
+          pokyn_nazev: s.pokyn_nazev,
+          vyvza,
+          vyvza_nazev: s.vyvza_nazev,
+          poznamka: s.poznamka,
+          stav: s.stav || existing?.stav || "Aktivní",
+          hodnoceni_prodekanu: existing?.hodnoceni_prodekanu || "",
+          rozhodnuti_prorektorky: existing?.rozhodnuti_prorektorky || "",
+          applications: existing?.applications || [],
+          supported: existing?.supported || [],
+          created_at: existing?.created_at || new Date().toISOString(),
+          __existing: !!existing
+        };
+        lastSaved = await saveCompetition(comp);
       }
-      const comp = {
-        id: compId,
-        program_slug: s.program_slug,
-        nazev: s.nazev,
-        rok: s.rok,
-        beh_cislo: s.beh_cislo,
-        alokovana_castka: Number(s.alokovana_castka) || existing?.alokovana_castka || 0,
-        pokyn,
-        pokyn_nazev: s.pokyn_nazev,
-        vyvza,
-        vyvza_nazev: s.vyvza_nazev,
-        poznamka: s.poznamka,
-        stav: s.stav || existing?.stav || "Aktivní",
-        hodnoceni_prodekanu: existing?.hodnoceni_prodekanu || "",
-        rozhodnuti_prorektorky: existing?.rozhodnuti_prorektorky || "",
-        applications: existing?.applications || [],
-        supported: existing?.supported || [],
-        created_at: existing?.created_at || new Date().toISOString(),
-        __existing: !!existing
-      };
-      const saved = await saveCompetition(comp);
       activeProgram = programSlug;
-      activeCompetitionId = saved.id;
-      setStatus(`Šablona načtena (${s.rok}, běh ${s.beh_cislo}).`);
+      activeCompetitionId = lastSaved?.id || activeCompetitionId;
+      setStatus(`Šablona načtena: ${entries.map(s => `běh ${s.beh_cislo}`).join(", ")}.`);
     } catch (err) {
       console.error(err);
       alert("Import šablony selhal: " + formatSaveError(err));
@@ -601,15 +635,21 @@
     );
   }
 
-  function importConnectProjects() {
-    return importCompetitionProjects(
-      "data/competitions/connect-2026-run3-projects.json",
-      "connect",
-      2026,
-      3,
-      buildConnectHodnoceni,
-      "Podpořeno – UHK Connect 2026/3"
-    );
+  async function importConnectProjects() {
+    const steps = [
+      { path: "data/competitions/connect-2026-beh1-projects.json", beh: 1, note: "Podpořeno – UHK Connect 2026 kolo 1" },
+      { path: "data/competitions/connect-2026-beh2-projects.json", beh: 2, note: "Podpořeno – UHK Connect 2026 kolo 2" }
+    ];
+    for (const step of steps) {
+      await importCompetitionProjects(
+        step.path,
+        "connect",
+        2026,
+        step.beh,
+        buildConnectHodnoceni,
+        step.note
+      );
+    }
   }
 
   function importConnectSeed() {
@@ -635,13 +675,13 @@
     },
     connect: {
       title: "UHK Connect",
-      description: "Krátké projekty pro síťování, mobilitu a navázání spolupráce — aktuálně 3. běh roku 2026.",
+      description: "Krátké projekty pro síťování, mobilitu a navázání spolupráce — rok 2026, celoroční alokace 800 000 Kč (běh 1 = 1. kolo, běh 2 = 2. kolo).",
       sourceUrl: "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/uhk-connect",
       sourceNote: "pokyn prorektorky č. 06/2026, výzva č. 2/2026",
       rok: 2026,
-      beh: 3,
-      seedBtn: { id: "importConnectSeedBtn", labelNew: "1. Načíst šablonu Connect (běh 3)", labelUpdate: "Aktualizovat šablonu Connect" },
-      projectsBtn: { id: "importConnectProjectsBtn", label: "2. Importovat hodnocení z exportu (10)" },
+      behs: [1, 2],
+      seedBtn: { id: "importConnectSeedBtn", labelNew: "1. Načíst šablony Connect (běh 1 + 2)", labelUpdate: "Aktualizovat šablony Connect" },
+      projectsBtn: { id: "importConnectProjectsBtn", label: "2. Importovat projekty (kolo 1: 7, kolo 2: 3)" },
       onSeed: importConnectSeed,
       onProjects: importConnectProjects
     }
@@ -656,7 +696,8 @@
       return;
     }
     box.hidden = false;
-    const hasRun = competitions.some(c => c.program_slug === activeProgram && c.rok === cfg.rok && c.beh_cislo === cfg.beh);
+    const behs = cfg.behs || [cfg.beh];
+    const hasRun = behs.every(beh => competitions.some(c => c.program_slug === activeProgram && c.rok === cfg.rok && c.beh_cislo === beh));
     box.innerHTML = `
       <div class="competitionRegaSeedBox">
         <p><strong>${cfg.title}</strong> — ${cfg.description}
