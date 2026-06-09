@@ -37,6 +37,12 @@ create table if not exists public.kb_competition_applications (
   hodnoceni_komise text,
   stav text default 'Přihláška',
   poznamka text,
+  cilova_soutez text,
+  termin_podani text,
+  rozpocet_rok_2 numeric(14, 2),
+  hodnoceni_prumer numeric(10, 4),
+  rozhodnuti_poradi integer,
+  hodnoceni_kriteria jsonb,
   created_at timestamptz not null default now()
 );
 

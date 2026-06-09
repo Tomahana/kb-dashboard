@@ -33,6 +33,12 @@
       hodnoceni_komise: row.hodnoceni_komise || "",
       stav: row.stav || "Přihláška",
       poznamka: row.poznamka || "",
+      cilova_soutez: row.cilova_soutez || "",
+      termin_podani: row.termin_podani || "",
+      rozpocet_rok_2: Number(row.rozpocet_rok_2) || 0,
+      hodnoceni_prumer: row.hodnoceni_prumer != null ? Number(row.hodnoceni_prumer) : null,
+      rozhodnuti_poradi: row.rozhodnuti_poradi != null ? Number(row.rozhodnuti_poradi) : null,
+      hodnoceni_kriteria: row.hodnoceni_kriteria || null,
       created_at: row.created_at
     };
   }
@@ -222,7 +228,13 @@
         hodnoceni: item.hodnoceni || null,
         hodnoceni_komise: item.hodnoceni_komise || null,
         stav: item.stav || "Přihláška",
-        poznamka: item.poznamka || null
+        poznamka: item.poznamka || null,
+        cilova_soutez: item.cilova_soutez || null,
+        termin_podani: item.termin_podani || null,
+        rozpocet_rok_2: item.rozpocet_rok_2 || null,
+        hodnoceni_prumer: item.hodnoceni_prumer ?? null,
+        rozhodnuti_poradi: item.rozhodnuti_poradi ?? null,
+        hodnoceni_kriteria: item.hodnoceni_kriteria || null
       };
       if (!item.__existing) row.created_at = item.created_at || new Date().toISOString();
       await supa.from("kb_competition_applications").upsert(row, { onConflict: "id" });

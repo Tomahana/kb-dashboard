@@ -652,6 +652,57 @@
     return v == null || v === "" ? "—" : v;
   }
 
+  function buildPrestigeHodnoceni(row) {
+    const k = row.kriteria || {};
+    return [
+      `Pořadí: ${row.poradi ?? "—"}/11 · Průměr K1–K7: ${row.prumer ?? "—"}`,
+      `K1=${scoreLabel(k.k1)} K2=${scoreLabel(k.k2)} K3=${scoreLabel(k.k3)} K4=${scoreLabel(k.k4)} K5=${scoreLabel(k.k5)} K6=${scoreLabel(k.k6)} K7=${scoreLabel(k.k7)}`,
+      `Cílová soutěž: ${row.cilova_soutez || "—"}`,
+      `Termín podání: ${row.termin_podani || "—"}`,
+      `Rozpočet: rok 1 ${row.financni_pozadavek ?? "—"} Kč, rok 2 ${row.rozpocet_rok_2 ?? "—"} Kč`,
+      `Rozhodnutí: ${row.rozhodnuti || "—"}`
+    ].join("\n");
+  }
+
+  function mapPrestigeApplicationRow(row, person) {
+    return {
+      id: row.id,
+      projekt_id: row.projekt_id,
+      nazev_projektu: row.nazev_projektu,
+      ...applyResitelLink({}, person),
+      fakulta: row.fakulta,
+      katedra: row.katedra || "",
+      financni_pozadavek: Number(row.financni_pozadavek) || 0,
+      cilova_soutez: row.cilova_soutez || "",
+      termin_podani: row.termin_podani || "",
+      rozpocet_rok_2: Number(row.rozpocet_rok_2) || 0,
+      hodnoceni_prumer: row.prumer ?? null,
+      rozhodnuti_poradi: row.poradi ?? null,
+      hodnoceni_kriteria: row.kriteria || null,
+      hodnoceni: row.poradi ? `Pořadí ${row.poradi}/11 · ${row.rozhodnuti || ""}` : "",
+      hodnoceni_komise: buildPrestigeHodnoceni(row),
+      stav: row.stav || (row.podporit ? "Podpořeno" : "Zamítnuto"),
+      poznamka: row.poznamka || "",
+      created_at: new Date().toISOString(),
+      __existing: false
+    };
+  }
+
+  async function resolvePersonForImport(p, personByKey) {
+    if (personByKey[p.key]) return personByKey[p.key];
+    let found = window.kbPersons?.matchPersonFromRegistry?.(p) || null;
+    if (found) {
+      personByKey[p.key] = found;
+      return found;
+    }
+    if (p.osobni_cislo) {
+      found = await window.kbPersons.upsertPerson(p);
+      personByKey[p.key] = found;
+      return found;
+    }
+    return null;
+  }
+
   function buildConnectHodnoceni(row) {
     const s = row.skore || {};
     const lines = [
@@ -708,16 +759,20 @@
     loading = true;
     render();
     try {
-      const pokynFile = await fetchPdfAsFile(seed.pokyn_file || entries[0].pokyn_file, pdfNames.pokyn);
-      const vyvzaFile = await fetchPdfAsFile(seed.vyvza_file || entries[0].vyvza_file, pdfNames.vyvza);
       const api = window.kbSupabaseCompetitions;
+      let pokynFile = null;
+      let vyvzaFile = null;
+      if (!seed.skip_pdf) {
+        pokynFile = await fetchPdfAsFile(seed.pokyn_file || entries[0].pokyn_file, pdfNames.pokyn);
+        vyvzaFile = await fetchPdfAsFile(seed.vyvza_file || entries[0].vyvza_file, pdfNames.vyvza);
+      }
       let lastSaved = null;
       for (const s of entries) {
         const existing = competitions.find(c => c.program_slug === s.program_slug && c.rok === s.rok && c.beh_cislo === s.beh_cislo);
         const compId = existing?.id || uuid();
         let pokyn = existing?.pokyn || "";
         let vyvza = existing?.vyvza || "";
-        if (api?.uploadPdf) {
+        if (api?.uploadPdf && pokynFile && vyvzaFile) {
           const upP = await api.uploadPdf(compId, "pokyn", pokynFile);
           const upV = await api.uploadPdf(compId, "vyvza", vyvzaFile);
           pokyn = upP.path;
@@ -774,6 +829,7 @@
       if (!confirm("Běh ještě neexistuje. Načíst nejdřív šablonu (pokyn + výzva)?")) return;
       if (programSlug === "rega") await importRegaSeed();
       else if (programSlug === "connect") await importConnectSeed();
+      else if (programSlug === "prestige") await importPrestigeSeed();
       comp = competitions.find(c => c.program_slug === programSlug && c.rok === rok && c.beh_cislo === behCislo);
       if (!comp) return;
     }
@@ -787,27 +843,29 @@
       await window.kbPersons?.ensureLoaded?.();
       const personByKey = {};
       for (const p of data.persons || []) {
-        const saved = await window.kbPersons.upsertPerson(p);
-        personByKey[p.key] = saved;
+        await resolvePersonForImport(p, personByKey);
       }
-      const applications = (data.applications || []).map(row => {
-        const person = personByKey[row.person_key];
-        return {
-          id: row.id,
-          projekt_id: row.projekt_id,
-          nazev_projektu: row.nazev_projektu,
-          ...applyResitelLink({}, person),
-          fakulta: row.fakulta,
-          katedra: row.katedra || "",
-          financni_pozadavek: row.financni_pozadavek,
-          hodnoceni: row.kolo ? `Kolo ${row.kolo}` : (row.poradi ? `Pořadí ${row.poradi}/8` : ""),
-          hodnoceni_komise: buildHodnoceni(row),
-          stav: row.stav,
-          poznamka: row.poznamka || (row.kolo ? `Kolo ${row.kolo} · ${row.rozhodnuti || ""}` : ""),
-          created_at: new Date().toISOString(),
-          __existing: false
+      const buildRow = programSlug === "prestige"
+        ? (row) => mapPrestigeApplicationRow(row, personByKey[row.person_key])
+        : (row) => {
+          const person = personByKey[row.person_key];
+          return {
+            id: row.id,
+            projekt_id: row.projekt_id,
+            nazev_projektu: row.nazev_projektu,
+            ...applyResitelLink({}, person),
+            fakulta: row.fakulta,
+            katedra: row.katedra || "",
+            financni_pozadavek: row.financni_pozadavek,
+            hodnoceni: row.kolo ? `Kolo ${row.kolo}` : (row.poradi ? `Pořadí ${row.poradi}/8` : ""),
+            hodnoceni_komise: buildHodnoceni(row),
+            stav: row.stav,
+            poznamka: row.poznamka || (row.kolo ? `Kolo ${row.kolo} · ${row.rozhodnuti || ""}` : ""),
+            created_at: new Date().toISOString(),
+            __existing: false
+          };
         };
-      });
+      const applications = (data.applications || []).map(buildRow);
       const supported = (data.applications || [])
         .filter(row => row.podporit)
         .map(row => {
@@ -898,6 +956,25 @@
     );
   }
 
+  function importPrestigeProjects() {
+    return importCompetitionProjects(
+      "data/competitions/prestige-2026-projects.json",
+      "prestige",
+      2026,
+      1,
+      buildPrestigeHodnoceni,
+      "Podpořeno – UHK Prestige výzva 1/2026"
+    );
+  }
+
+  function importPrestigeSeed() {
+    return importCompetitionSeed(
+      "data/competitions/prestige-seed.json",
+      {},
+      "prestige"
+    );
+  }
+
   const PROGRAM_SEED_BANNERS = {
     rega: {
       title: "UHK ReGa",
@@ -922,6 +999,18 @@
       projectsBtn: { id: "importConnectProjectsBtn", label: "2. Importovat projekty (kolo 1: 7, kolo 2: 7)" },
       onSeed: importConnectSeed,
       onProjects: importConnectProjects
+    },
+    prestige: {
+      title: "UHK Prestige",
+      description: "Podpora přípravy návrhů do ERC, Horizon Europe a dalších prestižních programů. Jeden běh výzvy 1/2026 — tabulka podaných projektů s hodnocením K1–K7.",
+      sourceUrl: "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty/soutez-uhk-prestige",
+      sourceNote: "pokyn prorektorky č. 11/2026, výzva č. 1/2026",
+      rok: 2026,
+      beh: 1,
+      seedBtn: { id: "importPrestigeSeedBtn", labelNew: "1. Načíst šablonu Prestige", labelUpdate: "Aktualizovat šablonu Prestige" },
+      projectsBtn: { id: "importPrestigeProjectsBtn", label: "2. Importovat podané projekty (11)" },
+      onSeed: importPrestigeSeed,
+      onProjects: importPrestigeProjects
     }
   };
 
@@ -1098,22 +1187,33 @@
   function renderApplicationsTable(c) {
     const apps = c.applications || [];
     if (!apps.length) return `<p class="hint">Žádné přihlášky.</p>`;
-    return `<div class="competitionTableWrap"><table class="competitionTable">
-      <thead><tr><th>ID</th><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Katedra</th><th>Požadavek</th><th>Stav</th><th></th></tr></thead>
+    const isPrestige = c.program_slug === "prestige";
+    const headers = isPrestige
+      ? `<th>ID</th><th>Projekt</th><th>Žadatel</th><th>Fak.</th><th>Cílová soutěž</th><th>Termín</th><th>Rok 1</th><th>Rok 2</th><th>Průměr</th><th>Poř.</th><th>Stav</th><th></th>`
+      : `<th>ID</th><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Katedra</th><th>Požadavek</th><th>Stav</th><th></th>`;
+    const colspan = isPrestige ? 12 : 8;
+    return `<div class="competitionTableWrap"><table class="competitionTable ${isPrestige ? "competitionTablePrestige" : ""}">
+      <thead><tr>${headers}</tr></thead>
       <tbody>${apps.map(a => `<tr>
         <td><code class="projektId">${html(a.projekt_id) || "—"}</code></td>
-        <td><strong>${html(a.nazev_projektu)}</strong></td>
+        <td><strong>${html(a.nazev_projektu)}</strong>${a.resitel_osobni_cislo ? `<br><span class="hint">${html(a.resitel_osobni_cislo)}</span>` : ""}</td>
         <td>${html(resitelDisplay(a))}</td>
         <td>${html(a.fakulta)}</td>
-        <td>${html(a.katedra)}</td>
+        ${isPrestige ? `
+        <td>${html(a.cilova_soutez)}</td>
+        <td>${html(a.termin_podani)}</td>
         <td class="money">${fmtMoney(a.financni_pozadavek)}</td>
+        <td class="money">${fmtMoney(a.rozpocet_rok_2)}</td>
+        <td>${a.hodnoceni_prumer != null ? html(String(a.hodnoceni_prumer)) : "—"}</td>
+        <td>${a.rozhodnuti_poradi != null ? html(String(a.rozhodnuti_poradi)) : "—"}</td>
+        ` : `<td>${html(a.katedra)}</td><td class="money">${fmtMoney(a.financni_pozadavek)}</td>`}
         <td>${html(a.stav)}</td>
         <td class="rowActions">
           <button type="button" class="button small secondary" data-edit-app="${html(a.id)}">Upravit</button>
           <button type="button" class="button small accent" data-promote-app="${html(a.id)}">Podpořit</button>
           <button type="button" class="button small secondary" data-del-app="${html(a.id)}">×</button>
         </td>
-      </tr>${a.hodnoceni || a.hodnoceni_komise ? `<tr class="appEvalRow"><td colspan="8">
+      </tr>${a.hodnoceni || a.hodnoceni_komise ? `<tr class="appEvalRow"><td colspan="${colspan}">
         ${a.hodnoceni ? `<div><strong>Proděkan:</strong> ${html(a.hodnoceni)}</div>` : ""}
         ${a.hodnoceni_komise ? `<div class="appKomiseBlock"><strong>Hodnocení komise:</strong><p class="competitionTextBlock">${html(a.hodnoceni_komise)}</p></div>` : ""}
       </td></tr>` : ""}`).join("")}</tbody></table></div>`;
@@ -1701,6 +1801,8 @@
       .competitionTableWrap { overflow-x: auto; }
       .competitionTable { width: 100%; border-collapse: collapse; }
       .competitionTable th, .competitionTable td { padding: .45rem .5rem; border-bottom: 1px solid var(--line); text-align: left; font-size: .88rem; }
+      .competitionTablePrestige { min-width: 1200px; }
+      .competitionTablePrestige td:nth-child(2) { max-width: 280px; white-space: normal; }
       .competitionTable .money { text-align: right; font-variant-numeric: tabular-nums; }
       .rowActions { white-space: nowrap; }
       .competitionDetailHead { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
