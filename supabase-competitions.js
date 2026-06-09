@@ -2,8 +2,11 @@
 
 (function () {
   const STORAGE_KEY = "kb-dashboard-competitions-v1";
+  const PDF_BUCKET = "kb-competition-docs";
+  const PDF_MAX_BYTES = 15 * 1024 * 1024;
   let client = null;
   let tablesAvailable = null;
+  let storageAvailable = null;
 
   function getClient() {
     if (window.kbAuth?.getClient) return window.kbAuth.getClient();
@@ -23,7 +26,9 @@
       beh_cislo: row.beh_cislo ?? 1,
       alokovana_castka: Number(row.alokovana_castka) || 0,
       pokyn: row.pokyn || "",
+      pokyn_nazev: row.pokyn_nazev || "",
       vyvza: row.vyvza || "",
+      vyvza_nazev: row.vyvza_nazev || "",
       pocet_prihlasek: row.pocet_prihlasek ?? (applications?.length || 0),
       hodnoceni_prodekanu: row.hodnoceni_prodekanu || "",
       rozhodnuti_prorektorky: row.rozhodnuti_prorektorky || "",
@@ -74,7 +79,9 @@
       beh_cislo: comp.beh_cislo || 1,
       alokovana_castka: comp.alokovana_castka || 0,
       pokyn: comp.pokyn || null,
+      pokyn_nazev: comp.pokyn_nazev || null,
       vyvza: comp.vyvza || null,
+      vyvza_nazev: comp.vyvza_nazev || null,
       pocet_prihlasek: (comp.applications || []).length,
       hodnoceni_prodekanu: comp.hodnoceni_prodekanu || null,
       rozhodnuti_prorektorky: comp.rozhodnuti_prorektorky || null,
@@ -91,8 +98,68 @@
   }
 
   async function deleteCompetition(id) {
+    await deleteCompetitionDocs(id);
     const { error } = await getClient().from("kb_competitions").delete().eq("id", id);
     if (error) throw error;
+  }
+
+  function resolvePdfUrl(path) {
+    if (!path) return "";
+    if (path.startsWith("data:") || path.startsWith("http")) return path;
+    const base = (window.KB_SUPABASE?.url || "").replace(/\/$/, "");
+    if (!base) return path;
+    return `${base}/storage/v1/object/public/${PDF_BUCKET}/${path}`;
+  }
+
+  async function probeStorage() {
+    if (storageAvailable !== null) return storageAvailable;
+    try {
+      const { error } = await getClient().storage.from(PDF_BUCKET).list("", { limit: 1 });
+      storageAvailable = !error;
+    } catch (_) {
+      storageAvailable = false;
+    }
+    return storageAvailable;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Soubor se nepodařilo přečíst."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function assertPdfFile(file) {
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) throw new Error("Soubor musí být ve formátu PDF.");
+    if (file.size > PDF_MAX_BYTES) throw new Error("PDF může mít maximálně 15 MB.");
+  }
+
+  async function uploadPdf(compId, kind, file) {
+    assertPdfFile(file);
+    const nazev = file.name;
+    if (await probeTables() && await probeStorage()) {
+      const path = `${compId}/${kind}.pdf`;
+      const { error } = await getClient().storage.from(PDF_BUCKET).upload(path, file, {
+        upsert: true,
+        contentType: "application/pdf"
+      });
+      if (!error) return { path, nazev };
+    }
+    return { path: await readFileAsDataUrl(file), nazev };
+  }
+
+  async function deletePdf(path) {
+    if (!path || path.startsWith("data:") || path.startsWith("http")) return;
+    if (!(await probeStorage())) return;
+    await getClient().storage.from(PDF_BUCKET).remove([path]);
+  }
+
+  async function deleteCompetitionDocs(compId) {
+    await deletePdf(`${compId}/pokyn.pdf`);
+    await deletePdf(`${compId}/vyvza.pdf`);
   }
 
   async function syncApplications(compId, items) {
@@ -157,9 +224,14 @@
 
   window.kbSupabaseCompetitions = {
     probeTables,
+    probeStorage,
     loadAll,
     saveCompetition,
     deleteCompetition,
+    uploadPdf,
+    deletePdf,
+    deleteCompetitionDocs,
+    resolvePdfUrl,
     loadLocal,
     saveLocal
   };

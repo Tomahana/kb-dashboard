@@ -8,7 +8,9 @@ create table if not exists public.kb_competitions (
   beh_cislo integer default 1,
   alokovana_castka numeric(14, 2) default 0,
   pokyn text,
+  pokyn_nazev text,
   vyvza text,
+  vyvza_nazev text,
   pocet_prihlasek integer default 0,
   hodnoceni_prodekanu text,
   rozhodnuti_prorektorky text,
@@ -42,6 +44,11 @@ create table if not exists public.kb_competition_supported (
   poznamka text,
   created_at timestamptz not null default now()
 );
+
+comment on column public.kb_competitions.pokyn is 'Cesta k PDF v Supabase Storage (kb-competition-docs) nebo data URL v localStorage';
+comment on column public.kb_competitions.pokyn_nazev is 'Původní název souboru pokynu (PDF)';
+comment on column public.kb_competitions.vyvza is 'Cesta k PDF v Supabase Storage nebo data URL v localStorage';
+comment on column public.kb_competitions.vyvza_nazev is 'Původní název souboru výzvy (PDF)';
 
 create index if not exists kb_competitions_program_idx on public.kb_competitions (program_slug);
 create index if not exists kb_competition_applications_comp_idx on public.kb_competition_applications (competition_id);

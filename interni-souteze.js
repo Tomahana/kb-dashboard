@@ -16,6 +16,10 @@
   let loading = false;
   let activeProgram = PROGRAMS[0].slug;
   let activeCompetitionId = null;
+  let pendingPokynFile = null;
+  let pendingVyvzaFile = null;
+  let removePokynPdf = false;
+  let removeVyvzaPdf = false;
 
   const el = (id) => document.getElementById(id);
   const n = (s) => (s || "").toString().trim();
@@ -41,6 +45,101 @@
 
   function sumApplications(comp) {
     return (comp?.applications || []).reduce((s, r) => s + (Number(r.financni_pozadavek) || 0), 0);
+  }
+
+  function pdfHref(path) {
+    if (!path) return "";
+    return window.kbSupabaseCompetitions?.resolvePdfUrl?.(path) || path;
+  }
+
+  function renderPdfBlock(path, nazev, label) {
+    if (!path) {
+      return `<div class="competitionPdfBlock"><strong>${html(label)}</strong><p class="hint">PDF není nahráno.</p></div>`;
+    }
+    const href = pdfHref(path);
+    const name = html(nazev || `${label}.pdf`);
+    return `<div class="competitionPdfBlock">
+      <strong>${html(label)}</strong>
+      <a class="competitionPdfLink" href="${html(href)}" target="_blank" rel="noopener">📄 ${name}</a>
+      <span class="hint">Otevřít PDF v novém okně</span>
+    </div>`;
+  }
+
+  function updatePdfFieldPreview(kind, path, nazev) {
+    const cap = kind === "pokyn" ? "Pokyn" : "Vyvza";
+    const current = el(`comp${cap}Current`);
+    const removeBtn = el(`comp${cap}Remove`);
+    const pending = kind === "pokyn" ? pendingPokynFile : pendingVyvzaFile;
+    const removed = kind === "pokyn" ? removePokynPdf : removeVyvzaPdf;
+    if (!current) return;
+    if (pending) {
+      current.textContent = `Nový soubor: ${pending.name}`;
+      if (removeBtn) removeBtn.hidden = false;
+      return;
+    }
+    if (removed) {
+      current.textContent = "PDF bude odebráno po uložení.";
+      if (removeBtn) removeBtn.hidden = false;
+      return;
+    }
+    if (path) {
+      const href = pdfHref(path);
+      const name = html(nazev || "dokument.pdf");
+      current.innerHTML = `Aktuální: <a href="${href}" target="_blank" rel="noopener">${name}</a>`;
+      if (removeBtn) removeBtn.hidden = false;
+    } else {
+      current.textContent = "Zatím není nahráno PDF.";
+      if (removeBtn) removeBtn.hidden = true;
+    }
+  }
+
+  function resetPdfDialogState(c) {
+    pendingPokynFile = null;
+    pendingVyvzaFile = null;
+    removePokynPdf = false;
+    removeVyvzaPdf = false;
+    const pokynInput = el("compPokynFile");
+    const vyvzaInput = el("compVyvzaFile");
+    if (pokynInput) pokynInput.value = "";
+    if (vyvzaInput) vyvzaInput.value = "";
+    updatePdfFieldPreview("pokyn", c?.pokyn, c?.pokyn_nazev);
+    updatePdfFieldPreview("vyvza", c?.vyvza, c?.vyvza_nazev);
+  }
+
+  async function applyPdfFields(compId, existing) {
+    let pokyn = existing?.pokyn || "";
+    let pokyn_nazev = existing?.pokyn_nazev || "";
+    let vyvza = existing?.vyvza || "";
+    let vyvza_nazev = existing?.vyvza_nazev || "";
+    const api = window.kbSupabaseCompetitions;
+
+    if (removePokynPdf) {
+      if (pokyn && api?.deletePdf) await api.deletePdf(pokyn);
+      pokyn = "";
+      pokyn_nazev = "";
+    }
+    if (removeVyvzaPdf) {
+      if (vyvza && api?.deletePdf) await api.deletePdf(vyvza);
+      vyvza = "";
+      vyvza_nazev = "";
+    }
+    if (pendingPokynFile) {
+      const up = api?.uploadPdf
+        ? await api.uploadPdf(compId, "pokyn", pendingPokynFile)
+        : { path: "", nazev: pendingPokynFile.name };
+      if (pokyn && api?.deletePdf) await api.deletePdf(pokyn);
+      pokyn = up.path;
+      pokyn_nazev = up.nazev;
+    }
+    if (pendingVyvzaFile) {
+      const up = api?.uploadPdf
+        ? await api.uploadPdf(compId, "vyvza", pendingVyvzaFile)
+        : { path: "", nazev: pendingVyvzaFile.name };
+      if (vyvza && api?.deletePdf) await api.deletePdf(vyvza);
+      vyvza = up.path;
+      vyvza_nazev = up.nazev;
+    }
+    return { pokyn, pokyn_nazev, vyvza, vyvza_nazev };
   }
 
   function persistLocal() {
@@ -185,8 +284,8 @@
       <section class="competitionSection panel">
         <h3>Pokyn a výzva</h3>
         <div class="competitionDocs">
-          <div><strong>Pokyn</strong><p>${html(c.pokyn) || "—"}</p></div>
-          <div><strong>Výzva</strong><p>${html(c.vyvza) || "—"}</p></div>
+          ${renderPdfBlock(c.pokyn, c.pokyn_nazev, "Pokyn")}
+          ${renderPdfBlock(c.vyvza, c.vyvza_nazev, "Výzva")}
         </div>
       </section>
       <section class="competitionSection panel">
@@ -275,7 +374,9 @@
       beh_cislo: competitionsForProgram(activeProgram).length + 1,
       alokovana_castka: 0,
       pokyn: "",
+      pokyn_nazev: "",
       vyvza: "",
+      vyvza_nazev: "",
       hodnoceni_prodekanu: "",
       rozhodnuti_prorektorky: "",
       poznamka: "",
@@ -289,8 +390,7 @@
     el("compRok").value = c.rok || "";
     el("compBeh").value = c.beh_cislo || 1;
     el("compAlokace").value = c.alokovana_castka || "";
-    el("compPokyn").value = c.pokyn || "";
-    el("compVyvza").value = c.vyvza || "";
+    resetPdfDialogState(c);
     el("compHodnoceni").value = c.hodnoceni_prodekanu || "";
     el("compRozhodnuti").value = c.rozhodnuti_prorektorky || "";
     el("compStav").value = c.stav || "Aktivní";
@@ -303,6 +403,13 @@
     e.preventDefault();
     const id = el("compEditId").value || uuid();
     const existing = getCompetition(id);
+    let pdfFields;
+    try {
+      pdfFields = await applyPdfFields(id, existing);
+    } catch (err) {
+      alert("PDF se nepodařilo nahrát: " + (err.message || err));
+      return;
+    }
     const comp = {
       id,
       program_slug: el("compProgram").value || activeProgram,
@@ -310,8 +417,10 @@
       rok: Number(el("compRok").value) || null,
       beh_cislo: Number(el("compBeh").value) || 1,
       alokovana_castka: Number(el("compAlokace").value) || 0,
-      pokyn: n(el("compPokyn").value),
-      vyvza: n(el("compVyvza").value),
+      pokyn: pdfFields.pokyn,
+      pokyn_nazev: pdfFields.pokyn_nazev,
+      vyvza: pdfFields.vyvza,
+      vyvza_nazev: pdfFields.vyvza_nazev,
       hodnoceni_prodekanu: n(el("compHodnoceni").value),
       rozhodnuti_prorektorky: n(el("compRozhodnuti").value),
       poznamka: n(el("compPoznamka").value),
@@ -325,6 +434,7 @@
       const saved = await saveCompetition(comp);
       activeCompetitionId = saved.id;
       activeProgram = saved.program_slug;
+      resetPdfDialogState(saved);
       el("competitionDialog").close();
       setStatus("Běh soutěže uložen.");
       render();
@@ -513,8 +623,20 @@
             <label>Alokovaná částka (Kč)<input id="compAlokace" type="number" min="0" step="1000" /></label>
             <label>Stav<select id="compStav"><option>Aktivní</option><option>Hodnocení</option><option>Rozhodnuto</option><option>Uzavřeno</option></select></label>
           </div>
-          <label>Pokyn<textarea id="compPokyn" rows="3" placeholder="Odkaz nebo text pokynu…"></textarea></label>
-          <label>Výzva<textarea id="compVyvza" rows="3" placeholder="Text výzvy…"></textarea></label>
+          <label>Pokyn (PDF)
+            <div class="pdfField">
+              <p id="compPokynCurrent" class="hint pdfFieldCurrent">Zatím není nahráno PDF.</p>
+              <input id="compPokynFile" type="file" accept=".pdf,application/pdf" />
+              <button type="button" id="compPokynRemove" class="button small secondary" hidden>Odebrat PDF</button>
+            </div>
+          </label>
+          <label>Výzva (PDF)
+            <div class="pdfField">
+              <p id="compVyvzaCurrent" class="hint pdfFieldCurrent">Zatím není nahráno PDF.</p>
+              <input id="compVyvzaFile" type="file" accept=".pdf,application/pdf" />
+              <button type="button" id="compVyvzaRemove" class="button small secondary" hidden>Odebrat PDF</button>
+            </div>
+          </label>
           <label>Hodnocení proděkanů<textarea id="compHodnoceni" rows="3"></textarea></label>
           <label>Rozhodnutí prorektorky<textarea id="compRozhodnuti" rows="3"></textarea></label>
           <label>Poznámka<textarea id="compPoznamka" rows="2"></textarea></label>
@@ -562,6 +684,30 @@
       </dialog>
     `;
     document.body.appendChild(dialogs);
+    el("compPokynFile")?.addEventListener("change", (e) => {
+      pendingPokynFile = e.target.files?.[0] || null;
+      removePokynPdf = false;
+      const existing = getCompetition(el("compEditId").value);
+      updatePdfFieldPreview("pokyn", existing?.pokyn, existing?.pokyn_nazev);
+    });
+    el("compVyvzaFile")?.addEventListener("change", (e) => {
+      pendingVyvzaFile = e.target.files?.[0] || null;
+      removeVyvzaPdf = false;
+      const existing = getCompetition(el("compEditId").value);
+      updatePdfFieldPreview("vyvza", existing?.vyvza, existing?.vyvza_nazev);
+    });
+    el("compPokynRemove")?.addEventListener("click", () => {
+      pendingPokynFile = null;
+      removePokynPdf = true;
+      el("compPokynFile").value = "";
+      updatePdfFieldPreview("pokyn", "", "");
+    });
+    el("compVyvzaRemove")?.addEventListener("click", () => {
+      pendingVyvzaFile = null;
+      removeVyvzaPdf = true;
+      el("compVyvzaFile").value = "";
+      updatePdfFieldPreview("vyvza", "", "");
+    });
     el("saveCompBtn").addEventListener("click", saveCompetitionDialog);
     el("saveAppBtn").addEventListener("click", saveApplicationDialog);
     el("saveSuppBtn").addEventListener("click", saveSupportedDialog);
@@ -584,6 +730,11 @@
       .competitionMetrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .65rem; margin-bottom: 1rem; }
       .competitionSection { margin-bottom: 1rem; }
       .competitionDocs { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .competitionPdfBlock { border: 1px solid var(--line); border-radius: 10px; padding: .75rem; background: #f8fafc; }
+      .competitionPdfLink { display: inline-block; margin-top: .35rem; font-weight: 700; color: var(--accent); text-decoration: none; }
+      .competitionPdfLink:hover { text-decoration: underline; }
+      .pdfField { display: grid; gap: .45rem; margin-top: .25rem; }
+      .pdfFieldCurrent { margin: 0; }
       .competitionTextBlock { white-space: pre-wrap; color: var(--text); }
       .competitionTableWrap { overflow-x: auto; }
       .competitionTable { width: 100%; border-collapse: collapse; }
