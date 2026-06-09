@@ -1,7 +1,7 @@
 // Vlastní rozbalovací seznamy – fungují uvnitř dialogu, výběr bez mazání textu.
 
 (function () {
-  const PICKER_SELECTOR = "#recordForm select, #topicForm select, #topicAgenda, #taskExportProvider, #teDefaultProvider, #deadlineOdpovednaPersonId, #appResitelId, #suppResitelId";
+  const PICKER_SELECTOR = "#recordForm select, #topicForm select, #topicAgenda, #taskExportProvider, #teDefaultProvider";
   let openMenuState = null;
 
   function el(id) {

@@ -689,11 +689,10 @@
         node.value = raw || (field === "stav" && !existing ? "Aktivní" : field === "zdroj" && !existing ? "vlastní" : "");
       }
     });
-    window.kbPersons?.fillSelect?.(
+    await window.kbPersons?.setupSearchPicker?.(
       el("deadlineOdpovednaPersonId"),
       window.kbPersonLinks?.personSelectId?.(existing, "odpovedna_osoba") || ""
     );
-    window.kbPickers?.refresh?.("deadlineOdpovednaPersonId");
     el("deadlineDialogTitle").textContent = existing ? "Upravit položku" : "Nová položka";
     el("deleteDeadlineBtn").hidden = !existing;
     renderDeadlineTopicsList(existing?.id);
@@ -907,8 +906,9 @@ ${lines}`;
     el("deadlineNewPersonBtn")?.addEventListener("click", () => {
       window.kbPersons?.openDialog?.(null, {
         onSaved: (p) => {
-          window.kbPersons.fillSelect(el("deadlineOdpovednaPersonId"), p.id);
-          window.kbPickers?.refresh?.("deadlineOdpovednaPersonId");
+          window.kbPersons.setSelectPersonValue(el("deadlineOdpovednaPersonId"), p.id);
+          el("deadlineOdpovednaPersonId")?.dispatchEvent(new Event("change", { bubbles: true }));
+          window.kbPersons.setupSearchPicker(el("deadlineOdpovednaPersonId"), p.id);
           fillDeadlinePersonFromSelect();
         }
       });

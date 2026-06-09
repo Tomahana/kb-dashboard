@@ -1314,7 +1314,10 @@
     el("appCompId").value = compId;
     el("appProjektId").value = existing?.projekt_id || suggestProjektId(comp);
     el("appNazev").value = existing?.nazev_projektu || "";
-    window.kbPersons?.fillSelect?.(el("appResitelId"), window.kbPersonLinks?.personSelectId?.(existing, "resitel") || existing?.resitel_id);
+    await window.kbPersons?.setupSearchPicker?.(
+      el("appResitelId"),
+      window.kbPersonLinks?.personSelectId?.(existing, "resitel") || existing?.resitel_id
+    );
     el("appFakulta").value = existing?.fakulta || "";
     el("appKatedra").value = existing?.katedra || "";
     el("appCastka").value = existing?.financni_pozadavek || "";
@@ -1374,7 +1377,10 @@
     el("suppCompId").value = compId;
     el("suppProjektId").value = existing?.projekt_id || "";
     el("suppNazev").value = existing?.nazev_projektu || "";
-    window.kbPersons?.fillSelect?.(el("suppResitelId"), window.kbPersonLinks?.personSelectId?.(existing, "resitel") || existing?.resitel_id);
+    await window.kbPersons?.setupSearchPicker?.(
+      el("suppResitelId"),
+      window.kbPersonLinks?.personSelectId?.(existing, "resitel") || existing?.resitel_id
+    );
     el("suppFakulta").value = existing?.fakulta || "";
     el("suppKatedra").value = existing?.katedra || "";
     el("suppCastka").value = existing?.castka_podpory || "";
@@ -1649,16 +1655,18 @@
     el("appNewPersonBtn")?.addEventListener("click", () => {
       window.kbPersons?.openDialog?.(null, {
         onSaved: (p) => {
-          window.kbPersons.fillSelect(el("appResitelId"), p.id);
-          fillResitelFromPerson(el("appResitelId"));
+          window.kbPersons.setSelectPersonValue(el("appResitelId"), p.id);
+          el("appResitelId")?.dispatchEvent(new Event("change", { bubbles: true }));
+          window.kbPersons.setupSearchPicker(el("appResitelId"), p.id);
         }
       });
     });
     el("suppNewPersonBtn")?.addEventListener("click", () => {
       window.kbPersons?.openDialog?.(null, {
         onSaved: (p) => {
-          window.kbPersons.fillSelect(el("suppResitelId"), p.id);
-          fillSuppResitelFromPerson(el("suppResitelId"));
+          window.kbPersons.setSelectPersonValue(el("suppResitelId"), p.id);
+          el("suppResitelId")?.dispatchEvent(new Event("change", { bubbles: true }));
+          window.kbPersons.setupSearchPicker(el("suppResitelId"), p.id);
         }
       });
     });
@@ -1702,8 +1710,9 @@
       .projektId { font-size: .82rem; background: #f2f4f7; padding: .1rem .35rem; border-radius: 4px; }
       .appEvalRow td { background: #f8fafc; font-size: .88rem; }
       .appKomiseBlock { margin-top: .5rem; }
-      .personSelectRow { display: flex; gap: .5rem; align-items: center; margin-top: .25rem; }
+      .personSelectRow { display: flex; gap: .5rem; align-items: flex-start; margin-top: .25rem; }
       .personSelectRow select { flex: 1; }
+      .personSelectRow .kb-person-search-picker { flex: 1; min-width: 0; }
       .competitionRegaSeedBox { margin: .75rem 0 0; padding: .85rem 1rem; border: 1px solid var(--line); border-radius: 10px; background: #f0f9ff; }
       .competitionRegaSeedBox p { margin: 0 0 .6rem; line-height: 1.5; }
       .competitionRegaSeedActions { display: flex; flex-wrap: wrap; gap: .5rem; }
@@ -1764,8 +1773,10 @@
     injectPage();
     injectDialogs();
     setTimeout(loadCompetitions, 150);
-    document.addEventListener("kb:page-changed", (e) => {
-      if (e.detail?.page === "interni-souteze" && !competitions.length && !loading) loadCompetitions();
+    document.addEventListener("kb:page-changed", async (e) => {
+      if (e.detail?.page !== "interni-souteze") return;
+      if (!competitions.length && !loading) loadCompetitions();
+      await window.kbPersons?.ensureLoaded?.();
     });
     document.addEventListener("kb:persons-loaded", () => render());
   }

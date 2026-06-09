@@ -233,14 +233,162 @@
   }
 
   async function ensureLoaded() {
-    if (persons.length || loading) return persons;
+    if (persons.length) return persons;
+    if (loading) {
+      await new Promise((resolve) => {
+        const done = () => {
+          document.removeEventListener("kb:persons-loaded", done);
+          resolve();
+        };
+        document.addEventListener("kb:persons-loaded", done);
+      });
+      return persons;
+    }
     return loadPersons();
+  }
+
+  function personOptionLabel(p) {
+    if (!p) return "";
+    return `${personLabel(p)}${p.osobni_cislo ? ` · ${p.osobni_cislo}` : ""}${p.pracoviste ? ` · ${p.pracoviste}` : ""}`;
+  }
+
+  function setSelectPersonValue(selectEl, personId) {
+    if (!selectEl) return;
+    const p = personId ? getPerson(personId) : null;
+    if (p) {
+      selectEl.innerHTML = `<option value=""></option><option value="${html(p.id)}" selected>${html(personOptionLabel(p))}</option>`;
+      selectEl.value = p.id;
+    } else {
+      selectEl.innerHTML = `<option value="">— vyberte osobu —</option>`;
+      selectEl.value = "";
+    }
+  }
+
+  function filterPersonsForPicker(query, limit = 30) {
+    const q = n(query).toLowerCase();
+    if (q.length < 2) return [];
+    return persons.filter(p => {
+      const hay = [p.prijmeni, p.jmeno, p.osobni_cislo, p.pracoviste, p.tituly, personLabel(p)].map(n).join(" ").toLowerCase();
+      return hay.includes(q);
+    }).slice(0, limit);
+  }
+
+  function getPersonSearchPicker(selectEl) {
+    const row = selectEl?.closest(".personSelectRow");
+    return row?.querySelector(".kb-person-search-picker") || null;
+  }
+
+  function unwrapKbPicker(selectEl) {
+    const wrap = selectEl?.closest(".kb-picker");
+    if (!wrap?.parentNode) return;
+    wrap.parentNode.insertBefore(selectEl, wrap);
+    wrap.remove();
+  }
+
+  function bindPersonSearchPicker(selectEl) {
+    if (!selectEl || selectEl.dataset.personPickerBound === "1") return;
+    unwrapKbPicker(selectEl);
+    selectEl.dataset.personPickerBound = "1";
+    selectEl.classList.add("kb-person-search-native");
+    selectEl.hidden = true;
+
+    const row = selectEl.closest(".personSelectRow") || selectEl.parentElement;
+    const picker = document.createElement("div");
+    picker.className = "kb-person-search-picker";
+    picker.innerHTML = `
+      <div class="kb-person-search-selected"></div>
+      <input type="search" class="kb-person-search-input" placeholder="Hledat příjmení, jméno, osobní číslo…" autocomplete="off" />
+      <p class="kb-person-search-hint hint">Zadejte alespoň 2 znaky (${persons.length || "…"} osob v databázi)</p>
+      <ul class="kb-person-search-results" hidden></ul>`;
+    row.insertBefore(picker, selectEl);
+
+    const input = picker.querySelector(".kb-person-search-input");
+    const results = picker.querySelector(".kb-person-search-results");
+    const hint = picker.querySelector(".kb-person-search-hint");
+    const selectedBox = picker.querySelector(".kb-person-search-selected");
+
+    function renderSelected() {
+      const p = getPerson(selectEl.value);
+      if (!p) {
+        selectedBox.innerHTML = `<span class="kb-person-search-empty">Žádná osoba vybrána</span>`;
+        return;
+      }
+      selectedBox.innerHTML = `<span class="kb-person-search-chip">${html(personOptionLabel(p))}<button type="button" class="kb-person-search-clear" title="Odebrat">×</button></span>`;
+      selectedBox.querySelector(".kb-person-search-clear")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        setSelectPersonValue(selectEl, "");
+        selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+        renderSelected();
+        input.value = "";
+        results.hidden = true;
+      });
+    }
+
+    function pickPerson(person) {
+      setSelectPersonValue(selectEl, person.id);
+      selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+      renderSelected();
+      input.value = "";
+      results.hidden = true;
+    }
+
+    function renderResults() {
+      hint.textContent = persons.length
+        ? `Zadejte alespoň 2 znaky (${persons.length} osob v databázi)`
+        : "Načítám osoby… Spusťte modul Osoby nebo Načíst ze Supabase.";
+      const matches = filterPersonsForPicker(input.value);
+      if (!n(input.value) || n(input.value).length < 2) {
+        results.hidden = true;
+        return;
+      }
+      if (!matches.length) {
+        results.innerHTML = `<li class="kb-person-search-none">Žádná shoda</li>`;
+        results.hidden = false;
+        return;
+      }
+      results.innerHTML = matches.map(p => `<li><button type="button" class="kb-person-search-option" data-id="${html(p.id)}">${html(personOptionLabel(p))}</button></li>`).join("");
+      results.hidden = false;
+      results.querySelectorAll(".kb-person-search-option").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          const person = getPerson(btn.dataset.id);
+          if (person) pickPerson(person);
+        });
+      });
+    }
+
+    input.addEventListener("input", renderResults);
+    input.addEventListener("focus", renderResults);
+    document.addEventListener("click", (e) => {
+      if (!picker.contains(e.target)) results.hidden = true;
+    });
+    document.addEventListener("kb:persons-loaded", () => {
+      renderSelected();
+      renderResults();
+    });
+
+    picker.__renderSelected = renderSelected;
+  }
+
+  async function setupSearchPicker(selectEl, selectedId) {
+    if (!selectEl) return;
+    await ensureLoaded();
+    bindPersonSearchPicker(selectEl);
+    setSelectPersonValue(selectEl, selectedId || "");
+    const picker = getPersonSearchPicker(selectEl);
+    picker?.__renderSelected?.();
+    const hint = picker?.querySelector(".kb-person-search-hint");
+    if (hint) {
+      hint.textContent = persons.length
+        ? `Zadejte alespoň 2 znaky (${persons.length} osob v databázi)`
+        : "Osoby se nepodařilo načíst — zkuste modul Osoby → Načíst ze Supabase.";
+    }
   }
 
   function renderPersonOptions(selectedId) {
     const sorted = [...persons].sort((a, b) => personLabel(a).localeCompare(personLabel(b), "cs"));
     const opts = sorted.map(p => {
-      const label = `${personLabel(p)}${p.osobni_cislo ? ` · ${p.osobni_cislo}` : ""}${p.pracoviste ? ` · ${p.pracoviste}` : ""}`;
+      const label = personOptionLabel(p);
       return `<option value="${html(p.id)}" ${p.id === selectedId ? "selected" : ""}>${html(label)}</option>`;
     }).join("");
     return `<option value="">— vyberte osobu —</option>${opts}`;
@@ -248,6 +396,11 @@
 
   function fillSelect(selectEl, selectedId) {
     if (!selectEl) return;
+    if (persons.length > 200 || selectEl.dataset.personPickerBound === "1") {
+      setupSearchPicker(selectEl, selectedId);
+      return;
+    }
+    selectEl.hidden = false;
     selectEl.innerHTML = renderPersonOptions(selectedId);
   }
 
@@ -725,6 +878,18 @@
       .personId { font-size: .82rem; background: #f2f4f7; padding: .1rem .35rem; border-radius: 4px; }
       .personsStatus { margin: .35rem 0 .5rem; }
       .personsStatusError { color: #b42318; }
+      .kb-person-search-picker { flex: 1; min-width: 0; display: grid; gap: .35rem; }
+      .kb-person-search-native { display: none !important; }
+      .kb-person-search-input { width: 100%; }
+      .kb-person-search-hint { margin: 0; font-size: .78rem; }
+      .kb-person-search-results { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+      .kb-person-search-results li { margin: 0; }
+      .kb-person-search-option { display: block; width: 100%; text-align: left; padding: .45rem .6rem; border: 0; background: transparent; cursor: pointer; font-size: .88rem; }
+      .kb-person-search-option:hover { background: #f2f4f7; }
+      .kb-person-search-none { padding: .5rem .6rem; color: var(--muted); font-size: .85rem; }
+      .kb-person-search-chip { display: inline-flex; align-items: center; gap: .35rem; padding: .25rem .5rem; background: #eff8ff; border: 1px solid #b2ddff; border-radius: 999px; font-size: .85rem; }
+      .kb-person-search-clear { border: 0; background: transparent; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 .15rem; color: var(--muted); }
+      .kb-person-search-empty { font-size: .85rem; color: var(--muted); }
       @media (max-width: 700px) {
         .personsFilters { grid-template-columns: 1fr 1fr; }
       }
@@ -752,6 +917,9 @@
     normalizePerson,
     renderPersonOptions,
     fillSelect,
+    setupSearchPicker,
+    setSelectPersonValue,
+    personOptionLabel,
     openDialog,
     upsertPerson,
     importFile,
