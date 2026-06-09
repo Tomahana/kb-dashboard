@@ -83,14 +83,49 @@ exception when undefined_table then null;
   when duplicate_object then null;
 end $$;
 
--- Doplnění vazby e-mail → osoba podle shody e-mailu
-do $$ begin
-  update public.kb_records r
-  set odesilatel_osobni_cislo = p.osobni_cislo
-  from public.kb_persons p
-  where lower(trim(coalesce(r."Odesílatel", r.odesilatel, ''))) = lower(trim(p.email))
-    and p.email is not null and trim(p.email) <> ''
-    and (r.odesilatel_osobni_cislo is null or r.odesilatel_osobni_cislo = '');
+-- Doplnění vazby e-mail → osoba podle shody e-mailu (sloupce v kb_records jsou česky: "Odesílatel")
+do $$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'kb_records'
+  ) and exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'kb_records' and column_name = 'Odesílatel'
+  ) then
+    execute $sql$
+      update public.kb_records r
+      set odesilatel_osobni_cislo = p.osobni_cislo
+      from public.kb_persons p
+      where lower(trim(coalesce(r."Odesílatel", ''))) = lower(trim(p.email))
+        and p.email is not null and trim(p.email) <> ''
+        and (r.odesilatel_osobni_cislo is null or r.odesilatel_osobni_cislo = '')
+    $sql$;
+    raise notice 'Doplněno odesilatel_osobni_cislo z sloupce "Odesílatel"';
+  else
+    raise notice 'Sloupec "Odesílatel" v kb_records nenalezen – přeskočeno';
+  end if;
+exception when undefined_table then
+  raise notice 'Tabulka kb_records neexistuje – přeskočeno';
+end $$;
+
+-- Odpovědná osoba u e-mailu (pokud je v poli e-mailová adresa)
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'kb_records' and column_name = 'Odpovědná osoba'
+  ) then
+    execute $sql$
+      update public.kb_records r
+      set odpovedna_osoba_osobni_cislo = p.osobni_cislo
+      from public.kb_persons p
+      where lower(trim(coalesce(r."Odpovědná osoba", ''))) = lower(trim(p.email))
+        and p.email is not null and trim(p.email) <> ''
+        and (r.odpovedna_osoba_osobni_cislo is null or r.odpovedna_osoba_osobni_cislo = '')
+    $sql$;
+    raise notice 'Doplněno odpovedna_osoba_osobni_cislo z "Odpovědná osoba" (shoda e-mailu)';
+  end if;
 exception when undefined_table then null;
 end $$;
 
