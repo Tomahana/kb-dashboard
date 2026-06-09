@@ -814,16 +814,7 @@
     }
   }
 
-  async function importCompetitionProjects(dataPath, programSlug, rok, behCislo, buildHodnoceni, supportedNote) {
-    let data;
-    try {
-      const res = await fetch(dataPath);
-      if (!res.ok) throw new Error(`Soubor ${dataPath} nenalezen.`);
-      data = await res.json();
-    } catch (err) {
-      alert("Projekty se nepodařilo načíst: " + (err.message || err));
-      return;
-    }
+  async function applyCompetitionProjectsImport(data, programSlug, rok, behCislo, buildHodnoceni, supportedNote) {
     let comp = competitions.find(c => c.program_slug === programSlug && c.rok === rok && c.beh_cislo === behCislo);
     if (!comp) {
       if (!confirm("Běh ještě neexistuje. Načíst nejdřív šablonu (pokyn + výzva)?")) return;
@@ -910,6 +901,187 @@
       document.dispatchEvent(new CustomEvent("kb:competitions-loaded"));
       document.dispatchEvent(new CustomEvent("kb:persons-loaded"));
     }
+  }
+
+  async function importCompetitionProjects(dataPath, programSlug, rok, behCislo, buildHodnoceni, supportedNote) {
+    let data;
+    try {
+      const res = await fetch(dataPath);
+      if (!res.ok) throw new Error(`Soubor ${dataPath} nenalezen.`);
+      data = await res.json();
+    } catch (err) {
+      alert("Projekty se nepodařilo načíst: " + (err.message || err));
+      return;
+    }
+    return applyCompetitionProjectsImport(data, programSlug, rok, behCislo, buildHodnoceni, supportedNote);
+  }
+
+  function normalizePrestigeHeader(header) {
+    return String(header || "")
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function parsePrestigeMoney(value) {
+    if (value == null || value === "") return 0;
+    const num = String(value)
+      .replace(/\u00a0/g, " ")
+      .replace(/\s/g, "")
+      .replace(/kč/gi, "")
+      .replace(",", ".");
+    return Number(num) || 0;
+  }
+
+  function parsePrestigeDecision(value) {
+    const text = String(value || "").trim();
+    const match = text.match(/^(\d+)\s+(podpořit|nepodpořit)/i);
+    if (!match) {
+      const podporit = /podpořit/i.test(text) && !/nepodpořit/i.test(text);
+      return { poradi: null, rozhodnuti: text, podporit };
+    }
+    const poradi = Number(match[1]);
+    const podporit = !/^nepodpořit/i.test(match[2]);
+    return { poradi, rozhodnuti: podporit ? "podpořit" : "nepodpořit", podporit };
+  }
+
+  function parsePrestigeApplicant(cell) {
+    const raw = String(cell || "").trim();
+    if (!raw) return { jmeno: "", prijmeni: "", tituly: "" };
+    const comma = raw.indexOf(",");
+    const main = (comma >= 0 ? raw.slice(0, comma) : raw).trim();
+    const tituly = comma >= 0 ? raw.slice(comma + 1).trim() : "";
+    const parts = main.split(/\s+/).filter(Boolean);
+    const honorific = /^(prof|doc|ing|mgr|dr|pharmdr|rndr|phdr|mba|mpa|m\.a|ph\.d)\.?$/i;
+    while (parts.length && honorific.test(parts[0])) parts.shift();
+    if (parts.length >= 2 && /^lamb$/i.test(parts[0])) {
+      return { jmeno: parts.slice(1).join(" "), prijmeni: parts[0], tituly };
+    }
+    const prijmeni = parts.pop() || "";
+    const jmeno = parts.join(" ");
+    return { jmeno, prijmeni, tituly };
+  }
+
+  function prestigePersonKey(prijmeni, used) {
+    const base = String(prijmeni || "osoba")
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "") || "osoba";
+    if (!used.has(base)) {
+      used.add(base);
+      return base;
+    }
+    let i = 2;
+    while (used.has(`${base}${i}`)) i += 1;
+    const key = `${base}${i}`;
+    used.add(key);
+    return key;
+  }
+
+  function prestigeRowValue(row, aliases) {
+    for (const alias of aliases) {
+      if (row[alias] != null && String(row[alias]).trim() !== "") return row[alias];
+    }
+    return "";
+  }
+
+  function prestigeDataFromCsvRows(rows) {
+    const persons = [];
+    const applications = [];
+    const usedKeys = new Set();
+    rows.forEach((row, index) => {
+      const normalized = {};
+      Object.entries(row).forEach(([key, value]) => {
+        normalized[normalizePrestigeHeader(key)] = value;
+      });
+      const applicant = parsePrestigeApplicant(prestigeRowValue(normalized, ["zadatel", "žadatel", "applicant"]));
+      if (!applicant.prijmeni && !applicant.jmeno) return;
+      const key = prestigePersonKey(applicant.prijmeni, usedKeys);
+      persons.push({ key, ...applicant, fakulta: prestigeRowValue(normalized, ["fakulta"]) });
+      const decision = parsePrestigeDecision(prestigeRowValue(normalized, ["rozhodnuti", "rozhodnutí", "decision"]));
+      const kriteria = {};
+      for (let i = 1; i <= 7; i += 1) {
+        const score = Number(prestigeRowValue(normalized, [`k${i}`]));
+        if (score) kriteria[`k${i}`] = score;
+      }
+      const prumerRaw = prestigeRowValue(normalized, ["prumer", "průměr", "average"]);
+      const prumer = prumerRaw ? Number(String(prumerRaw).replace(",", ".")) : null;
+      applications.push({
+        id: `p2600001-0001-4001-8001-${String(index + 1).padStart(12, "0")}`,
+        projekt_id: `PRESTIGE-2026-${String(index + 1).padStart(3, "0")}`,
+        person_key: key,
+        nazev_projektu: prestigeRowValue(normalized, ["projekt", "nazev projektu", "název projektu"]),
+        fakulta: prestigeRowValue(normalized, ["fakulta"]),
+        cilova_soutez: prestigeRowValue(normalized, ["cilova soutez", "cílová soutěž", "cilova soutěž"]),
+        termin_podani: prestigeRowValue(normalized, [
+          "predpokladany termin podani navrhu",
+          "předpokládaný termín podání návrhu",
+          "termin",
+          "termín"
+        ]),
+        financni_pozadavek: parsePrestigeMoney(prestigeRowValue(normalized, ["rozpocet 1. rok", "rozpočet 1. rok", "rok 1"])),
+        rozpocet_rok_2: parsePrestigeMoney(prestigeRowValue(normalized, ["rozpocet 2. rok", "rozpočet 2. rok", "rok 2"])),
+        kriteria: Object.keys(kriteria).length ? kriteria : null,
+        prumer,
+        poradi: decision.poradi,
+        rozhodnuti: decision.rozhodnuti,
+        stav: decision.podporit ? "Podpořeno" : "Zamítnuto",
+        podporit: decision.podporit
+      });
+    });
+    return {
+      source: "Import CSV – UHK Prestige výzva 1/2026",
+      competition_updates: {
+        stav: "Rozhodnuto",
+        hodnoceni_prodekanu: "Hodnocení proděkanů fakult a komise dle kritérií K1–K7 — import z tabulky.",
+        rozhodnuti_prorektorky: "Import z tabulky podaných projektů (výzva č. 1/2026)."
+      },
+      persons,
+      applications
+    };
+  }
+
+  async function readPrestigeCsvText(file) {
+    const buffer = await file.arrayBuffer();
+    const encodings = ["utf-8", "windows-1250", "iso-8859-2"];
+    let bestText = "";
+    let bestScore = -1;
+    for (const encoding of encodings) {
+      try {
+        const text = new TextDecoder(encoding).decode(buffer);
+        const score = (text.match(/[ěščřžýáíéúůďťňó]/gi) || []).length;
+        if (score > bestScore) {
+          bestScore = score;
+          bestText = text;
+        }
+      } catch (_) { /* next encoding */ }
+    }
+    return bestText || new TextDecoder("utf-8").decode(buffer);
+  }
+
+  async function importPrestigeFromCsv(file) {
+    if (!file) return;
+    let text;
+    try {
+      text = await readPrestigeCsvText(file);
+    } catch (err) {
+      alert("CSV se nepodařilo načíst: " + (err.message || err));
+      return;
+    }
+    const table = window.kbPersons?.parseDelimitedTable?.(text);
+    if (!table?.rows?.length) {
+      alert("V CSV nebyly nalezeny žádné řádky projektů.");
+      return;
+    }
+    const data = prestigeDataFromCsvRows(table.rows);
+    if (!data.applications.length) {
+      alert("Nepodařilo se zpracovat žádnou přihlášku. Zkontrolujte hlavičku (Žadatel, Projekt, K1–K7, Rozhodnutí).");
+      return;
+    }
+    return applyCompetitionProjectsImport(data, "prestige", 2026, 1, buildPrestigeHodnoceni, "Podpořeno – UHK Prestige výzva 1/2026");
   }
 
   function importRegaProjects() {
@@ -1009,8 +1181,10 @@
       beh: 1,
       seedBtn: { id: "importPrestigeSeedBtn", labelNew: "1. Načíst šablonu Prestige", labelUpdate: "Aktualizovat šablonu Prestige" },
       projectsBtn: { id: "importPrestigeProjectsBtn", label: "2. Importovat podané projekty (11)" },
+      csvBtn: { id: "importPrestigeCsvBtn", inputId: "importPrestigeCsvInput", label: "Import z CSV (Excel)" },
       onSeed: importPrestigeSeed,
-      onProjects: importPrestigeProjects
+      onProjects: importPrestigeProjects,
+      onCsv: importPrestigeFromCsv
     }
   };
 
@@ -1033,10 +1207,21 @@
         <div class="competitionRegaSeedActions">
           <button type="button" id="${cfg.seedBtn.id}" class="button small accent">${hasRun ? cfg.seedBtn.labelUpdate : cfg.seedBtn.labelNew}</button>
           <button type="button" id="${cfg.projectsBtn.id}" class="button small secondary">${cfg.projectsBtn.label}</button>
+          ${cfg.csvBtn ? `<input type="file" id="${cfg.csvBtn.inputId}" accept=".csv,.txt,text/csv" hidden>
+          <button type="button" id="${cfg.csvBtn.id}" class="button small secondary">${cfg.csvBtn.label}</button>` : ""}
         </div>
       </div>`;
     el(cfg.seedBtn.id)?.addEventListener("click", cfg.onSeed);
     el(cfg.projectsBtn.id)?.addEventListener("click", cfg.onProjects);
+    if (cfg.csvBtn) {
+      const csvInput = el(cfg.csvBtn.inputId);
+      el(cfg.csvBtn.id)?.addEventListener("click", () => csvInput?.click());
+      csvInput?.addEventListener("change", async () => {
+        const file = csvInput.files?.[0];
+        csvInput.value = "";
+        if (file) await cfg.onCsv(file);
+      });
+    }
   }
 
   async function saveCompetition(comp) {
