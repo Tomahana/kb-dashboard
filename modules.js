@@ -49,11 +49,12 @@
       icon: "🔬"
     },
     {
-      slug: "modul-interni-souteze",
+      slug: "interni-souteze",
       title: "Interní soutěže",
-      description: "Výzvy, hodnotící termíny a výsledky interních soutěží.",
-      status: "planned",
-      icon: "🏆"
+      description: "UHK Connect, Prestige, Horizon, Rega, Návraty, PhD Seed — alokace, výzvy, přihlášky a podpora.",
+      status: "active",
+      icon: "🏆",
+      stats: ["competitionsTotal", "competitionsActive"]
     },
     {
       slug: "modul-dkrvo",
@@ -113,6 +114,8 @@
       const date = new Date(d.termin_interni || d.termin_odeslani || d.termin_sberu || "");
       return date && date < now && !["odesláno", "uzavřeno", "hotovo", "zrušeno", "archiv"].includes(lower(d.stav));
     }).length;
+    const comps = window.kbCompetitions?.getCompetitions?.() || [];
+    const activeComps = comps.filter(c => !["uzavřeno", "archiv"].includes(lower(c.stav))).length;
 
     return {
       emailsTotal: data.length,
@@ -120,7 +123,9 @@
       emailsAi: pendingAi,
       emailsRisks: risks,
       deadlinesTotal: deadlines.length,
-      deadlinesOverdue: overdue
+      deadlinesOverdue: overdue,
+      competitionsTotal: comps.length,
+      competitionsActive: activeComps
     };
   }
 
@@ -131,7 +136,9 @@
       emailsAi: `${value} AI ke kontrole`,
       emailsRisks: `${value} rizik`,
       deadlinesTotal: `${value} termínů`,
-      deadlinesOverdue: `${value} po termínu`
+      deadlinesOverdue: `${value} po termínu`,
+      competitionsTotal: `${value} běhů soutěží`,
+      competitionsActive: `${value} aktivních běhů`
     };
     return labels[key] || String(value);
   }

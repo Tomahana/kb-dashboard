@@ -7,6 +7,7 @@
     temata: { title: "Témata", subtitle: "Seskupení e-mailů a AI shrnutí" },
     analyza: { title: "Analýza", subtitle: "Přehled agend, rizik a vývoje v čase" },
     terminy: { title: "Termíny", subtitle: "Termíny sběrů dat a odesílání na úřady" },
+    "interni-souteze": { title: "Interní soutěže", subtitle: "UHK programy, běhy, přihlášky, hodnocení a finance" },
     nastaveni: { title: "Nastavení", subtitle: "Supabase, AI, import a export" },
     modul: { title: "Modul", subtitle: "Oblast v přípravě" }
   };

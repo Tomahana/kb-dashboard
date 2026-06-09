@@ -132,10 +132,74 @@ revoke all on public.kb_deadlines from anon;
 grant select, insert, update, delete on public.kb_deadlines to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 4) Ověření
+-- 4) kb_competitions + přihlášky a podpořené projekty (interní soutěže)
+-- ---------------------------------------------------------------------------
+alter table if exists public.kb_competitions enable row level security;
+alter table if exists public.kb_competition_applications enable row level security;
+alter table if exists public.kb_competition_supported enable row level security;
+
+drop policy if exists "kb_competitions auth" on public.kb_competitions;
+drop policy if exists "kb_competitions anon read" on public.kb_competitions;
+drop policy if exists "kb_competitions anon write" on public.kb_competitions;
+drop policy if exists "kb_competitions authenticated read" on public.kb_competitions;
+drop policy if exists "kb_competitions authenticated write" on public.kb_competitions;
+
+drop policy if exists "kb_competition_applications auth" on public.kb_competition_applications;
+drop policy if exists "kb_competition_applications authenticated read" on public.kb_competition_applications;
+drop policy if exists "kb_competition_applications authenticated write" on public.kb_competition_applications;
+
+drop policy if exists "kb_competition_supported auth" on public.kb_competition_supported;
+drop policy if exists "kb_competition_supported authenticated read" on public.kb_competition_supported;
+drop policy if exists "kb_competition_supported authenticated write" on public.kb_competition_supported;
+
+create policy "kb_competitions authenticated read"
+  on public.kb_competitions for select
+  to authenticated
+  using (true);
+
+create policy "kb_competitions authenticated write"
+  on public.kb_competitions for all
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "kb_competition_applications authenticated read"
+  on public.kb_competition_applications for select
+  to authenticated
+  using (true);
+
+create policy "kb_competition_applications authenticated write"
+  on public.kb_competition_applications for all
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "kb_competition_supported authenticated read"
+  on public.kb_competition_supported for select
+  to authenticated
+  using (true);
+
+create policy "kb_competition_supported authenticated write"
+  on public.kb_competition_supported for all
+  to authenticated
+  using (true)
+  with check (true);
+
+revoke all on public.kb_competitions from anon;
+revoke all on public.kb_competition_applications from anon;
+revoke all on public.kb_competition_supported from anon;
+grant select, insert, update, delete on public.kb_competitions to authenticated;
+grant select, insert, update, delete on public.kb_competition_applications to authenticated;
+grant select, insert, update, delete on public.kb_competition_supported to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 5) Ověření
 -- ---------------------------------------------------------------------------
 select schemaname, tablename, policyname, roles, cmd
 from pg_policies
 where schemaname = 'public'
-  and tablename in ('kb_records', 'kb_record_bodies', 'kb_topics', 'kb_topic_records', 'kb_topic_deadlines', 'kb_deadlines')
+  and tablename in (
+    'kb_records', 'kb_record_bodies', 'kb_topics', 'kb_topic_records', 'kb_topic_deadlines',
+    'kb_deadlines', 'kb_competitions', 'kb_competition_applications', 'kb_competition_supported'
+  )
 order by tablename, policyname;

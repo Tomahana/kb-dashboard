@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>KB Dashboard – Znalostní báze</title>
-  <link rel="stylesheet" href="styles.css?v=16" />
+  <link rel="stylesheet" href="styles.css?v=17" />
 </head>
 <body class="app-shell">
   <aside class="sidebar">
@@ -25,11 +25,12 @@
         Termíny
         <span id="navBadgeDeadlines" class="navBadge navBadgeDeadline" hidden></span>
       </a>
+      <a href="#interni-souteze" class="navItem" data-page="interni-souteze">Interní soutěže</a>
       <a href="#nastaveni" class="navItem" data-page="nastaveni">Nastavení</a>
     </nav>
     <div class="sidebarFoot">
       <p class="hint">Vyberte modul v přehledu</p>
-      <p class="appVersion" id="appVersion">Verze 3.8</p>
+      <p class="appVersion" id="appVersion">Verze 3.9</p>
     </div>
   </aside>
 
@@ -213,6 +214,11 @@
       </section>
     </section>
 
+    <!-- INTERNÍ SOUTĚŽE -->
+    <section id="page-interni-souteze" class="page">
+      <div id="interniSoutezeRoot"></div>
+    </section>
+
     <!-- NASTAVENÍ -->
     <section id="page-nastaveni" class="page">
       <section class="panel">
@@ -239,6 +245,10 @@
         <h2>Termíny v Supabase</h2>
         <p class="hint">Spusťte <code>supabase/deadlines-schema.sql</code> a pokud tabulka už existuje, také <code>supabase/deadlines-migrate-v2.sql</code>.</p>
         <p class="hint">Import z Excelu: Uložit jako CSV (oddělovač středník) nebo zkopírovat do TSV. Vzor záhlaví: <code>data/deadlines-import.example.tsv</code>.</p>
+      </section>
+      <section class="panel">
+        <h2>Interní soutěže v Supabase</h2>
+        <p class="hint">Spusťte <code>supabase/competitions-schema.sql</code> pro tabulky běhů soutěží, přihlášek a podpořených projektů. Po vytvoření tabulek také <code>supabase/security-rls.sql</code>.</p>
       </section>
     </section>
   </div>
@@ -475,21 +485,23 @@
   </datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=16"></script>
-  <script src="auth.js?v=16"></script>
-  <script src="form-pickers.js?v=16"></script>
-  <script src="layout.js?v=16"></script>
-  <script src="modules.js?v=16"></script>
-  <script src="app.js?v=16"></script>
-  <script src="enhancements.js?v=16"></script>
-  <script src="supabase-loader.js?v=16"></script>
-  <script src="ai-classify.js?v=16"></script>
-  <script src="task-export.js?v=16"></script>
-  <script src="notion.js?v=16"></script>
-  <script src="supabase-topics.js?v=16"></script>
-  <script src="topics.js?v=16"></script>
-  <script src="supabase-deadlines.js?v=16"></script>
-  <script src="record-click-fix.js?v=16"></script>
-  <script src="deadlines.js?v=16"></script>
+  <script src="supabase-config.js?v=17"></script>
+  <script src="auth.js?v=17"></script>
+  <script src="form-pickers.js?v=17"></script>
+  <script src="layout.js?v=17"></script>
+  <script src="modules.js?v=17"></script>
+  <script src="app.js?v=17"></script>
+  <script src="enhancements.js?v=17"></script>
+  <script src="supabase-loader.js?v=17"></script>
+  <script src="ai-classify.js?v=17"></script>
+  <script src="task-export.js?v=17"></script>
+  <script src="notion.js?v=17"></script>
+  <script src="supabase-topics.js?v=17"></script>
+  <script src="topics.js?v=17"></script>
+  <script src="supabase-deadlines.js?v=17"></script>
+  <script src="record-click-fix.js?v=17"></script>
+  <script src="deadlines.js?v=17"></script>
+  <script src="supabase-competitions.js?v=17"></script>
+  <script src="interni-souteze.js?v=17"></script>
 </body>
 </html>
