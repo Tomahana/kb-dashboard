@@ -279,11 +279,6 @@
     return [...new Set(src.map(c => c.beh_cislo).filter(Boolean))].sort((a, b) => a - b);
   }
 
-  function programsInOverview() {
-    const slugs = [...new Set(competitions.map(c => c.program_slug).filter(Boolean))];
-    return PROGRAMS.filter(p => slugs.includes(p.slug));
-  }
-
   function renderCompetitionOverview() {
     const grid = el("competitionOverviewGrid");
     const rokSel = el("overviewRokFilter");
@@ -299,12 +294,9 @@
       rokSel.innerHTML = `<option value="">Vše</option>${years.map(y => `<option value="${y}" ${String(y) === String(overviewFilterRok) ? "selected" : ""}>${y}</option>`).join("")}`;
     }
     if (progSel) {
-      const progs = programsInOverview();
-      progSel.innerHTML = `<option value="">Vše</option>${PROGRAMS.map(p => {
-        const count = competitions.filter(c => c.program_slug === p.slug).length;
-        if (!count && !competitions.length) return "";
-        return `<option value="${p.slug}" ${p.slug === overviewFilterProgram ? "selected" : ""}>${html(p.title)}</option>`;
-      }).join("")}`;
+      progSel.innerHTML = `<option value="">Vše</option>${PROGRAMS.map(p =>
+        `<option value="${p.slug}" ${p.slug === overviewFilterProgram ? "selected" : ""}>${html(p.title)}</option>`
+      ).join("")}`;
     }
     if (behSel) {
       const behs = uniqueBeh();
