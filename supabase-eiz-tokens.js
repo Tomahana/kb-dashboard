@@ -3,8 +3,8 @@
 (function () {
   const STORAGE_KEY = "kb-dashboard-eiz-tokens-v1";
 
-  const CONTRACT_FIELDS = ["nazev", "poskytovatel", "poznamka", "aktivni"];
-  const YEAR_FIELDS = ["contract_id", "rok", "pocet_tokenu", "poznamka"];
+  const CONTRACT_FIELDS = ["nazev", "poskytovatel", "poznamka", "typ_cerpani", "sleva_apc_procent", "aktivni"];
+  const YEAR_FIELDS = ["contract_id", "rok", "pocet_tokenu", "neomezene", "poznamka"];
   const PUBLICATION_FIELDS = [
     "contract_id", "source_key", "autor", "autor_osobni_cislo", "fakulta", "zkr_fak",
     "nazev_clanku", "doi", "datum_zadosti", "datum_prijeti", "usetrena_apc", "imported_at"
@@ -34,6 +34,8 @@
       nazev: row.nazev || "",
       poskytovatel: row.poskytovatel || "",
       poznamka: row.poznamka || "",
+      typ_cerpani: row.typ_cerpani || "tokeny",
+      sleva_apc_procent: row.sleva_apc_procent == null ? null : Number(row.sleva_apc_procent),
       aktivni: row.aktivni !== false,
       years,
       created_at: row.created_at,
@@ -48,7 +50,8 @@
       id: row.id,
       contract_id: row.contract_id,
       rok: Number(row.rok) || 0,
-      pocet_tokenu: Number(row.pocet_tokenu) || 0,
+      pocet_tokenu: row.pocet_tokenu == null ? null : Number(row.pocet_tokenu),
+      neomezene: !!row.neomezene,
       poznamka: row.poznamka || "",
       created_at: row.created_at,
       updated_at: row.updated_at,
@@ -88,17 +91,24 @@
     CONTRACT_FIELDS.forEach((field) => {
       if (field === "nazev" || field === "aktivni") return;
       const value = item[field];
+      if (field === "sleva_apc_procent") {
+        payload[field] = value === "" || value == null ? null : Number(value);
+        return;
+      }
       payload[field] = value === "" || value == null ? null : value;
     });
+    if (!payload.typ_cerpani) payload.typ_cerpani = "tokeny";
     return payload;
   }
 
   function toYearPayload(item) {
+    const neomezene = !!item.neomezene;
     return {
       id: item.id,
       contract_id: item.contract_id,
       rok: Number(item.rok),
-      pocet_tokenu: Number(item.pocet_tokenu) || 0,
+      neomezene,
+      pocet_tokenu: neomezene ? null : (Number(item.pocet_tokenu) || 0),
       poznamka: item.poznamka || null,
       updated_at: new Date().toISOString()
     };

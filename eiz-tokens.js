@@ -11,6 +11,11 @@
     usetrena_apc: ["Ušetřená cena APC (odhad)", "Usetrena cena APC", "APC", "usetrena_apc", "Ušetřená cena APC"]
   };
 
+  const TYP_CERPANI = {
+    TOKENY: "tokeny",
+    SLEVA_APC: "sleva_apc"
+  };
+
   const FAKULTA_ZKR = {
     fim: "FIM",
     "fakulta informatiky": "FIM",
@@ -146,8 +151,45 @@
     return Number.isFinite(y) ? y : null;
   }
 
+  function isSlevaApcContract(contract) {
+    return (contract?.typ_cerpani || TYP_CERPANI.TOKENY) === TYP_CERPANI.SLEVA_APC;
+  }
+
+  function countsTowardTokens(contract) {
+    return !isSlevaApcContract(contract);
+  }
+
+  function isYearUnlimited(year) {
+    return !!year?.neomezene;
+  }
+
+  function formatTokenAllocation(year) {
+    if (isYearUnlimited(year)) return "∞";
+    if (year?.pocet_tokenu == null) return "—";
+    return String(year.pocet_tokenu);
+  }
+
+  function contractTypeLabel(contract) {
+    if (isSlevaApcContract(contract)) {
+      const pct = contract.sleva_apc_procent;
+      return Number.isFinite(pct) ? `Sleva ${pct} % na APC` : "Sleva na APC";
+    }
+    return "Čerpání tokenů";
+  }
+
+  function pubsForContractYear(contractId, rok) {
+    return publications.filter((p) => p.contract_id === contractId && publicationYear(p) === rok);
+  }
+
   function usedTokensForContract(contractId, rok) {
-    return publications.filter((p) => p.contract_id === contractId && publicationYear(p) === rok).length;
+    const contract = contractById(contractId);
+    if (!countsTowardTokens(contract)) return 0;
+    return pubsForContractYear(contractId, rok).length;
+  }
+
+  function apcForContractYear(contractId, rok) {
+    return pubsForContractYear(contractId, rok)
+      .reduce((sum, p) => sum + (Number(p.usetrena_apc) || 0), 0);
   }
 
   function totalApcForContract(contractId) {
@@ -361,28 +403,48 @@
     const years = (contract.years || []).slice().sort((a, b) => b.rok - a.rok);
     const pubCount = publications.filter((p) => p.contract_id === contract.id).length;
     const apc = totalApcForContract(contract.id);
+    const sleva = isSlevaApcContract(contract);
     const yearRows = years.length
       ? years.map((y) => {
+          const pubs = pubsForContractYear(contract.id, y.rok);
+          const apcYear = apcForContractYear(contract.id, y.rok);
+          if (sleva) {
+            return `<tr>
+              <td><strong>${y.rok}</strong></td>
+              <td>${pubs.length}</td>
+              <td>${html(formatMoney(apcYear))}</td>
+              <td class="rowActions">
+                <button type="button" class="button small secondary" data-edit-year="${html(contract.id)}" data-year="${y.rok}">Upravit</button>
+              </td>
+            </tr>`;
+          }
           const used = usedTokensForContract(contract.id, y.rok);
-          const left = Math.max(0, (y.pocet_tokenu || 0) - used);
-          const warn = used > (y.pocet_tokenu || 0);
+          const unlimited = isYearUnlimited(y);
+          const allocated = unlimited ? null : (y.pocet_tokenu ?? 0);
+          const left = unlimited ? null : Math.max(0, allocated - used);
+          const warn = !unlimited && used > allocated;
           return `<tr>
             <td><strong>${y.rok}</strong></td>
-            <td>${y.pocet_tokenu}</td>
+            <td>${formatTokenAllocation(y)}</td>
             <td>${used}</td>
-            <td class="${warn ? "eizWarn" : ""}">${left}</td>
+            <td class="${warn ? "eizWarn" : ""}">${unlimited ? "—" : left}</td>
             <td class="rowActions">
               <button type="button" class="button small secondary" data-edit-year="${html(contract.id)}" data-year="${y.rok}">Upravit</button>
             </td>
           </tr>`;
         }).join("")
-      : `<tr><td colspan="5" class="hint">Zatím bez ročních tokenů — přidejte rok 2025 nebo 2026.</td></tr>`;
+      : `<tr><td colspan="${sleva ? 4 : 5}" class="hint">Zatím bez ročních záznamů — přidejte rok 2025 nebo 2026.</td></tr>`;
 
-    return `<article class="eizContractCard ${contract.aktivni ? "" : "eizContractInactive"}">
+    const tableHead = sleva
+      ? `<thead><tr><th>Rok</th><th>Publikací</th><th>Ušetřené APC</th><th></th></tr></thead>`
+      : `<thead><tr><th>Rok</th><th>Tokenů</th><th>Využito</th><th>Zbývá</th><th></th></tr></thead>`;
+
+    return `<article class="eizContractCard ${contract.aktivni ? "" : "eizContractInactive"} ${sleva ? "eizContractSleva" : ""}">
       <div class="eizContractHead">
         <div>
           <h3>${html(contract.nazev)}</h3>
           ${contract.poskytovatel ? `<p class="hint">${html(contract.poskytovatel)}</p>` : ""}
+          <span class="eizTypeBadge ${sleva ? "eizTypeBadgeSleva" : ""}">${html(contractTypeLabel(contract))}</span>
         </div>
         <div class="sectionActions">
           <button type="button" class="button small secondary" data-edit-contract="${html(contract.id)}">Upravit</button>
@@ -398,7 +460,7 @@
         ${contract.aktivni ? "" : `<span class="eizInactiveBadge">Neaktivní</span>`}
       </div>
       <table class="eizYearTable">
-        <thead><tr><th>Rok</th><th>Tokenů</th><th>Využito</th><th>Zbývá</th><th></th></tr></thead>
+        ${tableHead}
         <tbody>${yearRows}</tbody>
       </table>
     </article>`;
@@ -441,7 +503,7 @@
         <input type="file" id="eizImportFile" accept=".csv,.txt,.tsv,text/csv" hidden />
         <button type="button" id="eizRelinkBtn" class="button small secondary">Propojit autory</button>
       </div>
-      <p class="hint">Importujte tabulku se sloupci: Autor, Fakulta, Název článku, DOI, Datum žádosti, Datum přijetí, Ušetřená cena APC (odhad). Vzor: <code>data/eiz-publications-import.example.tsv</code>.</p>
+      <p class="hint">Importujte tabulku se sloupci: Autor, Fakulta, Název článku, DOI, Datum žádosti, Datum přijetí, Ušetřená cena APC (odhad). Vzor: <code>data/eiz-publications-import.example.tsv</code>. U smluv typu <strong>sleva na APC</strong> se publikace nepočítají do tokenů.</p>
       ${items.length ? `<div class="eizTableWrap"><table class="eizTable">
         <thead><tr>
           <th>Autor</th><th>Fak.</th><th>Název článku</th><th>DOI</th><th>Žádost</th><th>Přijetí</th><th>APC</th>
@@ -467,13 +529,20 @@
   function renderSummary() {
     const totalPubs = publications.length;
     const totalApc = publications.reduce((s, p) => s + (Number(p.usetrena_apc) || 0), 0);
-    const totalTokens = contracts.reduce((s, c) => s + (c.years || []).reduce((ySum, y) => ySum + (y.pocet_tokenu || 0), 0), 0);
-    const used = publications.length;
+    const totalTokens = contracts.reduce((s, c) => {
+      if (isSlevaApcContract(c)) return s;
+      return s + (c.years || []).reduce((ySum, y) => {
+        if (isYearUnlimited(y)) return ySum;
+        return ySum + (y.pocet_tokenu || 0);
+      }, 0);
+    }, 0);
+    const tokenPubs = publications.filter((p) => countsTowardTokens(contractById(p.contract_id))).length;
     return `
       <div class="eizMetrics">
         <div class="metric"><span>${contracts.length}</span><small>Smluv</small></div>
-        <div class="metric"><span>${totalTokens}</span><small>Tokenů (součet roků)</small></div>
-        <div class="metric"><span>${used}</span><small>Publikací</small></div>
+        <div class="metric"><span>${totalTokens}</span><small>Alokovaných tokenů</small></div>
+        <div class="metric"><span>${tokenPubs}</span><small>Publikací čerpajících token</small></div>
+        <div class="metric"><span>${publications.length}</span><small>Publikací celkem</small></div>
         <div class="metric"><span>${formatMoney(totalApc)}</span><small>Ušetřené APC</small></div>
       </div>`;
   }
@@ -604,6 +673,34 @@
     }
   }
 
+  function toggleContractTypeFields() {
+    const typ = el("eizContractTyp")?.value || TYP_CERPANI.TOKENY;
+    const slevaWrap = el("eizContractSlevaWrap");
+    const slevaInput = el("eizContractSlevaProcent");
+    if (slevaWrap) slevaWrap.hidden = typ !== TYP_CERPANI.SLEVA_APC;
+    if (slevaInput) slevaInput.required = typ === TYP_CERPANI.SLEVA_APC;
+  }
+
+  function toggleYearTokenFields() {
+    const contractId = n(el("eizYearContractId")?.value);
+    const contract = contractById(contractId);
+    const sleva = isSlevaApcContract(contract);
+    const tokenFields = el("eizYearTokenFields");
+    const neomezene = el("eizYearNeomezene");
+    const pocet = el("eizYearPocet");
+    if (tokenFields) tokenFields.hidden = sleva;
+    if (neomezene) {
+      neomezene.disabled = sleva;
+      if (sleva) neomezene.checked = false;
+    }
+    if (pocet) {
+      const unlimited = !sleva && neomezene?.checked;
+      pocet.disabled = unlimited;
+      pocet.required = !sleva && !unlimited;
+      if (unlimited) pocet.value = "";
+    }
+  }
+
   function openContractDialog(id) {
     const existing = id ? contractById(id) : null;
     const dlg = el("eizContractDialog");
@@ -613,7 +710,10 @@
     el("eizContractNazev").value = existing?.nazev || "";
     el("eizContractPoskytovatel").value = existing?.poskytovatel || "";
     el("eizContractPoznamka").value = existing?.poznamka || "";
+    el("eizContractTyp").value = existing?.typ_cerpani || TYP_CERPANI.TOKENY;
+    el("eizContractSlevaProcent").value = existing?.sleva_apc_procent ?? "";
     el("eizContractAktivni").checked = existing ? existing.aktivni !== false : true;
+    toggleContractTypeFields();
     dlg.showModal();
   }
 
@@ -623,11 +723,19 @@
     const existing = (contract.years || []).find((y) => y.rok === rok);
     const dlg = el("eizYearDialog");
     if (!dlg) return;
+    el("eizYearDialogTitle").textContent = isSlevaApcContract(contract)
+      ? "Rok — sleva na APC"
+      : "Tokeny na rok";
+    el("eizYearDialogHint").textContent = isSlevaApcContract(contract)
+      ? "U smlouvy se slevou na APC se publikace nepočítají do tokenů — evidujte jen rok pro přehled."
+      : "Počet tokenů pro danou transformační smlouvu a kalendářní rok.";
     el("eizYearContractId").value = contractId;
     el("eizYearId").value = existing?.id || "";
     el("eizYearRok").value = existing?.rok || rok || new Date().getFullYear();
-    el("eizYearPocet").value = existing?.pocet_tokenu ?? "";
+    el("eizYearNeomezene").checked = !!existing?.neomezene;
+    el("eizYearPocet").value = existing?.neomezene ? "" : (existing?.pocet_tokenu ?? "");
     el("eizYearPoznamka").value = existing?.poznamka || "";
+    toggleYearTokenFields();
     dlg.showModal();
   }
 
@@ -636,17 +744,25 @@
       e.preventDefault();
       const id = n(el("eizContractId").value) || uuid();
       const existing = contractById(id);
+      const typ = el("eizContractTyp").value || TYP_CERPANI.TOKENY;
+      const slevaRaw = n(el("eizContractSlevaProcent").value).replace(",", ".");
       const contract = {
         id,
         nazev: n(el("eizContractNazev").value),
         poskytovatel: n(el("eizContractPoskytovatel").value),
         poznamka: n(el("eizContractPoznamka").value),
+        typ_cerpani: typ,
+        sleva_apc_procent: typ === TYP_CERPANI.SLEVA_APC ? Number(slevaRaw) : null,
         aktivni: el("eizContractAktivni").checked,
         years: existing?.years || [],
         __existing: !!existing
       };
       if (!contract.nazev) {
         setStatus("Název smlouvy je povinný.", true);
+        return;
+      }
+      if (typ === TYP_CERPANI.SLEVA_APC && !Number.isFinite(contract.sleva_apc_procent)) {
+        setStatus("U smlouvy se slevou na APC zadejte výši slevy v procentech (např. 20).", true);
         return;
       }
       loading = true;
@@ -663,13 +779,23 @@
       }
     });
 
+    el("eizContractTyp")?.addEventListener("change", toggleContractTypeFields);
+    el("eizYearNeomezene")?.addEventListener("change", toggleYearTokenFields);
+
     el("eizYearForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const contractId = n(el("eizYearContractId").value);
       const rok = Number(el("eizYearRok").value);
+      const contract = contractById(contractId);
+      const sleva = isSlevaApcContract(contract);
+      const neomezene = !sleva && el("eizYearNeomezene").checked;
       const pocet = Number(el("eizYearPocet").value);
       if (!contractId || !Number.isFinite(rok)) {
         setStatus("Vyplňte rok.", true);
+        return;
+      }
+      if (!sleva && !neomezene && !Number.isFinite(pocet)) {
+        setStatus("Zadejte počet tokenů, nebo zaškrtněte neomezeně.", true);
         return;
       }
       loading = true;
@@ -678,7 +804,8 @@
         await saveContractYear(contractId, {
           id: n(el("eizYearId").value) || uuid(),
           rok,
-          pocet_tokenu: Number.isFinite(pocet) ? pocet : 0,
+          neomezene,
+          pocet_tokenu: sleva || neomezene ? null : pocet,
           poznamka: n(el("eizYearPoznamka").value),
           __existing: !!n(el("eizYearId").value)
         });
@@ -712,6 +839,9 @@
       .eizContractHead h3 { margin: 0; }
       .eizContractMeta { display: flex; flex-wrap: wrap; gap: .75rem; font-size: .84rem; color: var(--muted); margin: .5rem 0 .75rem; }
       .eizInactiveBadge { background: #fee2e2; color: #991b1b; padding: .1rem .45rem; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+      .eizTypeBadge { display: inline-block; margin-top: .35rem; font-size: .72rem; font-weight: 700; padding: .15rem .5rem; border-radius: 999px; background: #eef2ff; color: #3730a3; }
+      .eizTypeBadgeSleva { background: #ecfdf5; color: #047857; }
+      .eizContractSleva { border-color: #a7f3d0; }
       .eizYearTable { width: 100%; border-collapse: collapse; font-size: .88rem; }
       .eizYearTable th, .eizYearTable td { border-bottom: 1px solid var(--line); padding: .4rem .35rem; text-align: left; }
       .eizWarn { color: #b45309; font-weight: 700; }
