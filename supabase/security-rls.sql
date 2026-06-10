@@ -233,7 +233,29 @@ revoke all on public.kb_pcr_research_topics from anon;
 grant select, insert, update, delete on public.kb_pcr_research_topics to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 6) Ověření
+-- 6) kb_ai_advisor_saved (AI poradce — uložené dotazy a spojení, Fáze 2+)
+-- ---------------------------------------------------------------------------
+alter table if exists public.kb_ai_advisor_saved enable row level security;
+
+drop policy if exists "kb_ai_advisor_saved authenticated read" on public.kb_ai_advisor_saved;
+drop policy if exists "kb_ai_advisor_saved authenticated write" on public.kb_ai_advisor_saved;
+
+create policy "kb_ai_advisor_saved authenticated read"
+  on public.kb_ai_advisor_saved for select
+  to authenticated
+  using (true);
+
+create policy "kb_ai_advisor_saved authenticated write"
+  on public.kb_ai_advisor_saved for all
+  to authenticated
+  using (true)
+  with check (true);
+
+revoke all on public.kb_ai_advisor_saved from anon;
+grant select, insert, update, delete on public.kb_ai_advisor_saved to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 7) Ověření
 -- ---------------------------------------------------------------------------
 select schemaname, tablename, policyname, roles, cmd
 from pg_policies
@@ -241,6 +263,6 @@ where schemaname = 'public'
   and tablename in (
     'kb_records', 'kb_record_bodies', 'kb_topics', 'kb_topic_records', 'kb_topic_deadlines',
     'kb_deadlines', 'kb_persons', 'kb_competitions', 'kb_competition_applications', 'kb_competition_supported',
-    'kb_pcr_research_topics'
+    'kb_pcr_research_topics', 'kb_ai_advisor_saved'
   )
 order by tablename, policyname;

@@ -73,6 +73,14 @@
       stats: ["pcrTopicsTotal", "pcrTopicsLinked"]
     },
     {
+      slug: "ai-poradce",
+      title: "AI poradce",
+      description: "Dotazy nad daty aplikace — Osoby, Termíny, PČR, soutěže, témata a e-maily. Odpovědi jen z nalezených zdrojů; volitelné AI shrnutí.",
+      status: "active",
+      icon: "🤖",
+      stats: []
+    },
+    {
       slug: "modul-dkrvo",
       title: "DKRVO",
       description: "Roční výkaz výzkumu, sběr dat a odeslání na MŠMT.",

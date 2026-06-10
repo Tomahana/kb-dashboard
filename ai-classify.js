@@ -593,13 +593,48 @@ ${text || "(prázdný text)"}`;
     document.addEventListener("kb:records-loaded", () => setTimeout(updateAutoClassifyButton, 50));
   }
 
+  async function callChat(messages, options = {}) {
+    const settings = loadSettings();
+    if (!n(settings.apiKey)) throw new Error("Chybí API klíč. Nastavte ho v Nastavení → AI klasifikace.");
+
+    const body = {
+      model: settings.model || DEFAULTS.model,
+      temperature: options.temperature ?? 0.15,
+      messages
+    };
+    if (options.json) body.response_format = { type: "json_object" };
+
+    const base = n(settings.baseUrl || DEFAULTS.baseUrl).replace(/\/$/, "");
+    const res = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${settings.apiKey}`
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`AI API chyba ${res.status}: ${errText.slice(0, 300)}`);
+    }
+
+    const json = await res.json();
+    const content = json?.choices?.[0]?.message?.content;
+    if (!content) throw new Error("AI nevrátila odpověď.");
+    return content;
+  }
+
   window.kbAiClassify = {
     needsClassification,
     hasAiProposal,
     classifyRecord,
     pendingReviewRecords,
     updateAutoClassifyButton,
-    updateAiKeyStatus
+    updateAiKeyStatus,
+    callChat,
+    hasApiKey,
+    loadSettings
   };
 
   document.addEventListener("DOMContentLoaded", init);

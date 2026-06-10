@@ -10,6 +10,7 @@
     osoby: { title: "Osoby", subtitle: "Centrální evidence osob pro všechny moduly" },
     "interni-souteze": { title: "Interní soutěže", subtitle: "UHK programy, běhy, přihlášky, hodnocení a finance" },
     "pcr-vyzkum": { title: "Výzkumné směry PČR", subtitle: "Témata pro spolupráci UHK s Policií ČR — sync, analýza a osoby" },
+    "ai-poradce": { title: "AI poradce", subtitle: "Dotazy nad daty aplikace — odpovědi jen z modulů KB Dashboardu" },
     nastaveni: { title: "Nastavení", subtitle: "Supabase, AI, import a export" },
     modul: { title: "Modul", subtitle: "Oblast v přípravě" }
   };
