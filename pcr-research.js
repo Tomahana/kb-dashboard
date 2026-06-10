@@ -398,56 +398,24 @@
       </div>`;
   }
 
-  function renderBarChart(groups, maxBars = 12) {
-    const top = groups.slice(0, maxBars);
-    const max = top[0]?.[1] || 1;
-    return `<div class="pcrBarChart">${top.map(([label, count]) => `
-      <div class="pcrBarRow">
-        <div class="pcrBarLabel" title="${html(label)}">${html(label)}</div>
-        <div class="pcrBarTrack"><div class="pcrBarFill" style="width:${Math.round((count / max) * 100)}%"></div></div>
-        <div class="pcrBarCount">${count}</div>
-      </div>`).join("")}</div>`;
+  function analysisContext(items) {
+    return {
+      items,
+      allItems: topics,
+      html,
+      gestorDisplay,
+      isLinked,
+      uniqueValues: (field) => uniqueValues(field),
+      groupCount
+    };
   }
 
-  function renderAnalysis(items) {
-    const byOblast = groupCount(items, "oblast");
-    const byFakulta = groupCount(items, "zkr_fak");
-    const byKatedra = groupCount(items, "zkr_kat");
-    const gestorGroups = new Map();
-    for (const item of items) {
-      const key = gestorDisplay(item) || n(item.gestor) || "—";
-      gestorGroups.set(key, (gestorGroups.get(key) || 0) + 1);
-    }
-    const byGestor = [...gestorGroups.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "cs"));
-    const unlinked = items.filter((t) => !isLinked(t));
-
-    return `
-      <div class="pcrAnalysisGrid">
-        <section class="pcrAnalysisCard">
-          <h3>Podle oblasti</h3>
-          ${renderBarChart(byOblast)}
-        </section>
-        <section class="pcrAnalysisCard">
-          <h3>Podle fakulty</h3>
-          ${renderBarChart(byFakulta, 8)}
-        </section>
-        <section class="pcrAnalysisCard">
-          <h3>Podle katedry</h3>
-          ${renderBarChart(byKatedra, 10)}
-        </section>
-        <section class="pcrAnalysisCard">
-          <h3>Gestoři (počet témat)</h3>
-          ${renderBarChart(byGestor, 12)}
-        </section>
-        <section class="pcrAnalysisCard pcrAnalysisWide">
-          <h3>Nepropojení gestoři (${unlinked.length})</h3>
-          ${unlinked.length
-            ? `<ul class="pcrUnlinkedList">${unlinked.slice(0, 20).map((t) =>
-              `<li><strong>${html(t.tema)}</strong> — ${html(t.gestor)}${t.email ? ` · <a href="mailto:${html(t.email)}">${html(t.email)}</a>` : ""}</li>`
-            ).join("")}${unlinked.length > 20 ? `<li class="hint">… a dalších ${unlinked.length - 20}</li>` : ""}</ul>`
-            : `<p class="hint">Všechna témata mají gestora propojeného na modul Osoby.</p>`}
-        </section>
-      </div>`;
+  function renderAnalysisView(items) {
+    const host = `<div id="pcrAnalysisMount"></div>`;
+    queueMicrotask(() => {
+      window.kbPcrAnalysis?.mount?.(el("pcrAnalysisMount"), analysisContext(items));
+    });
+    return host;
   }
 
   function renderTable(items) {
@@ -484,7 +452,7 @@
         <div class="sectionHeader">
           <div>
             <h2>Výzkumné směry PČR</h2>
-            <p class="hint">Evidence výzkumných směrů UHK pro spolupráci s Policií ČR. Data se synchronizují z <a href="${DEFAULT_SHEET_URL}" target="_blank" rel="noopener">Google Sheets</a> do Supabase a gestoři se propojují na modul <a href="#osoby" data-goto="osoby">Osoby</a>.</p>
+            <p class="hint">Evidence výzkumných směrů UHK pro spolupráci s Policií ČR — tabulka, <strong>analýzy</strong> (matice fakult × oblast, expertíza gestorů, klíčová slova, report pro PČR). Sync z <a href="${DEFAULT_SHEET_URL}" target="_blank" rel="noopener">Google Sheets</a>, gestoři v modulu <a href="#osoby" data-goto="osoby">Osoby</a>.</p>
           </div>
           <div class="sectionActions">
             <button type="button" id="pcrReloadBtn" class="button small secondary">Načíst ze Supabase</button>
@@ -499,9 +467,9 @@
         ${renderFilters()}
         <div class="pcrViewTabs">
           <button type="button" class="pcrViewTab ${activeView === "table" ? "active" : ""}" data-pcr-view="table">Tabulka (${items.length})</button>
-          <button type="button" class="pcrViewTab ${activeView === "analysis" ? "active" : ""}" data-pcr-view="analysis">Analýza</button>
+          <button type="button" class="pcrViewTab ${activeView === "analysis" ? "active" : ""}" data-pcr-view="analysis">Analýzy</button>
         </div>
-        <div id="pcrResearchContent">${loading ? `<p class="hint">Načítám…</p>` : (activeView === "analysis" ? renderAnalysis(items) : renderTable(items))}</div>
+        <div id="pcrResearchContent">${loading ? `<p class="hint">Načítám…</p>` : (activeView === "analysis" ? renderAnalysisView(items) : renderTable(items))}</div>
       </section>`;
 
     el("pcrReloadBtn")?.addEventListener("click", loadTopics);
