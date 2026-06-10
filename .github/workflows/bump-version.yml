@@ -1,0 +1,30 @@
+name: Bump app version
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    if: ${{ !contains(github.event.head_commit.message, 'Verze ') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Zvýšit verzi
+        run: node scripts/bump-version.js
+      - name: Commit a push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add version.json index.html
+          VERSION="$(node -p "JSON.parse(require('fs').readFileSync('version.json','utf8')).version")"
+          git commit -m "Verze ${VERSION}"
+          git push
