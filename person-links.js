@@ -20,6 +20,10 @@
       cisloField: "gestor_osobni_cislo",
       labelField: "gestor",
       emailField: "email"
+    },
+    autor: {
+      cisloField: "autor_osobni_cislo",
+      labelField: "autor"
     }
   };
 
@@ -28,9 +32,10 @@
     { module: "interni-souteze", table: "kb_competition_supported", role: "resitel" },
     { module: "terminy", table: "kb_deadlines", role: "odpovedna_osoba" },
     { module: "pcr-vyzkum", table: "kb_pcr_research_topics", role: "gestor" },
+    { module: "eiz-tokeny", table: "kb_eiz_publications", role: "autor" },
     { module: "emaily", table: "kb_records", role: "odesilatel" },
     { module: "emaily", table: "kb_records", role: "odpovedna_osoba" }
-    // budoucí: kb_publications (autor), kb_vysledky (resitel)
+    // budoucí: kb_vysledky (resitel)
   ];
 
   function n(s) {

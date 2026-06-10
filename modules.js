@@ -81,6 +81,14 @@
       stats: []
     },
     {
+      slug: "eiz-tokeny",
+      title: "EIZ tokeny",
+      description: "Transformační smlouvy — ruční evidence tokenů po letech (2025, 2026…) a import publikací (autor, DOI, APC) navázaných na smlouvu.",
+      status: "active",
+      icon: "🪙",
+      stats: ["eizContractsTotal", "eizPublicationsTotal"]
+    },
+    {
       slug: "modul-dkrvo",
       title: "DKRVO",
       description: "Roční výkaz výzkumu, sběr dat a odeslání na MŠMT.",
@@ -143,6 +151,8 @@
     const personCount = window.kbPersons?.getPersons?.().length || 0;
     const pcrTopics = window.kbPcrResearch?.getTopics?.() || [];
     const pcrLinked = pcrTopics.filter((t) => t.gestor_osobni_cislo || window.kbPersonLinks?.resolvePerson?.(t, "gestor")).length;
+    const eizContracts = window.kbEizTokens?.getContracts?.() || [];
+    const eizPublications = window.kbEizTokens?.getPublications?.() || [];
 
     return {
       emailsTotal: data.length,
@@ -155,7 +165,9 @@
       competitionsActive: activeComps,
       personsTotal: personCount,
       pcrTopicsTotal: pcrTopics.length,
-      pcrTopicsLinked: pcrLinked
+      pcrTopicsLinked: pcrLinked,
+      eizContractsTotal: eizContracts.length,
+      eizPublicationsTotal: eizPublications.length
     };
   }
 
@@ -171,7 +183,9 @@
       competitionsActive: `${value} aktivních běhů`,
       personsTotal: `${value} osob`,
       pcrTopicsTotal: `${value} témat PČR`,
-      pcrTopicsLinked: `${value} propojených gestorů`
+      pcrTopicsLinked: `${value} propojených gestorů`,
+      eizContractsTotal: `${value} smluv EIZ`,
+      eizPublicationsTotal: `${value} publikací EIZ`
     };
     return labels[key] || String(value);
   }
@@ -334,6 +348,7 @@
     document.addEventListener("kb:competitions-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:persons-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:pcr-research-loaded", () => setTimeout(renderModulesGrid, 60));
+    document.addEventListener("kb:eiz-tokens-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("input", () => setTimeout(renderModulesGrid, 120));
   }
 

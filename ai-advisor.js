@@ -88,6 +88,7 @@
         window.kbPersons?.ensureLoaded?.(),
         window.kbDeadlines?.loadDeadlines?.(),
         window.kbPcrResearch?.loadTopics?.(),
+        window.kbEizTokens?.loadData?.(),
         window.kbCompetitions?.loadCompetitions?.(),
         window.kbTopics?.loadTopics?.()
       ].map((p) => Promise.resolve(p).catch(() => {})));
