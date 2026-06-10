@@ -275,7 +275,7 @@ body.auth-locked .appMain {
   flex-wrap: wrap;
   align-items: center;
 }
-.page { display: none; padding: 1rem 1.25rem 1.5rem; }
+.page { display: none; padding: 1rem 1.25rem 1.5rem; min-width: 0; max-width: 100%; }
 .page.active { display: block; }
 .inboxLayout {
   display: grid;

@@ -2058,11 +2058,14 @@
     const style = document.createElement("style");
     style.id = "competitionStyles";
     style.textContent = `
+      #interniSoutezeRoot { min-width: 0; max-width: 100%; }
+      #interniSoutezeRoot .sectionHeader { flex-wrap: wrap; align-items: flex-start; }
       .competitionProgramTabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
       .competitionTab { border: 1px solid var(--line); background: white; border-radius: 999px; padding: .4rem .75rem; font-size: .85rem; cursor: pointer; }
       .competitionTab.active { background: var(--accent); color: white; border-color: var(--accent); }
       .competitionTab .tabCount { opacity: .85; font-weight: 700; }
-      .competitionLayout { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; align-items: start; }
+      .competitionLayout { display: grid; grid-template-columns: minmax(0, 280px) minmax(0, 1fr); gap: 1rem; align-items: start; min-width: 0; }
+      .competitionListPanel, .competitionDetailPanel { min-width: 0; max-width: 100%; }
       .competitionCards { display: grid; gap: .5rem; }
       .competitionCard { border: 1px solid var(--line); border-radius: 10px; padding: .65rem; cursor: pointer; background: white; }
       .competitionCard.active, .competitionCard:hover { border-color: var(--accent); background: #f8fafc; }
@@ -2076,14 +2079,14 @@
       .pdfField { display: grid; gap: .45rem; margin-top: .25rem; }
       .pdfFieldCurrent { margin: 0; }
       .competitionTextBlock { white-space: pre-wrap; color: var(--text); }
-      .competitionTableWrap { overflow-x: auto; }
+      .competitionTableWrap { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
       .competitionTable { width: 100%; border-collapse: collapse; }
       .competitionTable th, .competitionTable td { padding: .45rem .5rem; border-bottom: 1px solid var(--line); text-align: left; font-size: .88rem; }
       .competitionTablePrestige { min-width: 1200px; }
       .competitionTablePrestige td:nth-child(2) { max-width: 280px; white-space: normal; }
       .competitionTable .money { text-align: right; font-variant-numeric: tabular-nums; }
       .rowActions { white-space: nowrap; }
-      .competitionDetailHead { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+      .competitionDetailHead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; min-width: 0; }
       .competitionSummary table { max-width: 480px; }
       .competitionsStatus { margin: .35rem 0 .75rem; }
       .competitionsStatusError { color: #b42318; }
@@ -2134,6 +2137,7 @@
       .competitionProgramsPanel h3 { margin: 0 0 .65rem; }
       @media (max-width: 900px) {
         .competitionLayout, .competitionDocs, .competitionMetrics, .competitionOverviewGrid { grid-template-columns: 1fr; }
+        .competitionListPanel { max-width: none; }
       }
     `;
     document.head.appendChild(style);
