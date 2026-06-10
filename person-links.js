@@ -15,6 +15,11 @@
       cisloField: "odesilatel_osobni_cislo",
       labelField: "odesilatel",
       matchEmail: true
+    },
+    gestor: {
+      cisloField: "gestor_osobni_cislo",
+      labelField: "gestor",
+      emailField: "email"
     }
   };
 
@@ -22,6 +27,7 @@
     { module: "interni-souteze", table: "kb_competition_applications", role: "resitel" },
     { module: "interni-souteze", table: "kb_competition_supported", role: "resitel" },
     { module: "terminy", table: "kb_deadlines", role: "odpovedna_osoba" },
+    { module: "pcr-vyzkum", table: "kb_pcr_research_topics", role: "gestor" },
     { module: "emaily", table: "kb_records", role: "odesilatel" },
     { module: "emaily", table: "kb_records", role: "odpovedna_osoba" }
     // budoucí: kb_publications (autor), kb_vysledky (resitel)
@@ -48,6 +54,12 @@
     if (config.cisloField && item[config.cisloField]) {
       const byCislo = kb.getPersonByOsobniCislo?.(item[config.cisloField]);
       if (byCislo) return byCislo;
+    }
+    if (config.emailField && item[config.emailField]) {
+      const email = n(item[config.emailField]).toLowerCase();
+      const persons = kb.getPersons?.() || [];
+      const byEmailField = persons.find(p => n(p.email).toLowerCase() === email);
+      if (byEmailField) return byEmailField;
     }
     if (config.matchEmail && config.labelField) {
       const label = n(item[config.labelField]).toLowerCase();
