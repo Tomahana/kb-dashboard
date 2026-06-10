@@ -3,7 +3,7 @@
   "competition_updates": {
     "stav": "Rozhodnuto",
     "hodnoceni_prodekanu": "Hodnocení proděkanů fakult a komise dle kritérií K1–K7 — viz tabulka přihlášek.",
-    "rozhodnuti_prorektorky": "Rozhodnutí dle tabulky hodnocení — použijte Import z CSV (Excel) pro přesná data včetně podpořených projektů."
+    "rozhodnuti_prorektorky": "Podpořeno 9 projektů; nepodpořeny 2 (Bubák druhá žádost PRESTIGE-2026-010, Lamb PRESTIGE-2026-011)."
   },
   "persons": [
     {
@@ -95,9 +95,9 @@
       },
       "prumer": 1.1428571,
       "poradi": 1,
-      "rozhodnuti": "",
-      "stav": "Podáno",
-      "podporit": false
+      "rozhodnuti": "podpořit",
+      "stav": "Podpořeno",
+      "podporit": true
     },
     {
       "id": "p2600001-0001-4001-8001-000000000002",
@@ -118,11 +118,11 @@
         "k6": 2,
         "k7": 2
       },
-      "prumer": 2.0,
+      "prumer": 2,
       "poradi": 2,
-      "rozhodnuti": "",
-      "stav": "Podáno",
-      "podporit": false
+      "rozhodnuti": "podpořit",
+      "stav": "Podpořeno",
+      "podporit": true
     },
     {
       "id": "p2600001-0001-4001-8001-000000000003",
@@ -145,9 +145,9 @@
       },
       "prumer": 2.2857143,
       "poradi": 3,
-      "rozhodnuti": "",
-      "stav": "Podáno",
-      "podporit": false
+      "rozhodnuti": "podpořit",
+      "stav": "Podpořeno",
+      "podporit": true
     },
     {
       "id": "p2600001-0001-4001-8001-000000000004",
@@ -170,9 +170,9 @@
       },
       "prumer": 2.5714286,
       "poradi": 4,
-      "rozhodnuti": "",
-      "stav": "Podáno",
-      "podporit": false
+      "rozhodnuti": "podpořit",
+      "stav": "Podpořeno",
+      "podporit": true
     },
     {
       "id": "p2600001-0001-4001-8001-000000000005",
@@ -193,11 +193,11 @@
         "k6": 3,
         "k7": 3
       },
-      "prumer": 3.0,
+      "prumer": 3,
       "poradi": 5,
-      "rozhodnuti": "",
-      "stav": "Podáno",
-      "podporit": false
+      "rozhodnuti": "podpořit",
+      "stav": "Podpořeno",
+      "podporit": true
     },
     {
       "id": "p2600001-0001-4001-8001-000000000006",
@@ -220,9 +220,9 @@
       },
       "prumer": 3.1428571,
       "poradi": 6,
-      "rozhodnuti": "",
-      "stav": "Podáno",
-      "podporit": false
+      "rozhodnuti": "podpořit",
+      "stav": "Podpořeno",
+      "podporit": true
     },
     {
       "id": "p2600001-0001-4001-8001-000000000007",
@@ -245,9 +245,9 @@
       },
       "prumer": 3.4285714,
       "poradi": 7,
-      "rozhodnuti": "",
-      "stav": "Podáno",
-      "podporit": false
+      "rozhodnuti": "podpořit",
+      "stav": "Podpořeno",
+      "podporit": true
     },
     {
       "id": "p2600001-0001-4001-8001-000000000008",
@@ -268,11 +268,11 @@
         "k6": 5,
         "k7": 5
       },
-      "prumer": 5.0,
+      "prumer": 5,
       "poradi": 9,
-      "rozhodnuti": "nepodpořit",
-      "stav": "Zamítnuto",
-      "podporit": false
+      "rozhodnuti": "podpořit",
+      "stav": "Podpořeno",
+      "podporit": true
     },
     {
       "id": "p2600001-0001-4001-8001-000000000009",
@@ -293,11 +293,11 @@
         "k6": 4,
         "k7": 4
       },
-      "prumer": 4.0,
+      "prumer": 4,
       "poradi": 8,
-      "rozhodnuti": "",
-      "stav": "Podáno",
-      "podporit": false
+      "rozhodnuti": "podpořit",
+      "stav": "Podpořeno",
+      "podporit": true
     },
     {
       "id": "p2600001-0001-4001-8001-000000000010",
@@ -318,7 +318,7 @@
         "k6": 6,
         "k7": 6
       },
-      "prumer": 6.0,
+      "prumer": 6,
       "poradi": 10,
       "rozhodnuti": "nepodpořit",
       "stav": "Zamítnuto",

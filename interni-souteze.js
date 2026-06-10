@@ -615,10 +615,28 @@
         return;
       }
       useSupabase = true;
-      competitions = await window.kbSupabaseCompetitions.loadAll();
+      const loaded = await window.kbSupabaseCompetitions.loadAll();
       await window.kbPersons?.ensureLoaded?.();
+      let repaired = 0;
+      competitions = [];
+      for (const comp of loaded) {
+        const reconciled = reconcileCompetitionSupport(comp);
+        if (competitionSupportChanged(comp, reconciled)) {
+          try {
+            const saved = await window.kbSupabaseCompetitions.saveCompetition({ ...reconciled, __existing: true });
+            competitions.push(saved);
+            repaired += 1;
+          } catch (repairErr) {
+            console.warn("Synchronizace podpoření selhala:", repairErr);
+            competitions.push(reconciled);
+          }
+        } else {
+          competitions.push(reconciled);
+        }
+      }
       const personCount = window.kbPersons?.getPersons?.().length || 0;
-      setStatus(`Načteno ze Supabase: ${competitions.length} běhů, ${personCount} osob.`);
+      const repairNote = repaired ? ` · sjednoceno ${repaired} běhů` : "";
+      setStatus(`Načteno ze Supabase: ${competitions.length} běhů, ${personCount} osob${repairNote}.`);
     } catch (e) {
       console.error(e);
       useSupabase = false;
@@ -650,6 +668,76 @@
 
   function scoreLabel(v) {
     return v == null || v === "" ? "—" : v;
+  }
+
+  function isSupportedApplication(comp, appId) {
+    return (comp.supported || []).some(s => s.application_id === appId);
+  }
+
+  function buildSupportedFromApplication(app, existing) {
+    const linkedPerson = window.kbPersonLinks?.resolvePerson?.(app, "resitel")
+      || (app.resitel_id ? getPerson(app.resitel_id) : null);
+    return {
+      ...applyResitelLink({
+        id: existing?.id || uuid(),
+        application_id: app.id,
+        projekt_id: app.projekt_id,
+        nazev_projektu: app.nazev_projektu,
+        fakulta: app.fakulta,
+        katedra: app.katedra,
+        castka_podpory: app.financni_pozadavek,
+        poznamka: existing?.poznamka || `Podpořeno – přihláška ${app.projekt_id || app.id}`,
+        created_at: existing?.created_at || new Date().toISOString(),
+        __existing: !!existing
+      }, linkedPerson),
+      resitel: resitelDisplay(app)
+    };
+  }
+
+  function reconcileCompetitionSupport(comp) {
+    const supported = [...(comp.supported || [])];
+    const supportedByApp = new Map(supported.filter(s => s.application_id).map(s => [s.application_id, s]));
+    const applications = (comp.applications || []).map(app => {
+      const sup = supportedByApp.get(app.id);
+      if (sup && app.stav !== "Podpořeno") {
+        return { ...app, stav: "Podpořeno", __existing: true };
+      }
+      if (!sup && app.stav === "Podpořeno") {
+        return { ...app, stav: "Zamítnuto", __existing: true };
+      }
+      return app;
+    });
+    const nextSupported = [...supported];
+    for (const app of applications) {
+      if (app.stav !== "Podpořeno") continue;
+      const idx = nextSupported.findIndex(s => s.application_id === app.id);
+      if (idx === -1) nextSupported.push(buildSupportedFromApplication(app));
+      else {
+        nextSupported[idx] = {
+          ...nextSupported[idx],
+          projekt_id: app.projekt_id,
+          nazev_projektu: app.nazev_projektu,
+          fakulta: app.fakulta,
+          katedra: app.katedra,
+          castka_podpory: app.financni_pozadavek,
+          resitel: resitelDisplay(app),
+          __existing: true
+        };
+      }
+    }
+    const filteredSupported = nextSupported.filter(s => {
+      if (!s.application_id) return true;
+      const app = applications.find(a => a.id === s.application_id);
+      return app && app.stav === "Podpořeno";
+    });
+    return { ...comp, applications, supported: filteredSupported };
+  }
+
+  function competitionSupportChanged(before, after) {
+    if (!before || !after) return true;
+    const appSig = (comp) => (comp.applications || []).map(a => `${a.id}:${a.stav}`).join("|");
+    const supSig = (comp) => (comp.supported || []).map(s => `${s.id}:${s.application_id}`).join("|");
+    return appSig(before) !== appSig(after) || supSig(before) !== supSig(after);
   }
 
   function buildPrestigeHodnoceni(row) {
@@ -1225,18 +1313,19 @@
   }
 
   async function saveCompetition(comp) {
+    const synced = reconcileCompetitionSupport(comp);
     let saved;
     if (useSupabase && window.kbSupabaseCompetitions) {
-      saved = await window.kbSupabaseCompetitions.saveCompetition(comp);
+      saved = await window.kbSupabaseCompetitions.saveCompetition(synced);
       const idx = competitions.findIndex(c => c.id === saved.id);
       if (idx === -1) competitions.unshift(saved);
       else competitions[idx] = saved;
     } else {
-      const idx = competitions.findIndex(c => c.id === comp.id);
-      if (idx === -1) competitions.unshift(comp);
-      else competitions[idx] = comp;
+      const idx = competitions.findIndex(c => c.id === synced.id);
+      if (idx === -1) competitions.unshift(synced);
+      else competitions[idx] = synced;
       persistLocal();
-      saved = comp;
+      saved = synced;
     }
     if (usesCascadingAllocation(saved.program_slug) && saved.rok) {
       await syncCascadingAllocations(saved.program_slug, saved.rok);
@@ -1367,6 +1456,7 @@
     box.querySelectorAll("[data-edit-supp]").forEach(btn => btn.addEventListener("click", () => openSupportedDialog(c.id, btn.dataset.editSupp)));
     box.querySelectorAll("[data-del-supp]").forEach(btn => btn.addEventListener("click", () => removeSupported(c.id, btn.dataset.delSupp)));
     box.querySelectorAll("[data-promote-app]").forEach(btn => btn.addEventListener("click", () => promoteToSupported(c.id, btn.dataset.promoteApp)));
+    box.querySelectorAll("[data-reject-app]").forEach(btn => btn.addEventListener("click", () => rejectApplication(c.id, btn.dataset.rejectApp)));
   }
 
   function renderApplicationsTable(c) {
@@ -1395,7 +1485,9 @@
         <td>${html(a.stav)}</td>
         <td class="rowActions">
           <button type="button" class="button small secondary" data-edit-app="${html(a.id)}">Upravit</button>
-          <button type="button" class="button small accent" data-promote-app="${html(a.id)}">Podpořit</button>
+          ${a.stav === "Podpořeno" || isSupportedApplication(c, a.id)
+            ? `<button type="button" class="button small secondary" data-reject-app="${html(a.id)}">Nepodpořit</button>`
+            : `<button type="button" class="button small accent" data-promote-app="${html(a.id)}">Podpořit</button>`}
           <button type="button" class="button small secondary" data-del-app="${html(a.id)}">×</button>
         </td>
       </tr>${a.hodnoceni || a.hodnoceni_komise ? `<tr class="appEvalRow"><td colspan="${colspan}">
@@ -1715,23 +1807,24 @@
     const comp = getCompetition(compId);
     const app = (comp?.applications || []).find(a => a.id === appId);
     if (!comp || !app) return;
-    const linkedPerson = window.kbPersonLinks?.resolvePerson?.(app, "resitel")
-      || (app.resitel_id ? getPerson(app.resitel_id) : null);
-    const item = {
-      ...applyResitelLink({
-        id: uuid(),
-        application_id: app.id,
-        projekt_id: app.projekt_id,
-        nazev_projektu: app.nazev_projektu,
-        fakulta: app.fakulta,
-        katedra: app.katedra,
-        castka_podpory: app.financni_pozadavek,
-        poznamka: `Z přihlášky: ${app.stav || ""}`,
-        created_at: new Date().toISOString()
-      }, linkedPerson),
-      resitel: resitelDisplay(app)
-    };
-    await saveCompetition({ ...comp, supported: [...(comp.supported || []), item], __existing: true });
+    const apps = (comp.applications || []).map(a => (
+      a.id === appId ? { ...a, stav: "Podpořeno", __existing: true } : a
+    ));
+    const existingSup = (comp.supported || []).find(s => s.application_id === appId);
+    const item = buildSupportedFromApplication({ ...app, stav: "Podpořeno" }, existingSup);
+    const supported = [...(comp.supported || []).filter(s => s.application_id !== appId), item];
+    await saveCompetition({ ...comp, applications: apps, supported, __existing: true });
+    render();
+  }
+
+  async function rejectApplication(compId, appId) {
+    const comp = getCompetition(compId);
+    if (!comp) return;
+    const apps = (comp.applications || []).map(a => (
+      a.id === appId ? { ...a, stav: "Zamítnuto", __existing: true } : a
+    ));
+    const supported = (comp.supported || []).filter(s => s.application_id !== appId);
+    await saveCompetition({ ...comp, applications: apps, supported, __existing: true });
     render();
   }
 
