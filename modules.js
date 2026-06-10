@@ -65,6 +65,14 @@
       stats: ["competitionsTotal", "competitionsActive"]
     },
     {
+      slug: "pcr-vyzkum",
+      title: "Výzkumné směry PČR",
+      description: "Výzkumná témata UHK pro spolupráci s PČR — sync z Google Sheets, analýza podle oblastí a propojení gestorů na Osoby.",
+      status: "active",
+      icon: "🛡️",
+      stats: ["pcrTopicsTotal", "pcrTopicsLinked"]
+    },
+    {
       slug: "modul-dkrvo",
       title: "DKRVO",
       description: "Roční výkaz výzkumu, sběr dat a odeslání na MŠMT.",
@@ -125,6 +133,8 @@
     const comps = window.kbCompetitions?.getCompetitions?.() || [];
     const activeComps = comps.filter(c => !["uzavřeno", "archiv"].includes(lower(c.stav))).length;
     const personCount = window.kbPersons?.getPersons?.().length || 0;
+    const pcrTopics = window.kbPcrResearch?.getTopics?.() || [];
+    const pcrLinked = pcrTopics.filter((t) => t.gestor_osobni_cislo || window.kbPersonLinks?.resolvePerson?.(t, "gestor")).length;
 
     return {
       emailsTotal: data.length,
@@ -135,7 +145,9 @@
       deadlinesOverdue: overdue,
       competitionsTotal: comps.length,
       competitionsActive: activeComps,
-      personsTotal: personCount
+      personsTotal: personCount,
+      pcrTopicsTotal: pcrTopics.length,
+      pcrTopicsLinked: pcrLinked
     };
   }
 
@@ -149,7 +161,9 @@
       deadlinesOverdue: `${value} po termínu`,
       competitionsTotal: `${value} běhů soutěží`,
       competitionsActive: `${value} aktivních běhů`,
-      personsTotal: `${value} osob`
+      personsTotal: `${value} osob`,
+      pcrTopicsTotal: `${value} témat PČR`,
+      pcrTopicsLinked: `${value} propojených gestorů`
     };
     return labels[key] || String(value);
   }
@@ -311,6 +325,7 @@
     document.addEventListener("kb:records-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:competitions-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:persons-loaded", () => setTimeout(renderModulesGrid, 60));
+    document.addEventListener("kb:pcr-research-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("input", () => setTimeout(renderModulesGrid, 120));
   }
 

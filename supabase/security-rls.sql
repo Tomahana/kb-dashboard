@@ -214,13 +214,36 @@ grant select, insert, update, delete on public.kb_competition_applications to au
 grant select, insert, update, delete on public.kb_competition_supported to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 5) Ověření
+-- 5) kb_pcr_research_topics (výzkumné směry PČR)
+-- ---------------------------------------------------------------------------
+alter table if exists public.kb_pcr_research_topics enable row level security;
+
+drop policy if exists "kb_pcr_research_topics authenticated read" on public.kb_pcr_research_topics;
+drop policy if exists "kb_pcr_research_topics authenticated write" on public.kb_pcr_research_topics;
+
+create policy "kb_pcr_research_topics authenticated read"
+  on public.kb_pcr_research_topics for select
+  to authenticated
+  using (true);
+
+create policy "kb_pcr_research_topics authenticated write"
+  on public.kb_pcr_research_topics for all
+  to authenticated
+  using (true)
+  with check (true);
+
+revoke all on public.kb_pcr_research_topics from anon;
+grant select, insert, update, delete on public.kb_pcr_research_topics to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 6) Ověření
 -- ---------------------------------------------------------------------------
 select schemaname, tablename, policyname, roles, cmd
 from pg_policies
 where schemaname = 'public'
   and tablename in (
     'kb_records', 'kb_record_bodies', 'kb_topics', 'kb_topic_records', 'kb_topic_deadlines',
-    'kb_deadlines', 'kb_persons', 'kb_competitions', 'kb_competition_applications', 'kb_competition_supported'
+    'kb_deadlines', 'kb_persons', 'kb_competitions', 'kb_competition_applications', 'kb_competition_supported',
+    'kb_pcr_research_topics'
   )
 order by tablename, policyname;
