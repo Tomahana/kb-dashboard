@@ -67,7 +67,7 @@
     {
       slug: "pcr-vyzkum",
       title: "Výzkumné směry PČR",
-      description: "Výzkumná témata UHK pro spolupráci s PČR — sync z Google Sheets, analýza podle oblastí a propojení gestorů na Osoby.",
+      description: "Výzkumná témata UHK pro spolupráci s PČR — sync z Google Sheets, vědecké analýzy (matice, gestoři, klíčová slova, report) a propojení na Osoby.",
       status: "active",
       icon: "🛡️",
       stats: ["pcrTopicsTotal", "pcrTopicsLinked"]
