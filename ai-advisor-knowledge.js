@@ -13,7 +13,8 @@
     { id: "interni-souteze", label: "Interní soutěže", page: "interni-souteze", status: "active" },
     { id: "temata", label: "Témata", page: "temata", status: "active" },
     { id: "emaily", label: "E-maily / znalostní báze", page: "emaily", status: "active" },
-    { id: "publikace", label: "Publikační výstupy", page: null, status: "planned" },
+    { id: "eiz-tokeny", label: "EIZ tokeny / publikace", page: "eiz-tokeny", status: "active" },
+    { id: "publikace", label: "Publikační výstupy (ostatní)", page: null, status: "planned" },
     { id: "vysledky", label: "Aplikované výsledky", page: null, status: "planned" }
   ];
 
@@ -168,6 +169,45 @@
     return r?.id || r?.kb_id || r?.KB_ID || "";
   }
 
+  function buildEizChunks() {
+    const contracts = window.kbEizTokens?.getContracts?.() || [];
+    const publications = window.kbEizTokens?.getPublications?.() || [];
+    const contractMap = new Map(contracts.map((c) => [c.id, c.nazev]));
+    const out = [];
+    for (const c of contracts) {
+      const years = (c.years || []).map((y) => `${y.rok}: ${y.pocet_tokenu} tokenů`).join(", ");
+      out.push(chunk(
+        `eiz-contract:${c.id}`,
+        "eiz-tokeny",
+        "EIZ tokeny · smlouva",
+        c.nazev,
+        [c.poskytovatel, years, c.poznamka, c.aktivni ? "aktivní" : "neaktivní"].filter(Boolean).join(" · "),
+        "#eiz-tokeny",
+        { contract_id: c.id }
+      ));
+    }
+    for (const p of publications) {
+      out.push(chunk(
+        `eiz-pub:${p.id}`,
+        "eiz-tokeny",
+        "EIZ tokeny · publikace",
+        p.nazev_clanku,
+        [
+          contractMap.get(p.contract_id),
+          p.autor,
+          p.fakulta,
+          p.doi,
+          p.datum_zadosti,
+          p.datum_prijeti,
+          p.usetrena_apc != null ? `APC ${p.usetrena_apc}` : ""
+        ].filter(Boolean).join(" · "),
+        "#eiz-tokeny",
+        { contract_id: p.contract_id, doi: p.doi }
+      ));
+    }
+    return out;
+  }
+
   function buildEmailChunks(limit = 400) {
     let data = [];
     try {
@@ -195,8 +235,9 @@
     "pcr-vyzkum": buildPcrChunks,
     "interni-souteze": buildCompetitionChunks,
     temata: buildTopicChunks,
-    emaily: buildEmailChunks
-    // publikace: () => []  — Fáze 2
+    emaily: buildEmailChunks,
+    "eiz-tokeny": buildEizChunks
+    // publikace: () => []  — Fáze 2 (ostatní výstupy)
     // vysledky: () => []   — Fáze 2
   };
 
