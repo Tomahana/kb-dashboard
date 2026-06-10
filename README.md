@@ -12,6 +12,20 @@ Statický dashboard pro GitHub Pages nad JSON znalostní bází e-mailů a podkl
 - exportovat aktualizovaný JSON,
 - vygenerovat prompt pro AI analýzu aktuálně vyfiltrovaných záznamů.
 
+## Verze aplikace
+
+Číslo verze je v souboru `version.json` a zobrazuje se v postranním panelu (včetně data poslední změny).
+
+Při každém commitu s úpravami kódu se verze **automaticky zvýší** (git hook). Po klonování repozitáře jednou spusťte:
+
+```bash
+sh scripts/setup-git-hooks.sh
+```
+
+Ruční zvýšení: `node scripts/bump-version.js`
+
+Po merge do `main` verzi zvýší i GitHub Action (pro nasazení bez lokálních hooků).
+
 ## Nasazení na GitHub Pages
 
 1. Vytvořte na GitHubu nový repozitář, např. `kb-dashboard`.

@@ -141,7 +141,21 @@
     });
   }
 
+  function loadAppVersion() {
+    const box = el("appVersion");
+    if (!box) return;
+    fetch(`version.json?_${Date.now()}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data?.version) return;
+        const date = data.bumpedAt ? ` · ${data.bumpedAt}` : "";
+        box.textContent = `Verze ${data.version}${date}`;
+      })
+      .catch(() => {});
+  }
+
   function init() {
+    loadAppVersion();
     bindNav();
     bindOverviewLinks();
     const route = resolveRoute(location.hash);
