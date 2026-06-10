@@ -175,13 +175,25 @@
     const contractMap = new Map(contracts.map((c) => [c.id, c.nazev]));
     const out = [];
     for (const c of contracts) {
-      const years = (c.years || []).map((y) => `${y.rok}: ${y.pocet_tokenu} tokenů`).join(", ");
+      const years = (c.years || []).map((y) => {
+        if (c.typ_cerpani === "sleva_apc") return `${y.rok}: sleva APC`;
+        if (y.neomezene) return `${y.rok}: neomezeně`;
+        return `${y.rok}: ${y.pocet_tokenu ?? 0} tokenů`;
+      }).join(", ");
       out.push(chunk(
         `eiz-contract:${c.id}`,
         "eiz-tokeny",
         "EIZ tokeny · smlouva",
         c.nazev,
-        [c.poskytovatel, years, c.poznamka, c.aktivni ? "aktivní" : "neaktivní"].filter(Boolean).join(" · "),
+        [
+          c.typ_cerpani === "sleva_apc"
+            ? `sleva APC ${c.sleva_apc_procent ?? "?"} %`
+            : "čerpání tokenů",
+          c.poskytovatel,
+          years,
+          c.poznamka,
+          c.aktivni ? "aktivní" : "neaktivní"
+        ].filter(Boolean).join(" · "),
         "#eiz-tokeny",
         { contract_id: c.id }
       ));

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>KB Dashboard – Znalostní báze</title>
-  <link rel="stylesheet" href="styles.css?v=3.35" />
+  <link rel="stylesheet" href="styles.css?v=3.36" />
 </head>
 <body class="app-shell">
   <aside class="sidebar">
@@ -34,7 +34,7 @@
     </nav>
     <div class="sidebarFoot">
       <p class="hint">Vyberte modul v přehledu</p>
-      <p class="appVersion" id="appVersion">Verze 3.35</p>
+      <p class="appVersion" id="appVersion">Verze 3.36</p>
     </div>
   </aside>
 
@@ -290,7 +290,7 @@
       </section>
       <section class="panel">
         <h2>EIZ tokeny</h2>
-        <p class="hint">Spusťte <code>supabase/eiz-tokens-schema.sql</code> (po <code>persons-schema.sql</code>), poté <code>supabase/security-rls.sql</code> nebo <code>supabase/eiz-tokens-rls.sql</code>. Smlouvy a roční tokeny zadáváte ručně; publikace importujte jako CSV (středník). Vzor: <code>data/eiz-publications-import.example.tsv</code>.</p>
+        <p class="hint">Spusťte <code>supabase/eiz-tokens-schema.sql</code> (po <code>persons-schema.sql</code>), na existující DB také <code>supabase/eiz-tokens-migrate-v2.sql</code>, poté <code>supabase/security-rls.sql</code>. Smlouvy: tokeny (včetně neomezeně) nebo sleva na APC; publikace importujte jako CSV. Vzor: <code>data/eiz-publications-import.example.tsv</code>.</p>
       </section>
     </section>
   </div>
@@ -501,6 +501,15 @@
       <label>Poskytovatel / platforma
         <input id="eizContractPoskytovatel" type="text" placeholder="volitelné upřesnění" />
       </label>
+      <label>Typ čerpání
+        <select id="eizContractTyp">
+          <option value="tokeny">Tokeny (pevný počet nebo neomezeně)</option>
+          <option value="sleva_apc">Sleva na APC (bez počítání tokenů)</option>
+        </select>
+      </label>
+      <label id="eizContractSlevaWrap" hidden>Výše slevy na APC (%)
+        <input id="eizContractSlevaProcent" type="number" min="0" max="100" step="0.01" placeholder="např. 20" />
+      </label>
       <label>Poznámka
         <textarea id="eizContractPoznamka" rows="2"></textarea>
       </label>
@@ -519,19 +528,23 @@
     <form method="dialog" id="eizYearForm">
       <div class="dialogHeader">
         <div>
-          <h2>Tokeny na rok</h2>
-          <p class="hint">Počet tokenů pro danou transformační smlouvu a kalendářní rok.</p>
+          <h2 id="eizYearDialogTitle">Tokeny na rok</h2>
+          <p id="eizYearDialogHint" class="hint">Počet tokenů pro danou transformační smlouvu a kalendářní rok.</p>
         </div>
         <button class="iconButton" value="cancel">×</button>
       </div>
       <input type="hidden" id="eizYearContractId" />
       <input type="hidden" id="eizYearId" />
-      <div class="grid2">
-        <label>Rok *
-          <input id="eizYearRok" type="number" min="2000" max="2100" required placeholder="2025" />
+      <label>Rok *
+        <input id="eizYearRok" type="number" min="2000" max="2100" required placeholder="2025" />
+      </label>
+      <div id="eizYearTokenFields">
+        <label class="checkboxRow">
+          <input id="eizYearNeomezene" type="checkbox" />
+          Neomezený počet tokenů
         </label>
-        <label>Počet tokenů *
-          <input id="eizYearPocet" type="number" min="0" required placeholder="např. 12" />
+        <label>Počet tokenů
+          <input id="eizYearPocet" type="number" min="0" placeholder="např. 12" />
         </label>
       </div>
       <label>Poznámka
@@ -592,33 +605,33 @@
   </datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=3.35"></script>
-  <script src="auth.js?v=3.35"></script>
-  <script src="form-pickers.js?v=3.35"></script>
-  <script src="layout.js?v=3.35"></script>
-  <script src="modules.js?v=3.35"></script>
-  <script src="app.js?v=3.35"></script>
-  <script src="enhancements.js?v=3.35"></script>
-  <script src="supabase-loader.js?v=3.35"></script>
-  <script src="ai-classify.js?v=3.35"></script>
-  <script src="task-export.js?v=3.35"></script>
-  <script src="notion.js?v=3.35"></script>
-  <script src="supabase-topics.js?v=3.35"></script>
-  <script src="topics.js?v=3.35"></script>
-  <script src="record-click-fix.js?v=3.35"></script>
-  <script src="supabase-persons.js?v=3.35"></script>
-  <script src="persons.js?v=3.35"></script>
-  <script src="person-links.js?v=3.35"></script>
-  <script src="supabase-competitions.js?v=3.35"></script>
-  <script src="interni-souteze.js?v=3.35"></script>
-  <script src="supabase-deadlines.js?v=3.35"></script>
-  <script src="deadlines.js?v=3.35"></script>
-  <script src="supabase-pcr-research.js?v=3.35"></script>
-  <script src="pcr-research-analysis.js?v=3.35"></script>
-  <script src="pcr-research.js?v=3.35"></script>
-  <script src="ai-advisor-knowledge.js?v=3.35"></script>
-  <script src="ai-advisor.js?v=3.35"></script>
-  <script src="supabase-eiz-tokens.js?v=3.35"></script>
-  <script src="eiz-tokens.js?v=3.35"></script>
+  <script src="supabase-config.js?v=3.36"></script>
+  <script src="auth.js?v=3.36"></script>
+  <script src="form-pickers.js?v=3.36"></script>
+  <script src="layout.js?v=3.36"></script>
+  <script src="modules.js?v=3.36"></script>
+  <script src="app.js?v=3.36"></script>
+  <script src="enhancements.js?v=3.36"></script>
+  <script src="supabase-loader.js?v=3.36"></script>
+  <script src="ai-classify.js?v=3.36"></script>
+  <script src="task-export.js?v=3.36"></script>
+  <script src="notion.js?v=3.36"></script>
+  <script src="supabase-topics.js?v=3.36"></script>
+  <script src="topics.js?v=3.36"></script>
+  <script src="record-click-fix.js?v=3.36"></script>
+  <script src="supabase-persons.js?v=3.36"></script>
+  <script src="persons.js?v=3.36"></script>
+  <script src="person-links.js?v=3.36"></script>
+  <script src="supabase-competitions.js?v=3.36"></script>
+  <script src="interni-souteze.js?v=3.36"></script>
+  <script src="supabase-deadlines.js?v=3.36"></script>
+  <script src="deadlines.js?v=3.36"></script>
+  <script src="supabase-pcr-research.js?v=3.36"></script>
+  <script src="pcr-research-analysis.js?v=3.36"></script>
+  <script src="pcr-research.js?v=3.36"></script>
+  <script src="ai-advisor-knowledge.js?v=3.36"></script>
+  <script src="ai-advisor.js?v=3.36"></script>
+  <script src="supabase-eiz-tokens.js?v=3.36"></script>
+  <script src="eiz-tokens.js?v=3.36"></script>
 </body>
 </html>

@@ -10,18 +10,23 @@ create table if not exists public.kb_eiz_contracts (
   nazev text not null,
   poskytovatel text,
   poznamka text,
+  typ_cerpani text not null default 'tokeny' check (typ_cerpani in ('tokeny', 'sleva_apc')),
+  sleva_apc_procent numeric(5, 2),
   aktivni boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 comment on table public.kb_eiz_contracts is 'Transformační smlouvy EIZ (vydavatel / platforma)';
+comment on column public.kb_eiz_contracts.typ_cerpani is 'tokeny = čerpání tokenů; sleva_apc = sleva na APC bez počítání tokenů';
+comment on column public.kb_eiz_contracts.sleva_apc_procent is 'Výše slevy na APC (např. 20 = 20 %) u typu sleva_apc';
 
 create table if not exists public.kb_eiz_contract_years (
   id uuid primary key default gen_random_uuid(),
   contract_id uuid not null references public.kb_eiz_contracts(id) on delete cascade,
   rok integer not null check (rok >= 2000 and rok <= 2100),
-  pocet_tokenu integer not null default 0 check (pocet_tokenu >= 0),
+  pocet_tokenu integer check (pocet_tokenu is null or pocet_tokenu >= 0),
+  neomezene boolean not null default false,
   poznamka text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -29,6 +34,7 @@ create table if not exists public.kb_eiz_contract_years (
 );
 
 comment on table public.kb_eiz_contract_years is 'Počet tokenů na transformační smlouvu a kalendářní rok';
+comment on column public.kb_eiz_contract_years.neomezene is 'Neomezený počet tokenů v daném roce';
 
 create table if not exists public.kb_eiz_publications (
   id uuid primary key default gen_random_uuid(),
