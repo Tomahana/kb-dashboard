@@ -148,9 +148,6 @@ drop policy if exists "kb_competitions authenticated write" on public.kb_competi
 drop policy if exists "kb_persons auth" on public.kb_persons;
 drop policy if exists "kb_persons authenticated read" on public.kb_persons;
 drop policy if exists "kb_persons authenticated write" on public.kb_persons;
-drop policy if exists "kb_competition_persons auth" on public.kb_competition_persons;
-drop policy if exists "kb_competition_persons authenticated read" on public.kb_competition_persons;
-drop policy if exists "kb_competition_persons authenticated write" on public.kb_competition_persons;
 
 drop policy if exists "kb_competition_applications auth" on public.kb_competition_applications;
 drop policy if exists "kb_competition_applications authenticated read" on public.kb_competition_applications;

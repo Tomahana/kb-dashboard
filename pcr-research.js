@@ -110,12 +110,20 @@
     return { jmeno: parts[0], prijmeni: parts[parts.length - 1] };
   }
 
+  function sanitizeGestorFk(row) {
+    const next = { ...row };
+    if (!next.gestor_osobni_cislo) return next;
+    const exists = window.kbPersons?.getPersonByOsobniCislo?.(next.gestor_osobni_cislo);
+    if (!exists) next.gestor_osobni_cislo = null;
+    return next;
+  }
+
   function linkGestorPerson(row) {
     let linked = { ...row };
     const email = l(row.email);
     if (email) {
       const byEmail = window.kbPersons?.getPersons?.().find((p) => l(p.email) === email);
-      if (byEmail) return window.kbPersonLinks?.applyPersonLink?.(linked, byEmail, "gestor") || linked;
+      if (byEmail) return sanitizeGestorFk(window.kbPersonLinks?.applyPersonLink?.(linked, byEmail, "gestor") || linked);
     }
     const name = parseGestorName(row.gestor);
     const matched = window.kbPersons?.matchPersonFromRegistry?.({
@@ -124,8 +132,8 @@
       prijmeni: name.prijmeni,
       fakulta: row.zkr_fak || row.fakulta
     });
-    if (matched) return window.kbPersonLinks?.applyPersonLink?.(linked, matched, "gestor") || linked;
-    return linked;
+    if (matched) return sanitizeGestorFk(window.kbPersonLinks?.applyPersonLink?.(linked, matched, "gestor") || linked);
+    return sanitizeGestorFk(linked);
   }
 
   function gestorDisplay(row) {
@@ -164,31 +172,52 @@
     return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "cs"));
   }
 
+  async function fetchBundledCsv() {
+    const res = await fetch(`data/pcr-research-topics.csv?_${Date.now()}`);
+    if (!res.ok) throw new Error("Vestavěná kopie tabulky (data/pcr-research-topics.csv) není k dispozici.");
+    return res.text();
+  }
+
   async function fetchSheetCsv() {
+    const errors = [];
     const exportUrl = `https://docs.google.com/spreadsheets/d/${DEFAULT_SHEET_ID}/export?format=csv&gid=${DEFAULT_SHEET_GID}`;
     try {
       const res = await fetch(exportUrl);
       if (res.ok) return await res.text();
-    } catch (_) { /* CORS — fallback na edge function */ }
+      errors.push(`Google Sheets HTTP ${res.status}`);
+    } catch (err) {
+      errors.push(err.message || "CORS / síť");
+    }
 
     const session = await window.kbAuth?.getSession?.();
-    if (!session?.access_token) {
-      throw new Error("Nelze načíst tabulku přímo ani přes proxy — přihlaste se v Nastavení.");
+    if (session?.access_token && window.KB_SUPABASE?.url) {
+      try {
+        const fnUrl = `${window.KB_SUPABASE.url.replace(/\/$/, "")}/functions/v1/google-sheets-fetch`;
+        const res = await fetch(fnUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: window.KB_SUPABASE.anonKey,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ sheetId: DEFAULT_SHEET_ID, gid: DEFAULT_SHEET_GID })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.csv) return data.csv;
+        errors.push(data.error || `Edge funkce HTTP ${res.status}`);
+      } catch (err) {
+        errors.push(err.message || "Edge funkce");
+      }
+    } else {
+      errors.push("pro Google proxy chybí přihlášení");
     }
-    const fnUrl = `${window.KB_SUPABASE.url.replace(/\/$/, "")}/functions/v1/google-sheets-fetch`;
-    const res = await fetch(fnUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        apikey: window.KB_SUPABASE.anonKey,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ sheetId: DEFAULT_SHEET_ID, gid: DEFAULT_SHEET_GID })
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `Proxy selhalo (HTTP ${res.status}).`);
-    if (!data.csv) throw new Error("Proxy nevrátila CSV data.");
-    return data.csv;
+
+    try {
+      return await fetchBundledCsv();
+    } catch (err) {
+      errors.push(err.message || "vestavěná CSV");
+      throw new Error(`Načtení tabulky selhalo (${errors.join("; ")}). Použijte Import CSV.`);
+    }
   }
 
   async function importFromCsvText(text, replace = true) {
@@ -206,21 +235,37 @@
 
     const withIds = normalized.map((row) => {
       const existing = topics.find((t) => t.source_key === row.source_key);
-      return {
+      return sanitizeGestorFk({
         ...row,
         id: existing?.id || uuid(),
         __existing: !!existing
-      };
+      });
     });
 
     if (useSupabase && window.kbSupabasePcrResearch) {
-      if (!(await ensureAuth())) return null;
-      if (replace) await window.kbSupabasePcrResearch.deleteAll();
+      if (!(await ensureAuth())) {
+        topics = withIds;
+        persistLocal();
+        setStatus(`Uloženo ${withIds.length} témat lokálně — pro Supabase se přihlaste v Nastavení a import opakujte.`, true);
+        return withIds.length;
+      }
       setStatus(`Ukládám 0 / ${withIds.length}…`);
-      const saved = await window.kbSupabasePcrResearch.upsertTopicsBatch(withIds, (done, total) => {
-        setStatus(`Ukládám ${done} / ${total}…`);
-      });
-      topics = saved;
+      try {
+        const saved = await window.kbSupabasePcrResearch.upsertTopicsBatch(withIds, (done, total) => {
+          setStatus(`Ukládám ${done} / ${total}…`);
+        });
+        topics = saved;
+        if (replace) persistLocal();
+      } catch (err) {
+        const msg = err.message || String(err);
+        if (/row-level security|permission|policy|42501/i.test(msg)) {
+          throw new Error(`${msg} — spusťte supabase/security-rls.sql (nebo pcr-research-rls.sql) a přihlaste se.`);
+        }
+        if (/foreign key|gestor_osobni_cislo/i.test(msg)) {
+          throw new Error(`${msg} — gestor musí existovat v Osobách, nebo ponechte propojení prázdné.`);
+        }
+        throw err;
+      }
     } else {
       topics = withIds;
       persistLocal();

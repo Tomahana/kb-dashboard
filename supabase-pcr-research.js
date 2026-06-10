@@ -55,6 +55,10 @@
       const value = item[field];
       payload[field] = value === "" || value == null ? null : value;
     });
+    if (payload.gestor_osobni_cislo) {
+      const exists = window.kbPersons?.getPersonByOsobniCislo?.(payload.gestor_osobni_cislo);
+      if (!exists) payload.gestor_osobni_cislo = null;
+    }
     return payload;
   }
 
