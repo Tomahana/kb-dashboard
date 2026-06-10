@@ -28,15 +28,16 @@ Po merge do `main` verzi zvýší i GitHub Action (pro nasazení bez lokálních
 
 ## Nasazení na GitHub Pages
 
-1. Vytvořte na GitHubu nový repozitář, např. `kb-dashboard`.
-2. Nahrajte do něj soubory:
-   - `index.html`
-   - `styles.css`
-   - `app.js`
-   - složku `data/kb.json`
-3. V repozitáři otevřete `Settings → Pages`.
-4. Nastavte `Deploy from a branch`, branch `main`, folder `/root`.
-5. Web bude typicky na adrese `https://<uzivatel>.github.io/kb-dashboard/`.
+1. V repozitáři: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+2. Po každém pushi na `main` běží workflow `.github/workflows/deploy-pages.yml`.
+3. Web: `https://<uzivatel>.github.io/kb-dashboard/` (ověřte verzi v postranním panelu nebo v `version.json`).
+
+**Když se verze v prohlížeči nemění** (např. stále 3.31 po merge):
+
+- Otevřete **Actions** → poslední běh *Deploy static site to GitHub Pages* (nebo *pages build and deployment*).
+- Pokud je červený (failed), zkontrolujte **Settings → Actions → General → Workflow permissions: Read and write**.
+- Ruční nasazení: **Actions → Deploy static site to GitHub Pages → Run workflow**.
+- V prohlížeči tvrdý refresh: Ctrl+Shift+R (Mac: Cmd+Shift+R), případně anonymní okno.
 
 ## Zabezpečení
 
