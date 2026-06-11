@@ -557,6 +557,58 @@
     </form>
   </dialog>
 
+  <dialog id="eizPublicationDialog">
+    <form method="dialog" id="eizPublicationForm">
+      <div class="dialogHeader">
+        <div>
+          <h2 id="eizPublicationDialogTitle">Publikace</h2>
+          <p class="hint">Ruční zadání nebo úprava publikace navázané na transformační smlouvu.</p>
+        </div>
+        <button class="iconButton" value="cancel">×</button>
+      </div>
+      <input type="hidden" id="eizPublicationId" />
+      <label>Transformační smlouva *
+        <select id="eizPubContractId" required></select>
+      </label>
+      <label>Osoba z evidence (volitelné)
+        <div class="personSelectRow">
+          <select id="eizPubAutorPersonId"></select>
+          <button type="button" id="eizPubNewPersonBtn" class="button small secondary">+ Osoba</button>
+        </div>
+      </label>
+      <label>Autor (text)
+        <input id="eizPubAutor" type="text" placeholder="jméno, pokud není v Osobách" />
+      </label>
+      <div class="grid2">
+        <label>Fakulta
+          <input id="eizPubFakulta" type="text" placeholder="např. FIM" />
+        </label>
+        <label>DOI
+          <input id="eizPubDoi" type="text" placeholder="10.1000/…" />
+        </label>
+      </div>
+      <label>Název článku *
+        <input id="eizPubNazev" type="text" required />
+      </label>
+      <div class="grid2">
+        <label>Datum žádosti
+          <input id="eizPubDatumZadosti" type="date" />
+        </label>
+        <label>Datum přijetí
+          <input id="eizPubDatumPrijeti" type="date" />
+        </label>
+      </div>
+      <label>Ušetřená cena APC (odhad)
+        <input id="eizPubApc" type="number" min="0" step="1" placeholder="Kč" />
+      </label>
+      <div class="dialogActions">
+        <button type="button" id="eizDeletePublicationBtn" class="button danger" hidden>Smazat</button>
+        <button value="cancel" class="button secondary">Zavřít</button>
+        <button type="submit" class="button accent">Uložit</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="aiDialog">
     <form method="dialog">
       <div class="dialogHeader">

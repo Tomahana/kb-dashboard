@@ -246,6 +246,68 @@
     return contracts.find((c) => c.id === id) || null;
   }
 
+  function publicationById(id) {
+    return publications.find((p) => p.id === id) || null;
+  }
+
+  function buildPublicationFromForm() {
+    const contractId = n(el("eizPubContractId")?.value);
+    const apcRaw = n(el("eizPubApc")?.value).replace(/\s/g, "").replace(",", ".");
+    const fakulta = n(el("eizPubFakulta").value);
+    let row = {
+      contract_id: contractId,
+      autor: n(el("eizPubAutor").value),
+      fakulta,
+      zkr_fak: inferZkrFak(fakulta),
+      nazev_clanku: n(el("eizPubNazev").value) || "Bez názvu",
+      doi: n(el("eizPubDoi").value),
+      datum_zadosti: el("eizPubDatumZadosti")?.value || "",
+      datum_prijeti: el("eizPubDatumPrijeti")?.value || "",
+      usetrena_apc: apcRaw === "" ? null : Number(apcRaw)
+    };
+    row.source_key = makePublicationSourceKey(contractId, row);
+    const personId = n(el("eizPubAutorPersonId")?.value);
+    if (personId && window.kbPersons?.getPerson) {
+      const person = window.kbPersons.getPerson(personId);
+      if (person) row = window.kbPersonLinks?.applyPersonLink?.(row, person, "autor") || row;
+    } else {
+      row = linkAutorPerson(row);
+    }
+    return sanitizeAutorFk(row);
+  }
+
+  async function savePublication(item) {
+    let saved = item;
+    const prev = publications.find((p) => p.id === item.id);
+    if (useSupabase && window.kbSupabaseEizTokens) {
+      if (!(await ensureAuth())) return null;
+      if (prev && prev.source_key !== item.source_key) {
+        await window.kbSupabaseEizTokens.deletePublication(prev.id);
+      }
+      saved = await window.kbSupabaseEizTokens.upsertPublication(item);
+    }
+    publications = publications.filter((p) => p.id !== prev?.id || p.id === saved.id);
+    const idx = publications.findIndex((p) => p.id === saved.id);
+    if (idx === -1) publications.unshift(saved);
+    else publications[idx] = saved;
+    if (!useSupabase) persistLocal();
+    document.dispatchEvent(new CustomEvent("kb:eiz-tokens-loaded"));
+    return saved;
+  }
+
+  async function deletePublicationById(id) {
+    if (!confirm("Smazat tuto publikaci?")) return;
+    if (useSupabase && window.kbSupabaseEizTokens) {
+      if (!(await ensureAuth())) return;
+      await window.kbSupabaseEizTokens.deletePublication(id);
+    }
+    publications = publications.filter((p) => p.id !== id);
+    if (!useSupabase) persistLocal();
+    setStatus("Publikace smazána.");
+    render();
+    document.dispatchEvent(new CustomEvent("kb:eiz-tokens-loaded"));
+  }
+
   function filteredPublications() {
     return publications.filter((p) => {
       if (selectedContractId && p.contract_id !== selectedContractId) return false;
@@ -501,12 +563,13 @@
         <label>Hledat <input id="eizFilterSearch" type="search" value="${html(filterSearch)}" placeholder="Autor, název, DOI…" /></label>
         <label class="button small secondary" for="eizImportFile">Import CSV</label>
         <input type="file" id="eizImportFile" accept=".csv,.txt,.tsv,text/csv" hidden />
+        <button type="button" id="eizAddPublicationBtn" class="button accent small">+ Publikace</button>
         <button type="button" id="eizRelinkBtn" class="button small secondary">Propojit autory</button>
       </div>
-      <p class="hint">Importujte tabulku se sloupci: Autor, Fakulta, Název článku, DOI, Datum žádosti, Datum přijetí, Ušetřená cena APC (odhad). Vzor: <code>data/eiz-publications-import.example.tsv</code>. U smluv typu <strong>sleva na APC</strong> se publikace nepočítají do tokenů.</p>
+      <p class="hint">Přidejte publikaci ručně nebo importujte CSV (Autor, Fakulta, Název článku, DOI, Datum žádosti, Datum přijetí, Ušetřená cena APC). Vzor: <code>data/eiz-publications-import.example.tsv</code>.</p>
       ${items.length ? `<div class="eizTableWrap"><table class="eizTable">
         <thead><tr>
-          <th>Autor</th><th>Fak.</th><th>Název článku</th><th>DOI</th><th>Žádost</th><th>Přijetí</th><th>APC</th>
+          <th>Autor</th><th>Fak.</th><th>Název článku</th><th>DOI</th><th>Žádost</th><th>Přijetí</th><th>APC</th><th></th>
         </tr></thead>
         <tbody>${items.map((row) => {
           const person = window.kbPersonLinks?.resolvePerson?.(row, "autor");
@@ -521,9 +584,12 @@
             <td>${html(formatDate(row.datum_zadosti))}</td>
             <td>${html(formatDate(row.datum_prijeti))}</td>
             <td>${html(formatMoney(row.usetrena_apc))}</td>
+            <td class="rowActions">
+              <button type="button" class="button small secondary" data-edit-pub="${html(row.id)}">Upravit</button>
+            </td>
           </tr>`;
         }).join("")}</tbody>
-      </table></div>` : `<p class="hint">Žádné publikace${selectedContractId ? " u vybrané smlouvy" : ""}. Vyberte smlouvu a importujte CSV.</p>`}`;
+      </table></div>` : `<p class="hint">Žádné publikace${selectedContractId ? " u vybrané smlouvy" : ""}. Přidejte ručně nebo importujte CSV.</p>`}`;
   }
 
   function renderSummary() {
@@ -555,7 +621,7 @@
         <div class="sectionHeader">
           <div>
             <h2>EIZ tokeny — transformační smlouvy</h2>
-            <p class="hint">Ruční evidence smluv a ročních tokenů (2025, 2026, další roky). Import publikací z tabulky navázaný na smlouvu. Autory propojíte s modulem <a href="#osoby" data-goto="osoby">Osoby</a>.</p>
+            <p class="hint">Ruční evidence smluv, tokenů a publikací. Autory propojíte s modulem <a href="#osoby" data-goto="osoby">Osoby</a>.</p>
           </div>
           <div class="sectionActions">
             <button type="button" id="eizReloadBtn" class="button small secondary">Načíst ze Supabase</button>
@@ -640,6 +706,10 @@
       }
     });
     el("eizRelinkBtn")?.addEventListener("click", relinkAuthors);
+    el("eizAddPublicationBtn")?.addEventListener("click", () => openPublicationDialog());
+    root.querySelectorAll("[data-edit-pub]").forEach((btn) => {
+      btn.addEventListener("click", () => openPublicationDialog(btn.dataset.editPub));
+    });
   }
 
   async function relinkAuthors() {
@@ -717,6 +787,47 @@
     dlg.showModal();
   }
 
+  async function fillPublicationContractSelect(selectedId) {
+    const select = el("eizPubContractId");
+    if (!select) return;
+    select.innerHTML = contracts.map((c) =>
+      `<option value="${html(c.id)}"${c.id === selectedId ? " selected" : ""}>${html(c.nazev)}</option>`
+    ).join("");
+    if (!select.value && contracts[0]) select.value = contracts[0].id;
+  }
+
+  async function openPublicationDialog(id) {
+    if (!contracts.length) {
+      setStatus("Nejdříve přidejte transformační smlouvu.", true);
+      return;
+    }
+    await window.kbPersons?.ensureLoaded?.();
+    const existing = id ? publicationById(id) : null;
+    const dlg = el("eizPublicationDialog");
+    if (!dlg) return;
+    const contractId = existing?.contract_id || selectedContractId || contracts[0]?.id;
+    await fillPublicationContractSelect(contractId);
+    el("eizPublicationDialogTitle").textContent = existing ? "Upravit publikaci" : "Nová publikace";
+    el("eizPublicationId").value = existing?.id || "";
+    el("eizPubAutor").value = existing?.autor || "";
+    el("eizPubFakulta").value = existing?.fakulta || existing?.zkr_fak || "";
+    el("eizPubNazev").value = existing?.nazev_clanku || "";
+    el("eizPubDoi").value = existing?.doi || "";
+    el("eizPubDatumZadosti").value = existing?.datum_zadosti ? String(existing.datum_zadosti).slice(0, 10) : "";
+    el("eizPubDatumPrijeti").value = existing?.datum_prijeti ? String(existing.datum_prijeti).slice(0, 10) : "";
+    el("eizPubApc").value = existing?.usetrena_apc ?? "";
+    const delBtn = el("eizDeletePublicationBtn");
+    if (delBtn) {
+      delBtn.hidden = !existing;
+      delBtn.onclick = existing ? () => {
+        dlg.close();
+        deletePublicationById(existing.id);
+      } : null;
+    }
+    window.kbPersons?.fillSelect?.(el("eizPubAutorPersonId"), window.kbPersonLinks?.personSelectId?.(existing, "autor") || "");
+    dlg.showModal();
+  }
+
   function openYearDialog(contractId, rok) {
     const contract = contractById(contractId);
     if (!contract) return;
@@ -781,6 +892,54 @@
 
     el("eizContractTyp")?.addEventListener("change", toggleContractTypeFields);
     el("eizYearNeomezene")?.addEventListener("change", toggleYearTokenFields);
+    el("eizPubAutorPersonId")?.addEventListener("change", () => {
+      const person = window.kbPersons?.getPerson?.(el("eizPubAutorPersonId")?.value);
+      if (!person) return;
+      el("eizPubAutor").value = window.kbPersons?.personLabel?.(person) || "";
+      if (!n(el("eizPubFakulta").value) && person.pracoviste) {
+        el("eizPubFakulta").value = person.pracoviste;
+      }
+    });
+    el("eizPubNewPersonBtn")?.addEventListener("click", () => {
+      window.kbPersons?.openDialog?.();
+    });
+
+    el("eizPublicationForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = n(el("eizPublicationId").value) || uuid();
+      const existing = publicationById(id);
+      const built = buildPublicationFromForm();
+      if (!built.contract_id) {
+        setStatus("Vyberte smlouvu.", true);
+        return;
+      }
+      if (!n(built.nazev_clanku) || built.nazev_clanku === "Bez názvu") {
+        setStatus("Název článku je povinný.", true);
+        return;
+      }
+      const conflict = publications.find((p) => p.source_key === built.source_key && p.id !== id);
+      if (conflict) {
+        setStatus("Publikace se stejným DOI nebo kombinací autor/název/termín už existuje.", true);
+        return;
+      }
+      loading = true;
+      render();
+      try {
+        await savePublication({
+          ...built,
+          id,
+          imported_at: existing?.imported_at || null,
+          __existing: !!existing
+        });
+        setStatus(existing ? "Publikace uložena." : "Publikace přidána.");
+        el("eizPublicationDialog").close();
+      } catch (err) {
+        setStatus(`Uložení publikace selhalo: ${err.message || err}`, true);
+      } finally {
+        loading = false;
+        render();
+      }
+    });
 
     el("eizYearForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
