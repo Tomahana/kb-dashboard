@@ -2,6 +2,8 @@
 
 (function () {
   const STORAGE_KEY = "kb-dashboard-journal-db-v1";
+  const LOCAL_STORAGE_MAX_ROWS = 2500;
+  const LOAD_PAGE_SIZE = 1000;
 
   const FIELDS = [
     "source_key", "journal_key", "journal_name", "jcr_abbreviation", "issn", "eissn",
@@ -92,20 +94,40 @@
   }
 
   function saveLocal(records) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records, null, 2));
+    if (!Array.isArray(records) || records.length > LOCAL_STORAGE_MAX_ROWS) {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (_) {}
+      return;
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    } catch (err) {
+      console.warn("Lokální cache časopisů se nevejde do prohlížeče:", err);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (_) {}
+    }
   }
 
   async function loadAll() {
     const sb = getClient();
-    const { data, error } = await sb
-      .from("kb_journal_records")
-      .select("*")
-      .order("category")
-      .order("journal_name");
-    if (error) throw error;
-    const mapped = (data || []).map(mapRow);
-    saveLocal(mapped);
-    return mapped;
+    const all = [];
+    for (let from = 0; ; from += LOAD_PAGE_SIZE) {
+      const { data, error } = await sb
+        .from("kb_journal_records")
+        .select("*")
+        .order("source_year")
+        .order("category")
+        .order("journal_name")
+        .range(from, from + LOAD_PAGE_SIZE - 1);
+      if (error) throw error;
+      const batch = data || [];
+      all.push(...batch.map(mapRow));
+      if (batch.length < LOAD_PAGE_SIZE) break;
+    }
+    saveLocal(all);
+    return all;
   }
 
   async function upsertBatch(items, onProgress, options = {}) {
@@ -126,13 +148,12 @@
     if (options.fullRecords) {
       const map = new Map(options.fullRecords.map((row) => [row.source_key, row]));
       saved.forEach((row) => map.set(row.source_key, row));
-      const merged = [...map.values()];
+      const merged = Array.from(map.values());
       saveLocal(merged);
       return merged;
     }
 
     if (saved.length) {
-      saveLocal(await loadAll());
       return loadAll();
     }
     return [];
