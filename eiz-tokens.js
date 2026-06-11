@@ -8,6 +8,7 @@
     doi: ["DOI", "doi"],
     datum_zadosti: ["Datum žádosti", "Datum zadosti", "Žádost", "datum_zadosti"],
     datum_prijeti: ["Datum přijetí", "Datum prijeti", "Přijetí", "Prijeti", "datum_prijeti"],
+    rok: ["Rok", "rok"],
     usetrena_apc: ["Ušetřená cena APC (odhad)", "Usetrena cena APC", "APC", "usetrena_apc", "Ušetřená cena APC"]
   };
 
@@ -144,11 +145,74 @@
     return window.kbPersonLinks?.personDisplay?.(row, "autor") || n(row.autor) || "—";
   }
 
+  function yearFromDate(value) {
+    if (!value) return null;
+    const y = Number(String(value).slice(0, 4));
+    return Number.isFinite(y) && y >= 2000 && y <= 2100 ? y : null;
+  }
+
   function publicationYear(pub) {
-    const date = pub.datum_prijeti || pub.datum_zadosti;
-    if (!date) return null;
-    const y = Number(String(date).slice(0, 4));
-    return Number.isFinite(y) ? y : null;
+    if (pub?.rok != null && pub.rok !== "") {
+      const y = Number(pub.rok);
+      if (Number.isFinite(y)) return y;
+    }
+    return yearFromDate(pub?.datum_prijeti) || yearFromDate(pub?.datum_zadosti);
+  }
+
+  function inferPublicationRok(row, raw) {
+    const fromRow = Number(row?.rok);
+    if (Number.isFinite(fromRow) && fromRow >= 2000 && fromRow <= 2100) return fromRow;
+    const fromRaw = raw ? Number(getImportField(raw, "rok")) : NaN;
+    if (Number.isFinite(fromRaw) && fromRaw >= 2000 && fromRaw <= 2100) return fromRaw;
+    return yearFromDate(row?.datum_prijeti) || yearFromDate(row?.datum_zadosti) || new Date().getFullYear();
+  }
+
+  function collectSummaryYears() {
+    const years = new Set();
+    for (const c of contracts) {
+      for (const y of c.years || []) {
+        if (y.rok) years.add(Number(y.rok));
+      }
+    }
+    for (const p of publications) {
+      const y = publicationYear(p);
+      if (y) years.add(y);
+    }
+    return [...years].sort((a, b) => b - a);
+  }
+
+  function statsForYear(rok) {
+    const contractsWithYear = contracts.filter((c) => (c.years || []).some((y) => Number(y.rok) === rok));
+    const activeContracts = contractsWithYear.filter((c) => c.aktivni !== false).length;
+    let allocatedTokens = 0;
+    let unlimitedContracts = 0;
+    for (const c of contractsWithYear) {
+      if (isSlevaApcContract(c)) continue;
+      const y = (c.years || []).find((item) => Number(item.rok) === rok);
+      if (!y) continue;
+      if (isYearUnlimited(y)) {
+        unlimitedContracts += 1;
+        continue;
+      }
+      allocatedTokens += y.pocet_tokenu || 0;
+    }
+    const pubs = publications.filter((p) => publicationYear(p) === rok);
+    const tokenPubs = pubs.filter((p) => countsTowardTokens(contractById(p.contract_id)));
+    const usedTokens = tokenPubs.length;
+    const apc = pubs.reduce((s, p) => s + (Number(p.usetrena_apc) || 0), 0);
+    const remaining = allocatedTokens > 0 ? Math.max(0, allocatedTokens - usedTokens) : null;
+    return {
+      rok,
+      activeContracts,
+      contractsWithYear: contractsWithYear.length,
+      allocatedTokens,
+      unlimitedContracts,
+      pubs: pubs.length,
+      tokenPubs: tokenPubs.length,
+      usedTokens,
+      remaining,
+      apc
+    };
   }
 
   function isSlevaApcContract(contract) {
@@ -203,6 +267,7 @@
     if (doi) return `${contractId}|doi|${doi}`;
     return [
       contractId,
+      String(row.rok || inferPublicationRok(row)),
       l(row.autor),
       l(row.nazev_clanku),
       row.datum_zadosti || "",
@@ -238,6 +303,7 @@
       usetrena_apc: apcRaw === "" ? null : Number(apcRaw),
       imported_at: new Date().toISOString()
     };
+    row.rok = inferPublicationRok(row, raw);
     row.source_key = makePublicationSourceKey(contractId, row);
     return row;
   }
@@ -263,8 +329,12 @@
       doi: n(el("eizPubDoi").value),
       datum_zadosti: el("eizPubDatumZadosti")?.value || "",
       datum_prijeti: el("eizPubDatumPrijeti")?.value || "",
+      rok: Number(el("eizPubRok")?.value),
       usetrena_apc: apcRaw === "" ? null : Number(apcRaw)
     };
+    if (!Number.isFinite(row.rok)) {
+      row.rok = yearFromDate(row.datum_prijeti) || yearFromDate(row.datum_zadosti) || new Date().getFullYear();
+    }
     row.source_key = makePublicationSourceKey(contractId, row);
     const personId = n(el("eizPubAutorPersonId")?.value);
     if (personId && window.kbPersons?.getPerson) {
@@ -569,7 +639,7 @@
       <p class="hint">Přidejte publikaci ručně nebo importujte CSV (Autor, Fakulta, Název článku, DOI, Datum žádosti, Datum přijetí, Ušetřená cena APC). Vzor: <code>data/eiz-publications-import.example.tsv</code>.</p>
       ${items.length ? `<div class="eizTableWrap"><table class="eizTable">
         <thead><tr>
-          <th>Autor</th><th>Fak.</th><th>Název článku</th><th>DOI</th><th>Žádost</th><th>Přijetí</th><th>APC</th><th></th>
+          <th>Rok</th><th>Autor</th><th>Fak.</th><th>Název článku</th><th>DOI</th><th>Žádost</th><th>Přijetí</th><th>APC</th><th></th>
         </tr></thead>
         <tbody>${items.map((row) => {
           const person = window.kbPersonLinks?.resolvePerson?.(row, "autor");
@@ -577,6 +647,7 @@
             ? `<a href="#osoby" data-goto="osoby">${html(autorDisplay(row))}</a>`
             : html(autorDisplay(row));
           return `<tr>
+            <td><strong>${publicationYear(row) || "—"}</strong></td>
             <td>${autorCell}</td>
             <td>${html(row.zkr_fak || row.fakulta)}</td>
             <td><strong>${html(row.nazev_clanku)}</strong></td>
@@ -593,24 +664,31 @@
   }
 
   function renderSummary() {
-    const totalPubs = publications.length;
-    const totalApc = publications.reduce((s, p) => s + (Number(p.usetrena_apc) || 0), 0);
-    const totalTokens = contracts.reduce((s, c) => {
-      if (isSlevaApcContract(c)) return s;
-      return s + (c.years || []).reduce((ySum, y) => {
-        if (isYearUnlimited(y)) return ySum;
-        return ySum + (y.pocet_tokenu || 0);
-      }, 0);
-    }, 0);
-    const tokenPubs = publications.filter((p) => countsTowardTokens(contractById(p.contract_id))).length;
-    return `
-      <div class="eizMetrics">
-        <div class="metric"><span>${contracts.length}</span><small>Smluv</small></div>
-        <div class="metric"><span>${totalTokens}</span><small>Alokovaných tokenů</small></div>
-        <div class="metric"><span>${tokenPubs}</span><small>Publikací čerpajících token</small></div>
-        <div class="metric"><span>${publications.length}</span><small>Publikací celkem</small></div>
-        <div class="metric"><span>${formatMoney(totalApc)}</span><small>Ušetřené APC</small></div>
-      </div>`;
+    const years = collectSummaryYears();
+    if (!years.length) {
+      return `<p class="hint eizSummaryEmpty">Přehled po letech se zobrazí po zadání ročních tokenů u smluv nebo po přiřazení publikací k roku.</p>`;
+    }
+    const cards = years.map((rok) => {
+      const s = statsForYear(rok);
+      const tokenLabel = s.unlimitedContracts > 0
+        ? `${s.allocatedTokens || 0} + ${s.unlimitedContracts}× ∞`
+        : String(s.allocatedTokens);
+      const remainingLabel = s.allocatedTokens > 0
+        ? (s.remaining ?? "—")
+        : (s.unlimitedContracts > 0 ? "∞" : "—");
+      return `<article class="eizYearSummaryCard">
+        <h3 class="eizYearSummaryTitle">${rok}</h3>
+        <div class="eizMetrics eizMetricsCompact">
+          <div class="metric"><span>${s.contractsWithYear}</span><small>Smluv s rokem</small></div>
+          <div class="metric"><span>${tokenLabel}</span><small>Alok. tokenů</small></div>
+          <div class="metric"><span>${s.usedTokens}</span><small>Využito tokenů</small></div>
+          <div class="metric"><span>${remainingLabel}</span><small>Zbývá</small></div>
+          <div class="metric"><span>${s.pubs}</span><small>Publikací</small></div>
+          <div class="metric"><span>${formatMoney(s.apc)}</span><small>Ušetřené APC</small></div>
+        </div>
+      </article>`;
+    }).join("");
+    return `<div class="eizYearSummaryGrid">${cards}</div>`;
   }
 
   function render() {
@@ -815,6 +893,7 @@
     el("eizPubDoi").value = existing?.doi || "";
     el("eizPubDatumZadosti").value = existing?.datum_zadosti ? String(existing.datum_zadosti).slice(0, 10) : "";
     el("eizPubDatumPrijeti").value = existing?.datum_prijeti ? String(existing.datum_prijeti).slice(0, 10) : "";
+    el("eizPubRok").value = existing?.rok ?? publicationYear(existing) ?? new Date().getFullYear();
     el("eizPubApc").value = existing?.usetrena_apc ?? "";
     const delBtn = el("eizDeletePublicationBtn");
     if (delBtn) {
@@ -903,6 +982,14 @@
     el("eizPubNewPersonBtn")?.addEventListener("click", () => {
       window.kbPersons?.openDialog?.();
     });
+    const syncPubRokFromDates = () => {
+      const rokInput = el("eizPubRok");
+      if (!rokInput || n(rokInput.value)) return;
+      const inferred = yearFromDate(el("eizPubDatumPrijeti")?.value) || yearFromDate(el("eizPubDatumZadosti")?.value);
+      if (inferred) rokInput.value = inferred;
+    };
+    el("eizPubDatumZadosti")?.addEventListener("change", syncPubRokFromDates);
+    el("eizPubDatumPrijeti")?.addEventListener("change", syncPubRokFromDates);
 
     el("eizPublicationForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -915,6 +1002,10 @@
       }
       if (!n(built.nazev_clanku) || built.nazev_clanku === "Bez názvu") {
         setStatus("Název článku je povinný.", true);
+        return;
+      }
+      if (!publicationYear(built)) {
+        setStatus("Vyplňte rok přiřazení publikace.", true);
         return;
       }
       const conflict = publications.find((p) => p.source_key === built.source_key && p.id !== id);
@@ -984,8 +1075,14 @@
     const style = document.createElement("style");
     style.id = "eizTokensStyles";
     style.textContent = `
+      .eizYearSummaryGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: .75rem; margin: .75rem 0 1rem; }
+      .eizYearSummaryCard { border: 1px solid var(--line); border-radius: 12px; padding: .75rem; background: #f8fafc; }
+      .eizYearSummaryTitle { margin: 0 0 .5rem; font-size: 1.05rem; }
+      .eizSummaryEmpty { margin: .75rem 0 1rem; }
       .eizMetrics { display: flex; flex-wrap: wrap; gap: .75rem; margin: .75rem 0 1rem; }
+      .eizMetricsCompact { margin: 0; gap: .45rem; }
       .eizMetrics .metric { min-width: 110px; padding: .55rem .75rem; border: 1px solid var(--line); border-radius: 10px; background: #f8fafc; }
+      .eizMetricsCompact .metric { min-width: 88px; padding: .4rem .55rem; background: white; font-size: .88rem; }
       .eizMetrics .metric span { display: block; font-weight: 800; font-size: 1.1rem; }
       .eizMetrics .metric small { color: var(--muted); font-size: .75rem; }
       .eizViewTabs { display: flex; gap: .5rem; margin-bottom: 1rem; }

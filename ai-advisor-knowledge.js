@@ -206,6 +206,7 @@
         p.nazev_clanku,
         [
           contractMap.get(p.contract_id),
+          p.rok ? `rok ${p.rok}` : "",
           p.autor,
           p.fakulta,
           p.doi,

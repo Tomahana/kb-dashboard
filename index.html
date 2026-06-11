@@ -290,7 +290,7 @@
       </section>
       <section class="panel">
         <h2>EIZ tokeny</h2>
-        <p class="hint">Spusťte <code>supabase/eiz-tokens-schema.sql</code> (po <code>persons-schema.sql</code>), na existující DB také <code>supabase/eiz-tokens-migrate-v2.sql</code>, poté <code>supabase/security-rls.sql</code>. Smlouvy: tokeny (včetně neomezeně) nebo sleva na APC; publikace importujte jako CSV. Vzor: <code>data/eiz-publications-import.example.tsv</code>.</p>
+        <p class="hint">Spusťte <code>supabase/eiz-tokens-schema.sql</code> (po <code>persons-schema.sql</code>), na existující DB <code>eiz-tokens-migrate-v2.sql</code> a <code>eiz-tokens-migrate-v3.sql</code>, poté <code>security-rls.sql</code>. Publikace přiřazujte k roku; přehled metrik je po letech.</p>
       </section>
     </section>
   </div>
@@ -589,6 +589,9 @@
       </div>
       <label>Název článku *
         <input id="eizPubNazev" type="text" required />
+      </label>
+      <label>Rok přiřazení *
+        <input id="eizPubRok" type="number" min="2000" max="2100" required placeholder="2025" />
       </label>
       <div class="grid2">
         <label>Datum žádosti

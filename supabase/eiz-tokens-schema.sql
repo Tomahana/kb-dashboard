@@ -48,6 +48,7 @@ create table if not exists public.kb_eiz_publications (
   doi text,
   datum_zadosti date,
   datum_prijeti date,
+  rok integer check (rok is null or (rok >= 2000 and rok <= 2100)),
   usetrena_apc numeric(12, 2),
   imported_at timestamptz,
   created_at timestamptz not null default now(),
@@ -56,7 +57,8 @@ create table if not exists public.kb_eiz_publications (
 );
 
 comment on table public.kb_eiz_publications is 'Publikace čerpané z transformační smlouvy (import CSV)';
-comment on column public.kb_eiz_publications.source_key is 'Stabilní klíč pro upsert (smlouva + DOI nebo smlouva + autor + název + datum)';
+comment on column public.kb_eiz_publications.source_key is 'Stabilní klíč pro upsert (smlouva + DOI nebo smlouva + autor + název + rok)';
+comment on column public.kb_eiz_publications.rok is 'Kalendářní rok přiřazení publikace k čerpání smlouvy';
 
 create index if not exists kb_eiz_contract_years_contract_idx
   on public.kb_eiz_contract_years (contract_id);
@@ -72,6 +74,9 @@ create index if not exists kb_eiz_publications_doi_idx
 
 create index if not exists kb_eiz_publications_autor_cislo_idx
   on public.kb_eiz_publications (autor_osobni_cislo);
+
+create index if not exists kb_eiz_publications_rok_idx
+  on public.kb_eiz_publications (rok);
 
 create or replace function public.kb_eiz_set_updated_at()
 returns trigger
