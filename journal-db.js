@@ -35,8 +35,11 @@
     { id: "analysis", label: "Analýza oboru", icon: "🔬" }
   ];
 
+  const TABLE_PAGE_SIZE = 150;
+  const LOCAL_STORAGE_MAX_ROWS = 2500;
+
   let records = [];
-  let analysisCache = { analyzed: [], best: [], categories: [] };
+  let analysisCache = { best: [], categories: [] };
   let useSupabase = false;
   let loading = false;
   let activeView = "records";
@@ -44,6 +47,9 @@
   let filterSourceYear = "";
   let filterSearch = "";
   let analysisCategory = "";
+  let recordsPage = 0;
+
+  const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   const el = (id) => document.getElementById(id);
   const n = (s) => (s || "").toString().trim();
@@ -52,12 +58,24 @@
   const uuid = () => crypto.randomUUID?.() || `journal-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   function persistLocal() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records, null, 2));
-    window.kbSupabaseJournalDb?.saveLocal?.(records);
+    if (useSupabase && records.length > LOCAL_STORAGE_MAX_ROWS) {
+      window.kbSupabaseJournalDb?.saveLocal?.([]);
+      return;
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      window.kbSupabaseJournalDb?.saveLocal?.(records);
+    } catch (err) {
+      console.warn("Lokální cache časopisů se nevejde do prohlížeče:", err);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (_) {}
+    }
   }
 
-  function recomputeAnalysis() {
-    analysisCache = window.kbJournalDbAnalysis?.runAnalysis?.(records) || { analyzed: [], best: [], categories: [] };
+  async function recomputeAnalysis() {
+    await yieldToMain();
+    analysisCache = window.kbJournalDbAnalysis?.runAnalysis?.(records) || { best: [], categories: [] };
   }
 
   function setStatus(text, isError) {
@@ -193,31 +211,40 @@
     const clean = text.replace(/^\uFEFF/, "").trim();
     if (!clean) return { rows: [], meta: { headers: [], delimiter: ";", headerRow: 0 } };
 
-    const lines = clean.split(/\r?\n/).filter((line) => n(line));
-    const probeLines = lines.slice(0, 25);
-    let delimiter = ";";
-    let bestDelimScore = -1;
-    for (const line of probeLines) {
-      const candidate = detectDelimiter(line);
-      const score = journalHeaderRowScore(parseCsvRecords(line, candidate)[0] || []);
-      if (score > bestDelimScore) {
-        bestDelimScore = score;
-        delimiter = candidate;
+    const firstLine = clean.split(/\r?\n/, 1)[0] || clean;
+    let delimiter = detectDelimiter(firstLine);
+    let recordsParsed = parseCsvRecords(clean, delimiter);
+    let headerIdx = findJournalHeaderRowIndex(recordsParsed);
+
+    if (headerIdx === 0 && journalHeaderRowScore(recordsParsed[0] || []) < 2) {
+      for (const candidate of [";", ",", "\t"]) {
+        if (candidate === delimiter) continue;
+        const attempt = parseCsvRecords(clean, candidate);
+        const idx = findJournalHeaderRowIndex(attempt);
+        if (journalHeaderRowScore(attempt[idx] || []) > journalHeaderRowScore(recordsParsed[headerIdx] || [])) {
+          delimiter = candidate;
+          recordsParsed = attempt;
+          headerIdx = idx;
+        }
       }
     }
 
-    const records = parseCsvRecords(clean, delimiter);
-    if (!records.length) return { rows: [], meta: { headers: [], delimiter, headerRow: 0 } };
+    if (!recordsParsed.length) return { rows: [], meta: { headers: [], delimiter, headerRow: 0 } };
 
-    const headerIdx = findJournalHeaderRowIndex(records);
-    const headers = records[headerIdx].map((h) => n(h).replace(/^\uFEFF/, "").replace(/^"|"$/g, ""));
-    const rows = records.slice(headerIdx + 1).map((cols) => {
+    const headers = recordsParsed[headerIdx].map((h) => n(h).replace(/^\uFEFF/, "").replace(/^"|"$/g, ""));
+    const rows = [];
+    for (let i = headerIdx + 1; i < recordsParsed.length; i += 1) {
+      const cols = recordsParsed[i];
       const row = {};
-      headers.forEach((header, i) => {
-        if (header) row[header] = (cols[i] ?? "").replace(/^"|"$/g, "").trim();
+      let hasValue = false;
+      headers.forEach((header, j) => {
+        if (!header) return;
+        const val = (cols[j] ?? "").replace(/^"|"$/g, "").trim();
+        row[header] = val;
+        if (val) hasValue = true;
       });
-      return row;
-    }).filter((row) => Object.values(row).some((v) => n(v)));
+      if (hasValue) rows.push(row);
+    }
 
     return { rows, meta: { headers, delimiter, headerRow: headerIdx + 1 } };
   }
@@ -339,8 +366,9 @@
       return { imported: 0, skippedNoIssn, skippedNoCategory, total: records.length, upsertRows: [] };
     }
 
+    const existingByKey = new Map(records.map((r) => [r.source_key, r]));
     const withIds = normalized.map((row) => {
-      const existing = records.find((r) => r.source_key === row.source_key);
+      const existing = existingByKey.get(row.source_key);
       return {
         ...row,
         id: existing?.id || uuid(),
@@ -352,15 +380,14 @@
     if (replace) {
       records = withIds;
     } else {
-      const map = new Map(records.map((r) => [r.source_key, r]));
-      withIds.forEach((row) => map.set(row.source_key, row));
-      records = [...map.values()];
+      withIds.forEach((row) => existingByKey.set(row.source_key, row));
+      records = Array.from(existingByKey.values());
     }
 
     if (!skipSupabase && useSupabase && window.kbSupabaseJournalDb) {
       if (!(await ensureAuth())) {
         persistLocal();
-        if (!skipRecompute) recomputeAnalysis();
+        if (!skipRecompute) await recomputeAnalysis();
         setStatus(`Uloženo ${records.length} záznamů lokálně — pro Supabase se přihlaste.`, true);
         return {
           imported: withIds.length,
@@ -379,7 +406,7 @@
     }
 
     if (!skipRecompute) {
-      recomputeAnalysis();
+      await recomputeAnalysis();
       document.dispatchEvent(new CustomEvent("kb:journal-db-loaded"));
     }
 
@@ -423,7 +450,7 @@
       setStatus(`Chyba: ${err.message || err}`, true);
     } finally {
       loading = false;
-      recomputeAnalysis();
+      await recomputeAnalysis();
       render();
       document.dispatchEvent(new CustomEvent("kb:journal-db-loaded"));
     }
@@ -438,10 +465,9 @@
       if (filterCategory && n(row.category) !== filterCategory) return false;
       if (filterSourceYear && n(row.source_year) !== filterSourceYear) return false;
       if (filterSearch) {
-        const analyzed = analysisCache.analyzed.find((a) => a.id === row.id);
         const hay = l([
           row.journal_name, row.jcr_abbreviation, row.issn, row.eissn, row.category,
-          row.ais, row.jif, analyzed?.ais_rank, analyzed?.ais_quartile, analyzed?.ais_percentile_band
+          row.ais, row.jif, row.ais_rank, row.ais_quartile, row.ais_percentile_band
         ].join(" "));
         if (!hay.includes(l(filterSearch))) return false;
       }
@@ -449,9 +475,19 @@
     });
   }
 
-  function getAnalyzedForRecords(list) {
-    const ids = new Set(list.map((r) => r.id));
-    return analysisCache.analyzed.filter((r) => ids.has(r.id));
+  function renderPagination(total, page, pageSize, targetId) {
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    const current = Math.min(page, pages - 1);
+    if (total <= pageSize) return "";
+    const from = current * pageSize + 1;
+    const to = Math.min(total, (current + 1) * pageSize);
+    return `
+      <div class="journalDbPagination" data-pagination="${targetId}">
+        <span class="hint">${from}–${to} z ${total}</span>
+        <button type="button" class="button small secondary" data-page-nav="${targetId}" data-page="${current - 1}" ${current <= 0 ? "disabled" : ""}>← Předchozí</button>
+        <span>Strana ${current + 1} / ${pages}</span>
+        <button type="button" class="button small secondary" data-page-nav="${targetId}" data-page="${current + 1}" ${current >= pages - 1 ? "disabled" : ""}>Další →</button>
+      </div>`;
   }
 
   function formatNum(value, digits = 3) {
@@ -489,31 +525,32 @@
   }
 
   function renderRecordsTable(list) {
-    const analyzedMap = new Map(analysisCache.analyzed.map((r) => [r.id, r]));
     if (!list.length) return `<p class="hint">Žádné záznamy. Importujte export JCR (CSV/TSV/CSC).</p>`;
-    return `<div class="journalDbTableWrap"><table class="journalDbTable">
+    const total = list.length;
+    const page = Math.min(recordsPage, Math.max(0, Math.ceil(total / TABLE_PAGE_SIZE) - 1));
+    const slice = list.slice(page * TABLE_PAGE_SIZE, (page + 1) * TABLE_PAGE_SIZE);
+    return `
+      ${renderPagination(total, page, TABLE_PAGE_SIZE, "records")}
+      <div class="journalDbTableWrap"><table class="journalDbTable">
       <thead><tr>
         <th>Časopis</th><th>Obor</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>P</th><th>Q</th><th>D</th><th>C</th><th>JIF</th><th>Rok</th>
       </tr></thead>
-      <tbody>${list.map((row) => {
-        const a = analyzedMap.get(row.id) || {};
-        return `<tr>
+      <tbody>${slice.map((row) => `<tr>
           <td><strong>${html(row.journal_name || row.jcr_abbreviation)}</strong>
             ${row.jcr_abbreviation && row.journal_name ? `<br><span class="hint">${html(row.jcr_abbreviation)}</span>` : ""}
             ${row.issn ? `<br><span class="hint">${html(row.issn)}</span>` : ""}
           </td>
           <td>${html(row.category)}</td>
           <td>${formatNum(row.ais)}</td>
-          <td>${a.ais_rank_fraction || (a.ais_rank ? `${a.ais_rank} / ${a.category_journal_count}` : "—")}</td>
-          <td>${a.ais_rank_ratio ?? "—"}</td>
-          <td>${html(a.ais_percentile_band) || "—"}</td>
-          <td>${html(a.ais_quartile) || "—"}</td>
-          <td>${html(a.ais_decile) || "—"}</td>
-          <td>${html(a.ais_centile) || "—"}</td>
+          <td>${row.ais_rank_fraction || (row.ais_rank ? `${row.ais_rank} / ${row.category_journal_count}` : "—")}</td>
+          <td>${row.ais_rank_ratio ?? "—"}</td>
+          <td>${html(row.ais_percentile_band) || "—"}</td>
+          <td>${html(row.ais_quartile) || "—"}</td>
+          <td>${html(row.ais_decile) || "—"}</td>
+          <td>${html(row.ais_centile) || "—"}</td>
           <td>${formatNum(row.jif, 2)}${row.jif_year ? ` <span class="hint">(${html(row.jif_year)})</span>` : ""}</td>
           <td>${html(row.source_year) || "—"}</td>
-        </tr>`;
-      }).join("")}</tbody>
+        </tr>`).join("")}</tbody>
     </table></div>`;
   }
 
@@ -572,14 +609,16 @@
       ${filtered.length > 500 ? `<p class="hint">Zobrazeno 500 z ${filtered.length} časopisů — zpřesněte filtr oboru nebo roku.</p>` : ""}`;
   }
 
+  let analysisPage = 0;
+
   function renderCategoryAnalysisView() {
-    const years = uniqueValues("source_year", analysisCache.analyzed);
-    const categories = uniqueValues("category", analysisCache.analyzed);
+    const years = uniqueValues("source_year", records.filter((r) => r.ais_rank));
+    const categories = uniqueValues("category", records.filter((r) => r.ais_rank));
     if (!categories.length) return `<p class="hint">Importujte data pro analýzu oboru.</p>`;
     const selectedYear = filterSourceYear || years.sort((a, b) => b.localeCompare(a, "cs"))[0] || "";
     const selected = analysisCategory || categories[0];
-    const rows = analysisCache.analyzed
-      .filter((r) => n(r.category) === selected && n(r.source_year) === selectedYear)
+    const allRows = records
+      .filter((r) => n(r.category) === selected && n(r.source_year) === selectedYear && r.ais_rank)
       .sort((a, b) => (a.ais_rank || 9999) - (b.ais_rank || 9999));
 
     const catSummary = analysisCache.categories.find((c) =>
@@ -592,6 +631,9 @@
       return `<option value="${html(c)}"${c === selected ? " selected" : ""}>${html(c)} (${count})</option>`;
     }).join("");
 
+    const page = Math.min(analysisPage, Math.max(0, Math.ceil(allRows.length / TABLE_PAGE_SIZE) - 1));
+    const rows = allRows.slice(page * TABLE_PAGE_SIZE, (page + 1) * TABLE_PAGE_SIZE);
+
     return `
       <div class="journalDbAnalysisHead">
         <label>Analyzovaný obor
@@ -600,6 +642,7 @@
         ${selectedYear ? `<p class="hint">Rok exportu: <strong>${html(selectedYear)}</strong>${filterSourceYear ? "" : " — pro změnu roku použijte filtr „Rok exportu“ výše."}</p>` : ""}
         ${catSummary ? `<p class="hint">V oboru je <strong>${catSummary.journal_count}</strong> časopisů seřazených podle AIS (1 = nejvyšší AIS). Poměr pořadí/počet určuje P1, P5, D1–D10, C1–C100 a Q1–Q4 (Q1 = horních 25&nbsp;%).</p>` : `<p class="hint">Pro zvolený obor a rok nejsou data.</p>`}
       </div>
+      ${renderPagination(allRows.length, page, TABLE_PAGE_SIZE, "analysis")}
       <div class="journalDbTableWrap"><table class="journalDbTable journalDbTableCompact">
         <thead><tr>
           <th>#</th><th>Časopis</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>P</th><th>Q</th><th>D</th><th>C</th><th>JIF</th>
@@ -679,12 +722,38 @@
   }
 
   function bindFilterEvents() {
-    el("journalDbFilterCategory")?.addEventListener("change", (e) => { filterCategory = e.target.value; render(); });
-    el("journalDbFilterYear")?.addEventListener("change", (e) => { filterSourceYear = e.target.value; render(); });
-    el("journalDbFilterSearch")?.addEventListener("input", (e) => { filterSearch = e.target.value; render(); });
+    el("journalDbFilterCategory")?.addEventListener("change", (e) => {
+      filterCategory = e.target.value;
+      recordsPage = 0;
+      render();
+    });
+    el("journalDbFilterYear")?.addEventListener("change", (e) => {
+      filterSourceYear = e.target.value;
+      recordsPage = 0;
+      analysisPage = 0;
+      render();
+    });
+    el("journalDbFilterSearch")?.addEventListener("input", (e) => {
+      filterSearch = e.target.value;
+      recordsPage = 0;
+      render();
+    });
     el("journalDbAnalysisCategory")?.addEventListener("change", (e) => {
       analysisCategory = e.target.value;
+      analysisPage = 0;
       render();
+    });
+  }
+
+  function bindPaginationEvents(root) {
+    root.querySelectorAll("[data-page-nav]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const page = Number(btn.dataset.page);
+        if (!Number.isFinite(page) || page < 0) return;
+        if (btn.dataset.pageNav === "records") recordsPage = page;
+        else if (btn.dataset.pageNav === "analysis") analysisPage = page;
+        render();
+      });
     });
   }
 
@@ -750,7 +819,14 @@
           batchRows.push(...(result.upsertRows || []));
         }
 
-        persistLocal();
+        if (!useSupabase && records.length > LOCAL_STORAGE_MAX_ROWS) {
+          setStatus(
+            `Import dokončen — ${records.length} záznamů v paměti. localStorage nestačí — spusťte Supabase schéma a přihlaste se.`,
+            true
+          );
+        } else {
+          persistLocal();
+        }
 
         if (useSupabase && window.kbSupabaseJournalDb && batchRows.length) {
           if (await ensureAuth()) {
@@ -761,7 +837,7 @@
           }
         }
 
-        recomputeAnalysis();
+        await recomputeAnalysis();
         document.dispatchEvent(new CustomEvent("kb:journal-db-loaded"));
         const skippedParts = [
           skippedNoIssn ? `${skippedNoIssn} bez ISSN/eISSN` : "",
@@ -793,12 +869,18 @@
 
     root.querySelectorAll("[data-journal-view]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        activeView = btn.dataset.journalView;
+        const nextView = btn.dataset.journalView;
+        if (activeView !== nextView) {
+          recordsPage = 0;
+          analysisPage = 0;
+        }
+        activeView = nextView;
         render();
       });
     });
 
     bindFilterEvents();
+    bindPaginationEvents(root);
   }
 
   function injectStyles() {
@@ -828,6 +910,7 @@
       .journalDbHint { margin: 0 0 .75rem; }
       .journalDbAnalysisHead { margin-bottom: .75rem; display: grid; gap: .5rem; }
       .journalDbStatusError { color: #b42318; font-weight: 700; }
+      .journalDbPagination { display: flex; flex-wrap: wrap; gap: .5rem .75rem; align-items: center; margin: .5rem 0 .65rem; }
     `;
     document.head.appendChild(style);
   }
@@ -850,9 +933,9 @@
   window.kbJournalDb = {
     getRecords: () => records.slice(),
     getAnalyzed: (sourceYear) => {
-      const list = analysisCache.analyzed.slice();
+      const list = records.filter((row) => row.ais_rank);
       const year = n(sourceYear);
-      return year ? list.filter((row) => n(row.source_year) === year) : list;
+      return year ? list.filter((row) => n(row.source_year) === year) : list.slice();
     },
     getBestResults: (sourceYear) => {
       const list = analysisCache.best.slice();
