@@ -4,18 +4,28 @@
   const STORAGE_KEY = "kb-dashboard-journal-db-v1";
 
   const IMPORT_ALIASES = {
-    journal_name: ["Journal name", "Journal na", "Journal nam", "Název časopisu", "Casopis", "Časopis"],
-    jcr_abbreviation: ["JCR Abbreviation", "JCR Abbre", "JCR Abbrev", "Abbreviation"],
-    issn: ["ISSN", "issn"],
-    eissn: ["eISSN", "EISSN", "eissn"],
-    category: ["Category", "Kategorie", "Obor", "obor"],
-    edition: ["Edition", "Edice"],
-    ais: ["Article Influence Score", "Article Infl", "AIS", "Article Influence"],
-    ais_quartile: ["AIS Quartile", "AIS Quarti", "AIS Quart"],
-    jif: ["JIF", "Impact Factor"],
-    jif_quartile: ["JIF Quartile", "JIF Quartil", "JIF Quart"],
-    jif_percentile: ["JIF Percentile", "JIF Percent", "JIF Percentil"],
-    total_citations: ["Total Citations", "Total Citat", "Total Citation", "Citations"]
+    journal_name: [
+      "Journal name", "Journal Name", "Journal na", "Journal nam", "Journal Title", "Journal title",
+      "Full Journal Title", "Title", "Název časopisu", "Casopis", "Časopis"
+    ],
+    jcr_abbreviation: [
+      "JCR Abbreviation", "JCR Abbre", "JCR Abbrev", "Abbreviation", "Journal Abbreviation", "Abbrev"
+    ],
+    issn: ["ISSN", "issn", "Print ISSN", "Print ISSN "],
+    eissn: ["eISSN", "EISSN", "eissn", "e-ISSN", "E-ISSN", "Electronic ISSN"],
+    category: [
+      "Category", "Categories", "Kategorie", "Obor", "obor", "WoS Category", "JCR Category", "Edition Category"
+    ],
+    edition: ["Edition", "Edice", "Collection", "Index"],
+    ais: [
+      "Article Influence Score", "Article Influence", "Article Infl", "Article influence score",
+      "AIS", "Influence Score"
+    ],
+    ais_quartile: ["AIS Quartile", "AIS Quarti", "AIS Quart", "AIS Quartile Rank"],
+    jif: ["JIF", "Impact Factor", "Journal Impact Factor"],
+    jif_quartile: ["JIF Quartile", "JIF Quartil", "JIF Quart", "Impact Factor Quartile"],
+    jif_percentile: ["JIF Percentile", "JIF Percent", "JIF Percentil", "Average JIF Percentile"],
+    total_citations: ["Total Citations", "Total Citat", "Total Citation", "Citations", "Total cites"]
   };
 
   const VIEWS = [
@@ -69,6 +79,28 @@
     return n(s).replace(/^\uFEFF/, "").replace(/^"|"$/g, "").replace(/\s+/g, " ").toLowerCase();
   }
 
+  function headerMatchesField(hdr, field) {
+    if (field === "issn") {
+      return (hdr === "issn" || hdr.includes("print issn") || (hdr.includes("issn") && !hdr.includes("eissn") && !hdr.includes("e-issn")));
+    }
+    if (field === "eissn") {
+      return hdr.includes("eissn") || hdr.includes("e-issn") || hdr.includes("electronic issn");
+    }
+    if (field === "journal_name") {
+      return hdr.includes("journal") && (hdr.includes("name") || hdr.includes("title"));
+    }
+    if (field === "category") {
+      return hdr.includes("category") || hdr.includes("kategorie") || hdr === "obor";
+    }
+    if (field === "ais") {
+      return hdr.includes("article influence") || hdr.includes("influence score") || hdr === "ais";
+    }
+    if (field === "jcr_abbreviation") {
+      return hdr.includes("abbrev");
+    }
+    return false;
+  }
+
   function getFieldFromRow(row, field) {
     const aliases = IMPORT_ALIASES[field] || [field];
     for (const key of aliases) {
@@ -84,12 +116,122 @@
     }
     for (const [hdr, val] of Object.entries(byNorm)) {
       if (!n(val)) continue;
+      if (headerMatchesField(hdr, field)) return n(val);
       for (const key of aliases) {
         const nk = normalizeHeaderKey(key);
-        if (hdr === nk || hdr.includes(nk) || nk.includes(hdr)) return n(val);
+        if (hdr === nk || hdr.includes(nk) || nk.includes(hdr)) {
+          if (field === "issn" && (hdr.includes("eissn") || hdr.includes("e-issn"))) continue;
+          if (field === "eissn" && hdr === "issn") continue;
+          return n(val);
+        }
       }
     }
     return "";
+  }
+
+  function parseCsvRecords(text, delimiter) {
+    const records = [];
+    let row = [];
+    let field = "";
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { field += '"'; i += 1; }
+          else inQuotes = false;
+        } else field += ch;
+      } else if (ch === '"') inQuotes = true;
+      else if (ch === delimiter) { row.push(field); field = ""; }
+      else if (ch === "\n") {
+        row.push(field); field = "";
+        if (row.some((cell) => n(cell))) records.push(row);
+        row = [];
+      } else if (ch === "\r") {
+        if (text[i + 1] === "\n") i += 1;
+        row.push(field); field = "";
+        if (row.some((cell) => n(cell))) records.push(row);
+        row = [];
+      } else field += ch;
+    }
+    row.push(field);
+    if (row.some((cell) => n(cell))) records.push(row);
+    return records;
+  }
+
+  function detectDelimiter(sampleLine) {
+    const line = sampleLine.replace(/^\uFEFF/, "");
+    const counts = [
+      ["\t", (line.match(/\t/g) || []).length],
+      [";", (line.match(/;/g) || []).length],
+      [",", (line.match(/,/g) || []).length]
+    ];
+    counts.sort((a, b) => b[1] - a[1]);
+    return counts[0][1] > 0 ? counts[0][0] : ";";
+  }
+
+  function journalHeaderRowScore(cells) {
+    const joined = cells.map(normalizeHeaderKey).join(" ");
+    const markers = ["journal", "issn", "category", "jif", "ais", "abbrev", "influence", "edition", "citation"];
+    return markers.reduce((score, marker) => score + (joined.includes(marker) ? 1 : 0), 0);
+  }
+
+  function findJournalHeaderRowIndex(records) {
+    let bestIdx = 0;
+    let bestScore = -1;
+    records.slice(0, 20).forEach((row, idx) => {
+      const score = journalHeaderRowScore(row);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = idx;
+      }
+    });
+    return bestScore >= 2 ? bestIdx : 0;
+  }
+
+  function parseJournalImportTable(text) {
+    const clean = text.replace(/^\uFEFF/, "").trim();
+    if (!clean) return { rows: [], meta: { headers: [], delimiter: ";", headerRow: 0 } };
+
+    const lines = clean.split(/\r?\n/).filter((line) => n(line));
+    const probeLines = lines.slice(0, 25);
+    let delimiter = ";";
+    let bestDelimScore = -1;
+    for (const line of probeLines) {
+      const candidate = detectDelimiter(line);
+      const score = journalHeaderRowScore(parseCsvRecords(line, candidate)[0] || []);
+      if (score > bestDelimScore) {
+        bestDelimScore = score;
+        delimiter = candidate;
+      }
+    }
+
+    const records = parseCsvRecords(clean, delimiter);
+    if (!records.length) return { rows: [], meta: { headers: [], delimiter, headerRow: 0 } };
+
+    const headerIdx = findJournalHeaderRowIndex(records);
+    const headers = records[headerIdx].map((h) => n(h).replace(/^\uFEFF/, "").replace(/^"|"$/g, ""));
+    const rows = records.slice(headerIdx + 1).map((cols) => {
+      const row = {};
+      headers.forEach((header, i) => {
+        if (header) row[header] = (cols[i] ?? "").replace(/^"|"$/g, "").trim();
+      });
+      return row;
+    }).filter((row) => Object.values(row).some((v) => n(v)));
+
+    return { rows, meta: { headers, delimiter, headerRow: headerIdx + 1 } };
+  }
+
+  function buildImportError(parsed, skippedNoIssn, skippedNoCategory, normalizedCount) {
+    const headers = parsed.meta?.headers || [];
+    const headerPreview = headers.slice(0, 12).join(", ") || "?";
+    return (
+      `Import selhal — platných řádků: ${normalizedCount}. ` +
+      `Načteno ${parsed.rows.length} řádků, přeskočeno ${skippedNoIssn} bez ISSN/eISSN, ${skippedNoCategory} bez oboru. ` +
+      `Oddělovač: „${parsed.meta?.delimiter || "?"}“, záhlaví na řádku ${parsed.meta?.headerRow || "?"}. ` +
+      `Sloupce: ${headerPreview}. ` +
+      `Každý řádek musí mít ISSN nebo eISSN a Category. Tip: export z JCR jako CSV; u Excelu uložit jako CSV UTF-8 (středník).`
+    );
   }
 
   function detectJifColumn(row) {
@@ -183,17 +325,14 @@
     const skipSupabase = !!options.skipSupabase;
     const skipRecompute = !!options.skipRecompute;
 
-    const parsed = window.kbPersons?.parseDelimitedTable?.(text) || { rows: [] };
+    const parsed = parseJournalImportTable(text);
     const parsedRows = parsed.rows.map((row, i) => normalizeImportRow(row, i, meta));
     const skippedNoIssn = parsedRows.filter((row) => row?.__skipped?.reason === "no_issn").length;
     const skippedNoCategory = parsedRows.filter((row) => row?.__skipped?.reason === "no_category").length;
     const normalized = parsedRows.filter((row) => row && !row.__skipped);
 
     if (!normalized.length) {
-      throw new Error(
-        "V souboru nejsou platné řádky — každý záznam musí mít ISSN nebo eISSN a obor (Category). " +
-        `(záhlaví: ${parsed.meta?.headers?.slice(0, 8).join(", ") || "?"})`
-      );
+      throw new Error(buildImportError(parsed, skippedNoIssn, skippedNoCategory, normalized.length));
     }
 
     if (replace && records.length && !options.skipConfirm && !confirm(`Nahradit ${records.length} stávajících záznamů importem ${normalized.length} řádků?`)) {
@@ -731,6 +870,7 @@
       window.kbJournalDbAnalysis?.lookupBestJournal?.(ref, analysisCache.best, sourceYear),
     loadRecords,
     importFromText,
+    parseJournalImportTable,
     recomputeAnalysis
   };
 

@@ -17,10 +17,10 @@
 
   function normalizeIssn(value) {
     const v = n(value).replace(/\s/g, "").toUpperCase();
-    if (!v || v === "-" || v === "—") return "";
+    if (!v || v === "-" || v === "—" || /^N\/A$/i.test(v) || v === "NA") return "";
     const digits = v.replace(/[^0-9X]/gi, "");
-    if (digits.length === 8) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-    return v;
+    if (!digits || digits.length !== 8 || /^0+$/.test(digits)) return "";
+    return `${digits.slice(0, 4)}-${digits.slice(4)}`;
   }
 
   function makeJournalKey(row) {
