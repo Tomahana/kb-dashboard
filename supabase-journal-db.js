@@ -29,7 +29,7 @@
   }
 
   function mapRow(row) {
-    return {
+    const mapped = {
       id: row.id,
       source_key: row.source_key || "",
       journal_key: row.journal_key || "",
@@ -54,6 +54,11 @@
       __source: "supabase",
       __existing: true
     };
+    if (!mapped.issn && !mapped.eissn && mapped.journal_key) {
+      const match = mapped.journal_key.match(/^(issn|eissn):(.+)$/i);
+      if (match) mapped[match[1].toLowerCase()] = match[2];
+    }
+    return mapped;
   }
 
   function toPayload(item) {

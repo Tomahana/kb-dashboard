@@ -33,6 +33,8 @@
     const eissn = normalizeIssn(row.eissn);
     if (issn) return `issn:${issn}`;
     if (eissn) return `eissn:${eissn}`;
+    const stored = l(row.journal_key);
+    if (stored.startsWith("issn:") || stored.startsWith("eissn:")) return stored;
     return "";
   }
 
@@ -113,6 +115,15 @@
     return [...map.values()];
   }
 
+  function recordRankKey(row) {
+    const journalKey = row.journal_key || makeJournalKey(row);
+    if (!journalKey) return "";
+    const category = n(row.category) || "—";
+    const sourceYear = resolveSourceYear(row);
+    const edition = l(row.edition);
+    return `${sourceYear}|${category}|${journalKey}|${edition}`;
+  }
+
   function rankRecordsInPlace(rows) {
     rows.forEach(clearRankMetrics);
     const deduped = dedupeCategoryRows(rows);
@@ -127,7 +138,7 @@
       byYearCategory.get(groupKey).push(row);
     }
 
-    const metricsBySourceKey = new Map();
+    const metricsByRankKey = new Map();
 
     for (const [groupKey, items] of byYearCategory.entries()) {
       const sourceYear = resolveSourceYear(items[0]);
@@ -151,7 +162,8 @@
       sorted.forEach((entry, index) => {
         const rank = index + 1;
         const metrics = classifyFromRatio(rank, total);
-        metricsBySourceKey.set(entry.source_key, metrics);
+        metricsByRankKey.set(recordRankKey(entry), metrics);
+        Object.assign(entry, metrics);
         const ais = parseNumber(entry.ais);
         if (ais != null) {
           withAis += 1;
@@ -175,7 +187,7 @@
     }
 
     rows.forEach((row) => {
-      const metrics = metricsBySourceKey.get(row.source_key);
+      const metrics = metricsByRankKey.get(recordRankKey(row));
       if (metrics) Object.assign(row, metrics);
     });
 
@@ -301,6 +313,7 @@
     applyJournalIdentity,
     resolveSourceYear,
     classifyFromRatio,
+    recordRankKey,
     rankRecordsInPlace,
     aggregateBestResults,
     runAnalysis,

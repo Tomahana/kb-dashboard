@@ -74,8 +74,20 @@
   }
 
   async function recomputeAnalysis() {
+    if (!window.kbJournalDbAnalysis?.runAnalysis) {
+      analysisCache = { best: [], categories: [] };
+      return;
+    }
+    records = refreshRecordKeys(records);
+    setStatus(`Počítám pořadí AIS pro ${records.length} záznamů…`);
     await yieldToMain();
-    analysisCache = window.kbJournalDbAnalysis?.runAnalysis?.(records) || { best: [], categories: [] };
+    try {
+      analysisCache = window.kbJournalDbAnalysis.runAnalysis(records);
+    } catch (err) {
+      console.error("Analýza časopisů selhala:", err);
+      analysisCache = { best: [], categories: [] };
+      throw err;
+    }
   }
 
   function setStatus(text, isError) {
@@ -312,8 +324,9 @@
 
   function makeSourceKey(row) {
     const journalKey = row.journal_key || window.kbJournalDbAnalysis?.makeJournalKey?.(row) || "";
+    const sourceYear = window.kbJournalDbAnalysis?.resolveSourceYear?.(row) || n(row.source_year);
     return [
-      l(row.source_year),
+      l(sourceYear === "—" ? "" : sourceYear),
       l(row.category),
       l(journalKey),
       l(row.edition)
@@ -474,7 +487,17 @@
       setStatus(`Chyba: ${err.message || err}`, true);
     } finally {
       loading = false;
-      await recomputeAnalysis();
+      if (records.length) {
+        try {
+          await recomputeAnalysis();
+          const ranked = records.filter((row) => row.ais_rank).length;
+          if (!el("journalDbStatus")?.classList.contains("journalDbStatusError")) {
+            setStatus(`Načteno ${records.length} záznamů${ranked ? `, ${ranked} s pořadím AIS` : ""}.`);
+          }
+        } catch (err) {
+          setStatus(`Načteno ${records.length} záznamů, analýza pořadí selhala: ${err.message || err}`, true);
+        }
+      }
       render();
       document.dispatchEvent(new CustomEvent("kb:journal-db-loaded"));
     }
@@ -821,10 +844,12 @@
       if (!files.length) return;
       loading = true;
       render();
+      let imported = 0;
+      let skippedNoIssn = 0;
+      let skippedNoCategory = 0;
+      let importError = null;
+      let analysisError = null;
       try {
-        let imported = 0;
-        let skippedNoIssn = 0;
-        let skippedNoCategory = 0;
         const batchRows = [];
         for (let i = 0; i < files.length; i += 1) {
           const file = files[i];
@@ -860,24 +885,43 @@
             }, { fullRecords: records, chunkSize: 100 });
           }
         }
+      } catch (err) {
+        importError = err;
+      }
 
-        await recomputeAnalysis();
-        document.dispatchEvent(new CustomEvent("kb:journal-db-loaded"));
-        const skippedParts = [
-          skippedNoIssn ? `${skippedNoIssn} bez ISSN/eISSN` : "",
-          skippedNoCategory ? `${skippedNoCategory} bez oboru` : ""
-        ].filter(Boolean).join(", ");
+      if (records.length) {
+        try {
+          await recomputeAnalysis();
+          document.dispatchEvent(new CustomEvent("kb:journal-db-loaded"));
+        } catch (err) {
+          analysisError = err;
+        }
+      }
+
+      const skippedParts = [
+        skippedNoIssn ? `${skippedNoIssn} bez ISSN/eISSN` : "",
+        skippedNoCategory ? `${skippedNoCategory} bez oboru` : ""
+      ].filter(Boolean).join(", ");
+      const rankedCount = records.filter((row) => row.ais_rank).length;
+
+      if (importError) {
+        setStatus(`Import selhal: ${importError.message || importError}`, true);
+      } else if (analysisError) {
         setStatus(
-          `Import dokončen — ${records.length} záznamů celkem` +
+          `Import dokončen (${records.length} záznamů), ale analýza pořadí selhala: ${analysisError.message || analysisError}`,
+          true
+        );
+      } else {
+        setStatus(
+          `Import dokončen — ${records.length} záznamů` +
           (imported ? ` (+${imported} nových/aktualizovaných)` : "") +
+          (rankedCount ? `, ${rankedCount} s pořadím AIS` : "") +
           (skippedParts ? `. Přeskočeno: ${skippedParts}.` : ".")
         );
-      } catch (err) {
-        setStatus(`Import selhal: ${err.message || err}`, true);
-      } finally {
-        loading = false;
-        render();
       }
+
+      loading = false;
+      render();
     }
 
     el("journalDbImportFile")?.addEventListener("change", async (e) => {
