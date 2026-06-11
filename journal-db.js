@@ -118,10 +118,11 @@
   }
 
   function makeSourceKey(row) {
+    const journalKey = row.journal_key || window.kbJournalDbAnalysis?.makeJournalKey?.(row) || "";
     return [
       l(row.source_year),
       l(row.category),
-      l(row.journal_key || window.kbJournalDbAnalysis?.makeJournalKey?.(row)),
+      l(journalKey),
       l(row.edition)
     ].join("|");
   }
@@ -129,7 +130,7 @@
   function normalizeImportRow(raw, index, meta = {}) {
     const jifInfo = detectJifColumn(raw);
     const jifFromAlias = getFieldFromRow(raw, "jif");
-    const row = {
+    let row = {
       journal_name: getFieldFromRow(raw, "journal_name"),
       jcr_abbreviation: getFieldFromRow(raw, "jcr_abbreviation"),
       issn: getFieldFromRow(raw, "issn"),
@@ -148,10 +149,16 @@
       import_index: index + 1
     };
 
-    if (!row.journal_name && !row.jcr_abbreviation && !row.issn && !row.eissn) return null;
-    if (!row.category) return null;
+    row = window.kbJournalDbAnalysis?.applyJournalIdentity?.(row) || row;
 
-    row.journal_key = window.kbJournalDbAnalysis?.makeJournalKey?.(row) || "";
+    if (!window.kbJournalDbAnalysis?.hasJournalKey?.(row)) {
+      return { __skipped: true, reason: "no_issn", row };
+    }
+    if (!row.category) {
+      return { __skipped: true, reason: "no_category", row };
+    }
+
+    row.journal_key = window.kbJournalDbAnalysis.makeJournalKey(row);
     row.source_key = makeSourceKey(row);
     return row;
   }
@@ -164,21 +171,33 @@
     return new TextDecoder("utf-8").decode(buffer).replace(/^\uFEFF/, "");
   }
 
-  async function importFromText(text, meta = {}, replace = false) {
+  function refreshRecordKeys(list) {
+    return list.map((row) => {
+      const next = window.kbJournalDbAnalysis?.applyJournalIdentity?.(row) || row;
+      return { ...next, source_key: makeSourceKey(next) };
+    });
+  }
+
+  async function importFromText(text, meta = {}, options = {}) {
+    const replace = !!options.replace;
+    const skipSupabase = !!options.skipSupabase;
+    const skipRecompute = !!options.skipRecompute;
+
     const parsed = window.kbPersons?.parseDelimitedTable?.(text) || { rows: [] };
-    const normalized = parsed.rows
-      .map((row, i) => normalizeImportRow(row, i, meta))
-      .filter(Boolean);
+    const parsedRows = parsed.rows.map((row, i) => normalizeImportRow(row, i, meta));
+    const skippedNoIssn = parsedRows.filter((row) => row?.__skipped?.reason === "no_issn").length;
+    const skippedNoCategory = parsedRows.filter((row) => row?.__skipped?.reason === "no_category").length;
+    const normalized = parsedRows.filter((row) => row && !row.__skipped);
 
     if (!normalized.length) {
       throw new Error(
-        "V souboru nejsou rozpoznatelná data. Očekáváme sloupce Journal name, Category, AIS, ISSN… " +
+        "V souboru nejsou platné řádky — každý záznam musí mít ISSN nebo eISSN a obor (Category). " +
         `(záhlaví: ${parsed.meta?.headers?.slice(0, 8).join(", ") || "?"})`
       );
     }
 
-    if (replace && records.length && !confirm(`Nahradit ${records.length} stávajících záznamů importem ${normalized.length} řádků?`)) {
-      return null;
+    if (replace && records.length && !options.skipConfirm && !confirm(`Nahradit ${records.length} stávajících záznamů importem ${normalized.length} řádků?`)) {
+      return { imported: 0, skippedNoIssn, skippedNoCategory, total: records.length, upsertRows: [] };
     }
 
     const withIds = normalized.map((row) => {
@@ -199,24 +218,39 @@
       records = [...map.values()];
     }
 
-    if (useSupabase && window.kbSupabaseJournalDb) {
+    if (!skipSupabase && useSupabase && window.kbSupabaseJournalDb) {
       if (!(await ensureAuth())) {
         persistLocal();
-        recomputeAnalysis();
+        if (!skipRecompute) recomputeAnalysis();
         setStatus(`Uloženo ${records.length} záznamů lokálně — pro Supabase se přihlaste.`, true);
-        return withIds.length;
+        return {
+          imported: withIds.length,
+          skippedNoIssn,
+          skippedNoCategory,
+          total: records.length,
+          upsertRows: withIds
+        };
       }
       setStatus(`Ukládám 0 / ${withIds.length}…`);
       records = await window.kbSupabaseJournalDb.upsertBatch(withIds, (done, total) => {
         setStatus(`Ukládám ${done} / ${total}…`);
-      });
-    } else {
+      }, { fullRecords: records, chunkSize: 100 });
+    } else if (!skipSupabase) {
       persistLocal();
     }
 
-    recomputeAnalysis();
-    document.dispatchEvent(new CustomEvent("kb:journal-db-loaded"));
-    return withIds.length;
+    if (!skipRecompute) {
+      recomputeAnalysis();
+      document.dispatchEvent(new CustomEvent("kb:journal-db-loaded"));
+    }
+
+    return {
+      imported: withIds.length,
+      skippedNoIssn,
+      skippedNoCategory,
+      total: records.length,
+      upsertRows: withIds
+    };
   }
 
   async function loadRecords() {
@@ -227,19 +261,20 @@
         useSupabase = false;
         records = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
         if (!Array.isArray(records)) records = [];
+        records = refreshRecordKeys(records);
         setStatus("Data v prohlížeči. Spusťte supabase/journal-db-schema.sql.");
         return;
       }
       const available = await window.kbSupabaseJournalDb.probeTables();
       if (!available) {
         useSupabase = false;
-        records = window.kbSupabaseJournalDb.loadLocal();
+        records = refreshRecordKeys(window.kbSupabaseJournalDb.loadLocal());
         setStatus("Tabulka kb_journal_records v Supabase zatím neexistuje. Spusťte supabase/journal-db-schema.sql.");
         return;
       }
       useSupabase = true;
       if (await ensureAuth()) {
-        records = await window.kbSupabaseJournalDb.loadAll();
+        records = refreshRecordKeys(await window.kbSupabaseJournalDb.loadAll());
         setStatus(`Načteno ${records.length} záznamů časopisů ze Supabase.`);
       }
     } catch (err) {
@@ -523,12 +558,14 @@
         <div class="sectionHeader">
           <div>
             <h2>Databáze časopisů</h2>
-            <p class="hint">Import exportů JCR podle roků a oborů (CSV, TSV, CSC). Pořadí AIS v oboru a roce se dělí počtem časopisů v oboru — poměr určí P1/P5, decil, centil a kvartil (Q1 = horních 25&nbsp;%).</p>
+            <p class="hint">Import exportů JCR po částech (CSV, TSV, CSC). Klíč časopisu je <strong>ISSN nebo eISSN</strong> — název a zkratka slouží jen pro zobrazení. Nové soubory se <strong>doplňují</strong> k existujícím záznamům (stejný rok+obor+ISSN se aktualizuje).</p>
           </div>
           <div class="sectionActions">
             <button type="button" id="journalDbReloadBtn" class="button small secondary">Načíst ze Supabase</button>
-            <label class="button small secondary" for="journalDbImportFile">Import souboru</label>
+            <label class="button small secondary" for="journalDbImportFile">Import (doplnit)</label>
             <input type="file" id="journalDbImportFile" accept=".csv,.tsv,.txt,.csc,text/csv,text/tab-separated-values" hidden multiple />
+            <label class="button small secondary" for="journalDbImportReplaceFile">Import (nahradit vše)</label>
+            <input type="file" id="journalDbImportReplaceFile" accept=".csv,.tsv,.txt,.csc,text/csv,text/tab-separated-values" hidden multiple />
             <button type="button" id="journalDbExportBestBtn" class="button small secondary">Export nejlepších (CSV)</button>
             <button type="button" id="journalDbExportJsonBtn" class="button small secondary">Export JSON</button>
           </div>
@@ -547,27 +584,72 @@
     el("journalDbReloadBtn")?.addEventListener("click", loadRecords);
     el("journalDbExportJsonBtn")?.addEventListener("click", exportJson);
     el("journalDbExportBestBtn")?.addEventListener("click", exportBestCsv);
-    el("journalDbImportFile")?.addEventListener("change", async (e) => {
-      const files = [...(e.target.files || [])];
-      e.target.value = "";
+
+    async function handleImportFiles(files, replace = false) {
       if (!files.length) return;
       loading = true;
       render();
       try {
-        let total = 0;
-        for (const file of files) {
+        let imported = 0;
+        let skippedNoIssn = 0;
+        let skippedNoCategory = 0;
+        const batchRows = [];
+        for (let i = 0; i < files.length; i += 1) {
+          const file = files[i];
           const text = await readImportFileText(file);
           const yearFromName = file.name.match(/(20\d{2})/)?.[1] || "";
-          const count = await importFromText(text, { fileName: file.name, sourceYear: yearFromName }, files.length === 1 && !records.length);
-          if (count != null) total += count;
+          setStatus(`Importuji soubor ${i + 1} / ${files.length}: ${file.name}…`);
+          const result = await importFromText(text, { fileName: file.name, sourceYear: yearFromName }, {
+            replace: replace && i === 0,
+            skipSupabase: true,
+            skipRecompute: true,
+            skipConfirm: !replace || i > 0
+          });
+          imported += result.imported;
+          skippedNoIssn += result.skippedNoIssn;
+          skippedNoCategory += result.skippedNoCategory;
+          batchRows.push(...(result.upsertRows || []));
         }
-        setStatus(`Import dokončen — ${records.length} záznamů celkem (${analysisCache.best.length} unikátních časopisů).`);
+
+        persistLocal();
+
+        if (useSupabase && window.kbSupabaseJournalDb && batchRows.length) {
+          if (await ensureAuth()) {
+            setStatus(`Ukládám 0 / ${batchRows.length}…`);
+            records = await window.kbSupabaseJournalDb.upsertBatch(batchRows, (done, total) => {
+              setStatus(`Ukládám ${done} / ${total}…`);
+            }, { fullRecords: records, chunkSize: 100 });
+          }
+        }
+
+        recomputeAnalysis();
+        document.dispatchEvent(new CustomEvent("kb:journal-db-loaded"));
+        const skippedParts = [
+          skippedNoIssn ? `${skippedNoIssn} bez ISSN/eISSN` : "",
+          skippedNoCategory ? `${skippedNoCategory} bez oboru` : ""
+        ].filter(Boolean).join(", ");
+        setStatus(
+          `Import dokončen — ${records.length} záznamů celkem` +
+          (imported ? ` (+${imported} nových/aktualizovaných)` : "") +
+          (skippedParts ? `. Přeskočeno: ${skippedParts}.` : ".")
+        );
       } catch (err) {
         setStatus(`Import selhal: ${err.message || err}`, true);
       } finally {
         loading = false;
         render();
       }
+    }
+
+    el("journalDbImportFile")?.addEventListener("change", async (e) => {
+      const files = [...(e.target.files || [])];
+      e.target.value = "";
+      await handleImportFiles(files, false);
+    });
+    el("journalDbImportReplaceFile")?.addEventListener("change", async (e) => {
+      const files = [...(e.target.files || [])];
+      e.target.value = "";
+      await handleImportFiles(files, true);
     });
 
     root.querySelectorAll("[data-journal-view]").forEach((btn) => {

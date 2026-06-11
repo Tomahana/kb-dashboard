@@ -28,11 +28,22 @@
     const eissn = normalizeIssn(row.eissn);
     if (issn) return `issn:${issn}`;
     if (eissn) return `eissn:${eissn}`;
-    const abbr = l(row.jcr_abbreviation);
-    if (abbr) return `abbr:${abbr}`;
-    const name = l(row.journal_name);
-    if (name) return `name:${name}`;
     return "";
+  }
+
+  function hasJournalKey(row) {
+    return !!makeJournalKey(row);
+  }
+
+  function applyJournalIdentity(row) {
+    const issn = normalizeIssn(row.issn);
+    const eissn = normalizeIssn(row.eissn);
+    return {
+      ...row,
+      issn,
+      eissn,
+      journal_key: makeJournalKey({ issn, eissn })
+    };
   }
 
   function compareJournalName(a, b) {
@@ -74,9 +85,11 @@
   function dedupeCategoryRows(rows) {
     const map = new Map();
     for (const row of rows) {
+      const journalKey = makeJournalKey(row);
+      if (!journalKey) continue;
       const category = n(row.category) || "—";
       const sourceYear = resolveSourceYear(row);
-      const key = `${sourceYear}|${category}|${makeJournalKey(row)}`;
+      const key = `${sourceYear}|${category}|${journalKey}`;
       const existing = map.get(key);
       const ais = parseNumber(row.ais);
       if (!existing) {
@@ -109,6 +122,8 @@
     const byYearCategory = new Map();
 
     for (const row of deduped) {
+      const journalKey = makeJournalKey(row);
+      if (!journalKey) continue;
       const category = n(row.category) || "—";
       const sourceYear = resolveSourceYear(row);
       const groupKey = `${sourceYear}|${category}`;
@@ -280,12 +295,11 @@
   }
 
   function lookupBestJournal(journalRef, bestRows, sourceYear) {
-    const keyFromRef = makeJournalKey({
+    const ref = window.kbJournalDbAnalysis?.applyJournalIdentity?.({
       issn: journalRef.issn,
-      eissn: journalRef.eissn,
-      jcr_abbreviation: journalRef.jcr_abbreviation,
-      journal_name: journalRef.journal_name || journalRef.nazev || journalRef.casopis
-    });
+      eissn: journalRef.eissn
+    }) || journalRef;
+    const keyFromRef = makeJournalKey(ref);
     if (!keyFromRef) return null;
     const year = n(sourceYear || journalRef.source_year || journalRef.best_source_year);
     const matches = bestRows.filter((row) => row.journal_key === keyFromRef);
@@ -298,6 +312,8 @@
     parseNumber,
     normalizeIssn,
     makeJournalKey,
+    hasJournalKey,
+    applyJournalIdentity,
     resolveSourceYear,
     classifyFromRatio,
     rankByCategory,

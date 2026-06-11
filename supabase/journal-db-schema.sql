@@ -31,7 +31,7 @@ create table if not exists public.kb_journal_records (
 
 comment on table public.kb_journal_records is 'JCR exporty časopisů podle oborů a roků — podklad pro analýzu AIS';
 comment on column public.kb_journal_records.source_key is 'Stabilní klíč pro upsert (rok+obor+časopis+edice)';
-comment on column public.kb_journal_records.journal_key is 'Klíč časopisu (ISSN/eISSN/zkratka/název) pro agregaci nejlepšího výsledku';
+comment on column public.kb_journal_records.journal_key is 'Klíč časopisu — pouze ISSN nebo eISSN (issn:xxxx-xxxx / eissn:xxxx-xxxx)';
 
 create index if not exists kb_journal_records_category_idx
   on public.kb_journal_records (category);

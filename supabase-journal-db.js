@@ -108,10 +108,10 @@
     return mapped;
   }
 
-  async function upsertBatch(items, onProgress) {
+  async function upsertBatch(items, onProgress, options = {}) {
     const sb = getClient();
     const saved = [];
-    const chunkSize = 50;
+    const chunkSize = options.chunkSize || 100;
     for (let i = 0; i < items.length; i += chunkSize) {
       const chunk = items.slice(i, i + chunkSize).map(toPayload);
       const { data, error } = await sb
@@ -122,8 +122,20 @@
       (data || []).forEach((row) => saved.push(mapRow(row)));
       onProgress?.(Math.min(i + chunk.length, items.length), items.length);
     }
-    saveLocal(saved.length ? await loadAll() : []);
-    return saved.length ? await loadAll() : [];
+
+    if (options.fullRecords) {
+      const map = new Map(options.fullRecords.map((row) => [row.source_key, row]));
+      saved.forEach((row) => map.set(row.source_key, row));
+      const merged = [...map.values()];
+      saveLocal(merged);
+      return merged;
+    }
+
+    if (saved.length) {
+      saveLocal(await loadAll());
+      return loadAll();
+    }
+    return [];
   }
 
   window.kbSupabaseJournalDb = {
