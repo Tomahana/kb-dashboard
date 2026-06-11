@@ -89,6 +89,14 @@
       stats: ["eizContractsTotal", "eizPublicationsTotal"]
     },
     {
+      slug: "casopisy",
+      title: "Databáze časopisů",
+      description: "Import JCR exportů podle roků a oborů — počet časopisů v oboru a roce, AIS pořadí, kvartily/decily/centily a nejlepší výsledek napříč obory v rámci roku.",
+      status: "active",
+      icon: "📚",
+      stats: ["journalRecordsTotal", "journalCategoriesTotal"]
+    },
+    {
       slug: "modul-dkrvo",
       title: "DKRVO",
       description: "Roční výkaz výzkumu, sběr dat a odeslání na MŠMT.",
@@ -153,6 +161,8 @@
     const pcrLinked = pcrTopics.filter((t) => t.gestor_osobni_cislo || window.kbPersonLinks?.resolvePerson?.(t, "gestor")).length;
     const eizContracts = window.kbEizTokens?.getContracts?.() || [];
     const eizPublications = window.kbEizTokens?.getPublications?.() || [];
+    const journalRecords = window.kbJournalDb?.getRecords?.() || [];
+    const journalCategories = window.kbJournalDb?.getCategories?.() || [];
 
     return {
       emailsTotal: data.length,
@@ -167,7 +177,9 @@
       pcrTopicsTotal: pcrTopics.length,
       pcrTopicsLinked: pcrLinked,
       eizContractsTotal: eizContracts.length,
-      eizPublicationsTotal: eizPublications.length
+      eizPublicationsTotal: eizPublications.length,
+      journalRecordsTotal: journalRecords.length,
+      journalCategoriesTotal: journalCategories.length
     };
   }
 
@@ -185,7 +197,9 @@
       pcrTopicsTotal: `${value} témat PČR`,
       pcrTopicsLinked: `${value} propojených gestorů`,
       eizContractsTotal: `${value} smluv EIZ`,
-      eizPublicationsTotal: `${value} publikací EIZ`
+      eizPublicationsTotal: `${value} publikací EIZ`,
+      journalRecordsTotal: `${value} záznamů časopisů`,
+      journalCategoriesTotal: `${value} oborů JCR`
     };
     return labels[key] || String(value);
   }
@@ -349,6 +363,7 @@
     document.addEventListener("kb:persons-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:pcr-research-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:eiz-tokens-loaded", () => setTimeout(renderModulesGrid, 60));
+    document.addEventListener("kb:journal-db-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("input", () => setTimeout(renderModulesGrid, 120));
   }
 

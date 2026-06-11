@@ -14,6 +14,7 @@
     { id: "temata", label: "Témata", page: "temata", status: "active" },
     { id: "emaily", label: "E-maily / znalostní báze", page: "emaily", status: "active" },
     { id: "eiz-tokeny", label: "EIZ tokeny / publikace", page: "eiz-tokeny", status: "active" },
+    { id: "casopisy", label: "Databáze časopisů / JCR", page: "casopisy", status: "active" },
     { id: "publikace", label: "Publikační výstupy (ostatní)", page: null, status: "planned" },
     { id: "vysledky", label: "Aplikované výsledky", page: null, status: "planned" }
   ];
@@ -221,6 +222,28 @@
     return out;
   }
 
+  function buildJournalChunks() {
+    const best = window.kbJournalDb?.getBestResults?.() || [];
+    return best.slice(0, 300).map((row) => chunk(
+      `journal:${row.journal_key || row.id}:${row.best_source_year || row.source_year || ""}`,
+      "casopisy",
+      "Databáze časopisů",
+      row.journal_name || row.jcr_abbreviation || "Časopis",
+      [
+        row.best_source_year || row.source_year ? `rok ${row.best_source_year || row.source_year}` : "",
+        row.best_category,
+        row.best_ais != null ? `AIS ${row.best_ais}` : "",
+        row.best_ais_rank ? `pořadí ${row.best_ais_rank_fraction || row.best_ais_rank}` : "",
+        row.best_ais_percentile_band ? row.best_ais_percentile_band : "",
+        row.best_ais_quartile ? row.best_ais_quartile : "",
+        row.issn,
+        row.jif ? `JIF ${row.jif}` : ""
+      ].filter(Boolean).join(" · "),
+      "#casopisy",
+      { journal_key: row.journal_key, issn: row.issn, source_year: row.best_source_year || row.source_year }
+    ));
+  }
+
   function buildEmailChunks(limit = 400) {
     let data = [];
     try {
@@ -249,7 +272,8 @@
     "interni-souteze": buildCompetitionChunks,
     temata: buildTopicChunks,
     emaily: buildEmailChunks,
-    "eiz-tokeny": buildEizChunks
+    "eiz-tokeny": buildEizChunks,
+    casopisy: buildJournalChunks
     // publikace: () => []  — Fáze 2 (ostatní výstupy)
     // vysledky: () => []   — Fáze 2
   };

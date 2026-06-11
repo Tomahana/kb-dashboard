@@ -291,7 +291,23 @@ grant select, insert, update, delete on public.kb_eiz_contract_years to authenti
 grant select, insert, update, delete on public.kb_eiz_publications to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 8) Ověření
+-- 8) kb_journal_records (databáze časopisů / JCR exporty)
+-- ---------------------------------------------------------------------------
+alter table if exists public.kb_journal_records enable row level security;
+
+drop policy if exists "kb_journal_records authenticated read" on public.kb_journal_records;
+drop policy if exists "kb_journal_records authenticated write" on public.kb_journal_records;
+
+create policy "kb_journal_records authenticated read"
+  on public.kb_journal_records for select to authenticated using (true);
+create policy "kb_journal_records authenticated write"
+  on public.kb_journal_records for all to authenticated using (true) with check (true);
+
+revoke all on public.kb_journal_records from anon;
+grant select, insert, update, delete on public.kb_journal_records to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 9) Ověření
 -- ---------------------------------------------------------------------------
 select schemaname, tablename, policyname, roles, cmd
 from pg_policies
@@ -300,6 +316,7 @@ where schemaname = 'public'
     'kb_records', 'kb_record_bodies', 'kb_topics', 'kb_topic_records', 'kb_topic_deadlines',
     'kb_deadlines', 'kb_persons', 'kb_competitions', 'kb_competition_applications', 'kb_competition_supported',
     'kb_pcr_research_topics', 'kb_ai_advisor_saved',
-    'kb_eiz_contracts', 'kb_eiz_contract_years', 'kb_eiz_publications'
+    'kb_eiz_contracts', 'kb_eiz_contract_years', 'kb_eiz_publications',
+    'kb_journal_records'
   )
 order by tablename, policyname;
