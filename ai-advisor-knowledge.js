@@ -233,8 +233,9 @@
         row.best_source_year || row.source_year ? `rok ${row.best_source_year || row.source_year}` : "",
         row.best_category,
         row.best_ais != null ? `AIS ${row.best_ais}` : "",
-        row.best_ais_rank ? `pořadí ${row.best_ais_rank}/${row.category_journal_count}` : "",
-        row.best_ais_quartile ? `Q${row.best_ais_quartile}` : "",
+        row.best_ais_rank ? `pořadí ${row.best_ais_rank_fraction || row.best_ais_rank}` : "",
+        row.best_ais_percentile_band ? row.best_ais_percentile_band : "",
+        row.best_ais_quartile ? row.best_ais_quartile : "",
         row.issn,
         row.jif ? `JIF ${row.jif}` : ""
       ].filter(Boolean).join(" · "),

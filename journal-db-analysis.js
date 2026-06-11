@@ -42,23 +42,33 @@
     );
   }
 
-  function bucketFromRank(rank, total, buckets) {
+  function classifyFromRatio(rank, total) {
     const safeTotal = Math.max(1, total);
-    return Math.min(buckets, Math.max(1, Math.floor(((rank - 1) * buckets) / safeTotal) + 1));
+    const ratio = rank / safeTotal;
+    const roundedRatio = Math.round(ratio * 1000000) / 1000000;
+
+    let percentileBand = "";
+    if (ratio <= 0.01) percentileBand = "P1";
+    else if (ratio <= 0.05) percentileBand = "P5";
+
+    const decileNum = Math.min(10, Math.max(1, Math.ceil(ratio * 10)));
+    const centileNum = Math.min(100, Math.max(1, Math.ceil(ratio * 100)));
+    const quartileNum = Math.min(4, Math.max(1, Math.ceil(ratio * 4)));
+
+    return {
+      category_journal_count: total,
+      ais_rank: rank,
+      ais_rank_ratio: roundedRatio,
+      ais_rank_fraction: `${rank}/${safeTotal}`,
+      ais_percentile_band: percentileBand,
+      ais_decile: `D${decileNum}`,
+      ais_centile: `C${centileNum}`,
+      ais_quartile: `Q${quartileNum}`
+    };
   }
 
   function assignRankMetrics(entry, rank, total) {
-    const safeTotal = Math.max(1, total);
-    const ratio = rank / safeTotal;
-    const percentileTop = ((safeTotal - rank + 1) / safeTotal) * 100;
-
-    entry.category_journal_count = total;
-    entry.ais_rank = rank;
-    entry.ais_rank_ratio = Math.round(ratio * 10000) / 10000;
-    entry.ais_percentile_top = Math.round(percentileTop * 10) / 10;
-    entry.ais_quartile_rank = bucketFromRank(rank, safeTotal, 4);
-    entry.ais_decile_rank = bucketFromRank(rank, safeTotal, 10);
-    entry.ais_centile_rank = bucketFromRank(rank, safeTotal, 100);
+    Object.assign(entry, classifyFromRatio(rank, total));
   }
 
   function dedupeCategoryRows(rows) {
@@ -142,14 +152,14 @@
     const jifPercentile = parseNumber(row.jif_percentile);
     const jif = parseNumber(row.jif);
     const rank = row.ais_rank || 999999;
-    const categoryTotal = row.category_journal_count || 999999;
+    const ratio = row.ais_rank_ratio ?? 1;
 
     return {
       ais: ais == null ? -Infinity : ais,
       jifPercentile: jifPercentile == null ? -Infinity : jifPercentile,
       jif: jif == null ? -Infinity : jif,
       rank,
-      categoryTotal
+      ratio
     };
   }
 
@@ -160,7 +170,7 @@
     if (c.jifPercentile !== cur.jifPercentile) return c.jifPercentile > cur.jifPercentile;
     if (c.jif !== cur.jif) return c.jif > cur.jif;
     if (c.rank !== cur.rank) return c.rank < cur.rank;
-    return c.categoryTotal < cur.categoryTotal;
+    return c.ratio < cur.ratio;
   }
 
   function aggregateBestResults(analyzedRows) {
@@ -209,10 +219,11 @@
       best_source_year: resolveSourceYear(row),
       best_ais_rank: row.ais_rank,
       best_ais_rank_ratio: row.ais_rank_ratio,
-      best_ais_percentile_top: row.ais_percentile_top,
-      best_ais_quartile: row.ais_quartile_rank,
-      best_ais_decile: row.ais_decile_rank,
-      best_ais_centile: row.ais_centile_rank,
+      best_ais_rank_fraction: row.ais_rank_fraction,
+      best_ais_percentile_band: row.ais_percentile_band,
+      best_ais_quartile: row.ais_quartile,
+      best_ais_decile: row.ais_decile,
+      best_ais_centile: row.ais_centile,
       best_jif: parseNumber(row.jif),
       best_jif_year: row.jif_year,
       best_jif_percentile: parseNumber(row.jif_percentile)
@@ -288,6 +299,7 @@
     normalizeIssn,
     makeJournalKey,
     resolveSourceYear,
+    classifyFromRatio,
     rankByCategory,
     aggregateBestResults,
     summarizeCategories,

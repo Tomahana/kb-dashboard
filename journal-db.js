@@ -267,7 +267,7 @@
         const analyzed = analysisCache.analyzed.find((a) => a.id === row.id);
         const hay = l([
           row.journal_name, row.jcr_abbreviation, row.issn, row.eissn, row.category,
-          row.ais, row.jif, analyzed?.ais_rank, analyzed?.ais_quartile_rank
+          row.ais, row.jif, analyzed?.ais_rank, analyzed?.ais_quartile, analyzed?.ais_percentile_band
         ].join(" "));
         if (!hay.includes(l(filterSearch))) return false;
       }
@@ -319,7 +319,7 @@
     if (!list.length) return `<p class="hint">Žádné záznamy. Importujte export JCR (CSV/TSV/CSC).</p>`;
     return `<div class="journalDbTableWrap"><table class="journalDbTable">
       <thead><tr>
-        <th>Časopis</th><th>Obor</th><th>AIS</th><th>Pořadí</th><th>Kvartil</th><th>Decil</th><th>Centil</th><th>JIF</th><th>Rok</th>
+        <th>Časopis</th><th>Obor</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>P</th><th>Q</th><th>D</th><th>C</th><th>JIF</th><th>Rok</th>
       </tr></thead>
       <tbody>${list.map((row) => {
         const a = analyzedMap.get(row.id) || {};
@@ -330,10 +330,12 @@
           </td>
           <td>${html(row.category)}</td>
           <td>${formatNum(row.ais)}</td>
-          <td>${a.ais_rank ? `${a.ais_rank} / ${a.category_journal_count}` : "—"}</td>
-          <td>${a.ais_quartile_rank ?? "—"}</td>
-          <td>${a.ais_decile_rank ?? "—"}</td>
-          <td>${a.ais_centile_rank ?? "—"}</td>
+          <td>${a.ais_rank_fraction || (a.ais_rank ? `${a.ais_rank} / ${a.category_journal_count}` : "—")}</td>
+          <td>${a.ais_rank_ratio ?? "—"}</td>
+          <td>${html(a.ais_percentile_band) || "—"}</td>
+          <td>${html(a.ais_quartile) || "—"}</td>
+          <td>${html(a.ais_decile) || "—"}</td>
+          <td>${html(a.ais_centile) || "—"}</td>
           <td>${formatNum(row.jif, 2)}${row.jif_year ? ` <span class="hint">(${html(row.jif_year)})</span>` : ""}</td>
           <td>${html(row.source_year) || "—"}</td>
         </tr>`;
@@ -372,10 +374,10 @@
     });
     const shown = filtered.slice(0, 500);
     return `
-      <p class="hint journalDbHint">Pro každý časopis a rok exportu se napříč obory vybere řádek s nejvyšším AIS. Rok určuje samostatný výsledek — hodnoty <code>best_*</code> jsou vždy vázané na konkrétní rok.</p>
+      <p class="hint journalDbHint">Poměr = pořadí / počet časopisů v oboru daného roku (např. 1/98). Z poměru vychází pásma P1 (top 1&nbsp;%), P5 (top 5&nbsp;%), decil D1–D10, centil C1–C100 a kvartil Q1–Q4 (Q1 = horních 25&nbsp;%).</p>
       <div class="journalDbTableWrap"><table class="journalDbTable">
         <thead><tr>
-          <th>Rok</th><th>Časopis</th><th>Nejlepší obor</th><th>AIS</th><th>Pořadí</th><th>Kvartil</th><th>Decil</th><th>Centil</th><th>Oborů</th><th>Obory</th>
+          <th>Rok</th><th>Časopis</th><th>Nejlepší obor</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>P</th><th>Q</th><th>D</th><th>C</th><th>Oborů</th>
         </tr></thead>
         <tbody>${shown.map((row) => `<tr>
           <td>${html(row.best_source_year || row.source_year) || "—"}</td>
@@ -384,12 +386,13 @@
           </td>
           <td>${html(row.best_category)}</td>
           <td>${formatNum(row.best_ais)}</td>
-          <td>${row.best_ais_rank ? `${row.best_ais_rank} / ${row.category_journal_count}` : "—"}</td>
-          <td>${row.best_ais_quartile ?? "—"}</td>
-          <td>${row.best_ais_decile ?? "—"}</td>
-          <td>${row.best_ais_centile ?? "—"}</td>
+          <td>${html(row.best_ais_rank_fraction) || (row.best_ais_rank ? `${row.best_ais_rank} / ${row.category_journal_count}` : "—")}</td>
+          <td>${row.best_ais_rank_ratio ?? "—"}</td>
+          <td>${html(row.best_ais_percentile_band) || "—"}</td>
+          <td>${html(row.best_ais_quartile) || "—"}</td>
+          <td>${html(row.best_ais_decile) || "—"}</td>
+          <td>${html(row.best_ais_centile) || "—"}</td>
           <td>${row.category_count ?? 1}</td>
-          <td class="journalDbSmall">${html((row.categories_seen || []).slice(0, 3).join(", "))}${(row.categories_seen || []).length > 3 ? "…" : ""}</td>
         </tr>`).join("")}</tbody>
       </table></div>
       ${filtered.length > 500 ? `<p class="hint">Zobrazeno 500 z ${filtered.length} časopisů — zpřesněte filtr oboru nebo roku.</p>` : ""}`;
@@ -421,21 +424,22 @@
           <select id="journalDbAnalysisCategory">${opts}</select>
         </label>
         ${selectedYear ? `<p class="hint">Rok exportu: <strong>${html(selectedYear)}</strong>${filterSourceYear ? "" : " — pro změnu roku použijte filtr „Rok exportu“ výše."}</p>` : ""}
-        ${catSummary ? `<p class="hint">V oboru je <strong>${catSummary.journal_count}</strong> časopisů seřazených podle AIS (1 = nejvyšší AIS). Kvartil/decil/centil vychází z pořadí v oboru pro daný rok.</p>` : `<p class="hint">Pro zvolený obor a rok nejsou data.</p>`}
+        ${catSummary ? `<p class="hint">V oboru je <strong>${catSummary.journal_count}</strong> časopisů seřazených podle AIS (1 = nejvyšší AIS). Poměr pořadí/počet určuje P1, P5, D1–D10, C1–C100 a Q1–Q4 (Q1 = horních 25&nbsp;%).</p>` : `<p class="hint">Pro zvolený obor a rok nejsou data.</p>`}
       </div>
       <div class="journalDbTableWrap"><table class="journalDbTable journalDbTableCompact">
         <thead><tr>
-          <th>#</th><th>Časopis</th><th>AIS</th><th>Poměr</th><th>% shora</th><th>Q</th><th>D</th><th>C</th><th>JIF</th>
+          <th>#</th><th>Časopis</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>P</th><th>Q</th><th>D</th><th>C</th><th>JIF</th>
         </tr></thead>
         <tbody>${rows.map((row) => `<tr>
           <td>${row.ais_rank}</td>
           <td>${html(row.journal_name || row.jcr_abbreviation)}</td>
           <td>${formatNum(row.ais)}</td>
+          <td>${html(row.ais_rank_fraction) || "—"}</td>
           <td>${row.ais_rank_ratio ?? "—"}</td>
-          <td>${row.ais_percentile_top ?? "—"}</td>
-          <td>${row.ais_quartile_rank ?? "—"}</td>
-          <td>${row.ais_decile_rank ?? "—"}</td>
-          <td>${row.ais_centile_rank ?? "—"}</td>
+          <td>${html(row.ais_percentile_band) || "—"}</td>
+          <td>${html(row.ais_quartile) || "—"}</td>
+          <td>${html(row.ais_decile) || "—"}</td>
+          <td>${html(row.ais_centile) || "—"}</td>
           <td>${formatNum(row.jif, 2)}</td>
         </tr>`).join("")}</tbody>
       </table></div>`;
@@ -474,7 +478,7 @@
     }
     const headers = [
       "source_year", "journal_name", "jcr_abbreviation", "issn", "eissn", "best_category",
-      "best_ais", "best_ais_rank", "best_ais_rank_ratio", "best_ais_percentile_top",
+      "best_ais", "best_ais_rank", "best_ais_rank_fraction", "best_ais_rank_ratio", "best_ais_percentile_band",
       "best_ais_quartile", "best_ais_decile", "best_ais_centile",
       "best_jif", "best_jif_year", "category_count", "categories_seen"
     ];
@@ -519,7 +523,7 @@
         <div class="sectionHeader">
           <div>
             <h2>Databáze časopisů</h2>
-            <p class="hint">Import exportů JCR podle roků a oborů (CSV, TSV, CSC). Sloupce se rozpoznají flexibilně. Pořadí AIS, kvartily, decily a centily se počítají v rámci oboru a roku. Napříč obory v tom samém roce se vybere nejlepší výsledek pro navazující kroky.</p>
+            <p class="hint">Import exportů JCR podle roků a oborů (CSV, TSV, CSC). Pořadí AIS v oboru a roce se dělí počtem časopisů v oboru — poměr určí P1/P5, decil, centil a kvartil (Q1 = horních 25&nbsp;%).</p>
           </div>
           <div class="sectionActions">
             <button type="button" id="journalDbReloadBtn" class="button small secondary">Načíst ze Supabase</button>
