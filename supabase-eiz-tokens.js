@@ -7,7 +7,7 @@
   const YEAR_FIELDS = ["contract_id", "rok", "pocet_tokenu", "neomezene", "poznamka"];
   const PUBLICATION_FIELDS = [
     "contract_id", "source_key", "autor", "autor_osobni_cislo", "fakulta", "zkr_fak",
-    "nazev_clanku", "doi", "datum_zadosti", "datum_prijeti", "usetrena_apc", "imported_at"
+    "nazev_clanku", "doi", "datum_zadosti", "datum_prijeti", "rok", "usetrena_apc", "imported_at"
   ];
 
   let client = null;
@@ -72,6 +72,7 @@
       doi: row.doi || "",
       datum_zadosti: row.datum_zadosti || "",
       datum_prijeti: row.datum_prijeti || "",
+      rok: row.rok == null ? null : Number(row.rok),
       usetrena_apc: row.usetrena_apc == null ? null : Number(row.usetrena_apc),
       imported_at: row.imported_at,
       created_at: row.created_at,
@@ -131,6 +132,10 @@
       }
       if (field === "datum_zadosti" || field === "datum_prijeti") {
         payload[field] = value || null;
+        return;
+      }
+      if (field === "rok") {
+        payload[field] = value === "" || value == null ? null : Number(value);
         return;
       }
       payload[field] = value === "" || value == null ? null : value;
