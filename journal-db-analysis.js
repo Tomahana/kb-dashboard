@@ -1,8 +1,12 @@
-// Analýza databáze časopisů — pořadí podle AIS v oboru, decily, centily, kvartily, nejlepší výsledek napříč výskyty.
+// Analýza databáze časopisů — pořadí podle AIS v oboru a roce, decily, centily, kvartily, nejlepší výsledek napříč obory v rámci roku.
 
 (function () {
   const n = (s) => (s || "").toString().trim();
   const l = (s) => n(s).toLowerCase();
+
+  function resolveSourceYear(row) {
+    return n(row.source_year) || n(row.jif_year) || "—";
+  }
 
   function parseNumber(value) {
     const v = n(value).replace(/\s/g, "").replace(",", ".");
@@ -61,16 +65,17 @@
     const map = new Map();
     for (const row of rows) {
       const category = n(row.category) || "—";
-      const key = `${category}|${makeJournalKey(row)}`;
+      const sourceYear = resolveSourceYear(row);
+      const key = `${sourceYear}|${category}|${makeJournalKey(row)}`;
       const existing = map.get(key);
       const ais = parseNumber(row.ais);
       if (!existing) {
-        map.set(key, { ...row, category });
+        map.set(key, { ...row, category, source_year: sourceYear === "—" ? row.source_year : sourceYear });
         continue;
       }
       const existingAis = parseNumber(existing.ais);
       if (ais != null && (existingAis == null || ais > existingAis)) {
-        map.set(key, { ...row, category, ...pickSourceMeta(existing, row) });
+        map.set(key, { ...row, category, source_year: sourceYear === "—" ? row.source_year : sourceYear, ...pickSourceMeta(existing, row) });
       } else {
         map.set(key, { ...existing, ...pickSourceMeta(existing, row) });
       }
@@ -91,17 +96,21 @@
 
   function rankByCategory(rows) {
     const deduped = dedupeCategoryRows(rows);
-    const byCategory = new Map();
+    const byYearCategory = new Map();
 
     for (const row of deduped) {
       const category = n(row.category) || "—";
-      if (!byCategory.has(category)) byCategory.set(category, []);
-      byCategory.get(category).push(row);
+      const sourceYear = resolveSourceYear(row);
+      const groupKey = `${sourceYear}|${category}`;
+      if (!byYearCategory.has(groupKey)) byYearCategory.set(groupKey, []);
+      byYearCategory.get(groupKey).push(row);
     }
 
     const analyzed = [];
 
-    for (const [category, items] of byCategory.entries()) {
+    for (const [, items] of byYearCategory.entries()) {
+      const sourceYear = resolveSourceYear(items[0]);
+      const category = n(items[0]?.category) || "—";
       const sorted = [...items].sort((a, b) => {
         const aisA = parseNumber(a.ais);
         const aisB = parseNumber(b.ais);
@@ -119,6 +128,7 @@
         analyzed.push({
           ...entry,
           category,
+          source_year: sourceYear === "—" ? entry.source_year : sourceYear,
           journal_key: makeJournalKey(entry)
         });
       });
@@ -157,27 +167,24 @@
     const byKey = new Map();
 
     for (const row of analyzedRows) {
-      const key = row.journal_key || makeJournalKey(row);
-      if (!key) continue;
-      const existing = byKey.get(key);
+      const journalKey = row.journal_key || makeJournalKey(row);
+      if (!journalKey) continue;
+      const sourceYear = resolveSourceYear(row);
+      const aggKey = `${sourceYear}|${journalKey}`;
+      const existing = byKey.get(aggKey);
       if (!existing) {
-        byKey.set(key, {
+        byKey.set(aggKey, {
           ...row,
-          occurrence_count: 1,
+          source_year: sourceYear === "—" ? row.source_year : sourceYear,
+          category_count: 1,
           categories_seen: uniqueList([row.category]),
-          source_years_seen: uniqueList([...(row.source_years || []), row.source_year]),
           source_files_seen: uniqueList([...(row.source_files || []), row.source_file])
         });
         continue;
       }
 
-      existing.occurrence_count += 1;
+      existing.category_count += 1;
       existing.categories_seen = uniqueList([...(existing.categories_seen || []), row.category]);
-      existing.source_years_seen = uniqueList([
-        ...(existing.source_years_seen || []),
-        ...(row.source_years || []),
-        row.source_year
-      ]);
       existing.source_files_seen = uniqueList([
         ...(existing.source_files_seen || []),
         ...(row.source_files || []),
@@ -185,11 +192,11 @@
       ]);
 
       if (isBetterRow(row, existing)) {
-        byKey.set(key, {
+        byKey.set(aggKey, {
           ...row,
-          occurrence_count: existing.occurrence_count,
+          source_year: sourceYear === "—" ? row.source_year : sourceYear,
+          category_count: existing.category_count,
           categories_seen: existing.categories_seen,
-          source_years_seen: existing.source_years_seen,
           source_files_seen: existing.source_files_seen
         });
       }
@@ -199,6 +206,7 @@
       ...row,
       best_ais: parseNumber(row.ais),
       best_category: row.category,
+      best_source_year: resolveSourceYear(row),
       best_ais_rank: row.ais_rank,
       best_ais_rank_ratio: row.ais_rank_ratio,
       best_ais_percentile_top: row.ais_percentile_top,
@@ -215,8 +223,11 @@
     const map = new Map();
     for (const row of analyzedRows) {
       const category = n(row.category) || "—";
-      if (!map.has(category)) {
-        map.set(category, {
+      const sourceYear = resolveSourceYear(row);
+      const key = `${sourceYear}|${category}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          source_year: sourceYear,
           category,
           journal_count: row.category_journal_count || 0,
           with_ais: 0,
@@ -225,7 +236,7 @@
           top_ais: null
         });
       }
-      const bucket = map.get(category);
+      const bucket = map.get(key);
       const ais = parseNumber(row.ais);
       if (ais != null) bucket.with_ais += 1;
       if (bucket.top_ais == null || (ais != null && ais > bucket.top_ais)) {
@@ -235,7 +246,9 @@
     }
 
     for (const bucket of map.values()) {
-      const rows = analyzedRows.filter((r) => n(r.category) === bucket.category);
+      const rows = analyzedRows.filter((r) =>
+        n(r.category) === bucket.category && resolveSourceYear(r) === bucket.source_year
+      );
       const aisValues = rows.map((r) => parseNumber(r.ais)).filter((v) => v != null);
       bucket.avg_ais = aisValues.length
         ? Math.round((aisValues.reduce((a, b) => a + b, 0) / aisValues.length) * 1000) / 1000
@@ -243,7 +256,9 @@
       bucket.journal_count = rows[0]?.category_journal_count || rows.length;
     }
 
-    return [...map.values()].sort((a, b) => a.category.localeCompare(b.category, "cs"));
+    return [...map.values()].sort((a, b) =>
+      b.source_year.localeCompare(a.source_year, "cs") || a.category.localeCompare(b.category, "cs")
+    );
   }
 
   function runAnalysis(rawRows) {
@@ -253,7 +268,7 @@
     return { analyzed, best, categories };
   }
 
-  function lookupBestJournal(journalRef, bestRows) {
+  function lookupBestJournal(journalRef, bestRows, sourceYear) {
     const keyFromRef = makeJournalKey({
       issn: journalRef.issn,
       eissn: journalRef.eissn,
@@ -261,13 +276,18 @@
       journal_name: journalRef.journal_name || journalRef.nazev || journalRef.casopis
     });
     if (!keyFromRef) return null;
-    return bestRows.find((row) => row.journal_key === keyFromRef) || null;
+    const year = n(sourceYear || journalRef.source_year || journalRef.best_source_year);
+    const matches = bestRows.filter((row) => row.journal_key === keyFromRef);
+    if (!matches.length) return null;
+    if (year) return matches.find((row) => resolveSourceYear(row) === year) || null;
+    return matches.sort((a, b) => resolveSourceYear(b).localeCompare(resolveSourceYear(a), "cs"))[0];
   }
 
   window.kbJournalDbAnalysis = {
     parseNumber,
     normalizeIssn,
     makeJournalKey,
+    resolveSourceYear,
     rankByCategory,
     aggregateBestResults,
     summarizeCategories,

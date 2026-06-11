@@ -91,7 +91,7 @@
     {
       slug: "casopisy",
       title: "Databáze časopisů",
-      description: "Import JCR exportů podle roků a oborů — počet časopisů v oboru, AIS pořadí, kvartily/decily/centily a nejlepší výsledek napříč výskyty.",
+      description: "Import JCR exportů podle roků a oborů — počet časopisů v oboru a roce, AIS pořadí, kvartily/decily/centily a nejlepší výsledek napříč obory v rámci roku.",
       status: "active",
       icon: "📚",
       stats: ["journalRecordsTotal", "journalCategoriesTotal"]

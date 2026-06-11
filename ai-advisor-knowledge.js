@@ -225,11 +225,12 @@
   function buildJournalChunks() {
     const best = window.kbJournalDb?.getBestResults?.() || [];
     return best.slice(0, 300).map((row) => chunk(
-      `journal:${row.journal_key || row.id}`,
+      `journal:${row.journal_key || row.id}:${row.best_source_year || row.source_year || ""}`,
       "casopisy",
       "Databáze časopisů",
       row.journal_name || row.jcr_abbreviation || "Časopis",
       [
+        row.best_source_year || row.source_year ? `rok ${row.best_source_year || row.source_year}` : "",
         row.best_category,
         row.best_ais != null ? `AIS ${row.best_ais}` : "",
         row.best_ais_rank ? `pořadí ${row.best_ais_rank}/${row.category_journal_count}` : "",
@@ -238,7 +239,7 @@
         row.jif ? `JIF ${row.jif}` : ""
       ].filter(Boolean).join(" · "),
       "#casopisy",
-      { journal_key: row.journal_key, issn: row.issn }
+      { journal_key: row.journal_key, issn: row.issn, source_year: row.best_source_year || row.source_year }
     ));
   }
 

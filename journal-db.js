@@ -342,13 +342,16 @@
   }
 
   function renderCategoriesView() {
-    const cats = analysisCache.categories;
+    const cats = analysisCache.categories.filter((c) =>
+      !filterSourceYear || n(c.source_year) === filterSourceYear
+    );
     if (!cats.length) return `<p class="hint">Importujte data pro přehled oborů.</p>`;
     return `<div class="journalDbTableWrap"><table class="journalDbTable">
       <thead><tr>
-        <th>Obor</th><th>Počet časopisů</th><th>S AIS</th><th>Prům. AIS</th><th>Nejlepší časopis</th><th>AIS</th>
+        <th>Rok</th><th>Obor</th><th>Počet časopisů</th><th>S AIS</th><th>Prům. AIS</th><th>Nejlepší časopis</th><th>AIS</th>
       </tr></thead>
       <tbody>${cats.map((c) => `<tr>
+        <td>${html(c.source_year)}</td>
         <td><strong>${html(c.category)}</strong></td>
         <td>${c.journal_count}</td>
         <td>${c.with_ais}</td>
@@ -362,17 +365,20 @@
   function renderBestView() {
     const list = analysisCache.best;
     if (!list.length) return `<p class="hint">Nejlepší výsledky se vypočítají po importu.</p>`;
-    const filtered = filterCategory
-      ? list.filter((r) => n(r.best_category) === filterCategory)
-      : list;
+    const filtered = list.filter((r) => {
+      if (filterCategory && n(r.best_category) !== filterCategory) return false;
+      if (filterSourceYear && n(r.best_source_year || r.source_year) !== filterSourceYear) return false;
+      return true;
+    });
     const shown = filtered.slice(0, 500);
     return `
-      <p class="hint journalDbHint">Pro každý časopis napříč všemi výskyty (obory, roky) je vybrán řádek s nejvyšším AIS. Tyto hodnoty (<code>best_*</code>) slouží pro navazující moduly.</p>
+      <p class="hint journalDbHint">Pro každý časopis a rok exportu se napříč obory vybere řádek s nejvyšším AIS. Rok určuje samostatný výsledek — hodnoty <code>best_*</code> jsou vždy vázané na konkrétní rok.</p>
       <div class="journalDbTableWrap"><table class="journalDbTable">
         <thead><tr>
-          <th>Časopis</th><th>Nejlepší obor</th><th>AIS</th><th>Pořadí</th><th>Kvartil</th><th>Decil</th><th>Centil</th><th>Výskytů</th><th>Obory</th>
+          <th>Rok</th><th>Časopis</th><th>Nejlepší obor</th><th>AIS</th><th>Pořadí</th><th>Kvartil</th><th>Decil</th><th>Centil</th><th>Oborů</th><th>Obory</th>
         </tr></thead>
         <tbody>${shown.map((row) => `<tr>
+          <td>${html(row.best_source_year || row.source_year) || "—"}</td>
           <td><strong>${html(row.journal_name || row.jcr_abbreviation)}</strong>
             ${row.issn ? `<br><span class="hint">${html(row.issn)}</span>` : ""}
           </td>
@@ -382,32 +388,40 @@
           <td>${row.best_ais_quartile ?? "—"}</td>
           <td>${row.best_ais_decile ?? "—"}</td>
           <td>${row.best_ais_centile ?? "—"}</td>
-          <td>${row.occurrence_count ?? 1}</td>
+          <td>${row.category_count ?? 1}</td>
           <td class="journalDbSmall">${html((row.categories_seen || []).slice(0, 3).join(", "))}${(row.categories_seen || []).length > 3 ? "…" : ""}</td>
         </tr>`).join("")}</tbody>
       </table></div>
-      ${filtered.length > 500 ? `<p class="hint">Zobrazeno 500 z ${filtered.length} časopisů — zpřesněte filtr oboru nebo hledání.</p>` : ""}`;
+      ${filtered.length > 500 ? `<p class="hint">Zobrazeno 500 z ${filtered.length} časopisů — zpřesněte filtr oboru nebo roku.</p>` : ""}`;
   }
 
   function renderCategoryAnalysisView() {
+    const years = uniqueValues("source_year", analysisCache.analyzed);
     const categories = uniqueValues("category", analysisCache.analyzed);
     if (!categories.length) return `<p class="hint">Importujte data pro analýzu oboru.</p>`;
+    const selectedYear = filterSourceYear || years.sort((a, b) => b.localeCompare(a, "cs"))[0] || "";
     const selected = analysisCategory || categories[0];
     const rows = analysisCache.analyzed
-      .filter((r) => n(r.category) === selected)
+      .filter((r) => n(r.category) === selected && n(r.source_year) === selectedYear)
       .sort((a, b) => (a.ais_rank || 9999) - (b.ais_rank || 9999));
 
-    const catSummary = analysisCache.categories.find((c) => c.category === selected);
-    const opts = categories.map((c) =>
-      `<option value="${html(c)}"${c === selected ? " selected" : ""}>${html(c)} (${analysisCache.categories.find((x) => x.category === c)?.journal_count || "?"})</option>`
-    ).join("");
+    const catSummary = analysisCache.categories.find((c) =>
+      c.category === selected && n(c.source_year) === selectedYear
+    );
+    const opts = categories.map((c) => {
+      const count = analysisCache.categories.find((x) =>
+        x.category === c && n(x.source_year) === selectedYear
+      )?.journal_count || "?";
+      return `<option value="${html(c)}"${c === selected ? " selected" : ""}>${html(c)} (${count})</option>`;
+    }).join("");
 
     return `
       <div class="journalDbAnalysisHead">
         <label>Analyzovaný obor
           <select id="journalDbAnalysisCategory">${opts}</select>
         </label>
-        ${catSummary ? `<p class="hint">V oboru je <strong>${catSummary.journal_count}</strong> časopisů seřazených podle AIS (1 = nejvyšší AIS). Kvartil/decil/centil vychází z pořadí v oboru.</p>` : ""}
+        ${selectedYear ? `<p class="hint">Rok exportu: <strong>${html(selectedYear)}</strong>${filterSourceYear ? "" : " — pro změnu roku použijte filtr „Rok exportu“ výše."}</p>` : ""}
+        ${catSummary ? `<p class="hint">V oboru je <strong>${catSummary.journal_count}</strong> časopisů seřazených podle AIS (1 = nejvyšší AIS). Kvartil/decil/centil vychází z pořadí v oboru pro daný rok.</p>` : `<p class="hint">Pro zvolený obor a rok nejsou data.</p>`}
       </div>
       <div class="journalDbTableWrap"><table class="journalDbTable journalDbTableCompact">
         <thead><tr>
@@ -459,14 +473,19 @@
       return;
     }
     const headers = [
-      "journal_name", "jcr_abbreviation", "issn", "eissn", "best_category",
+      "source_year", "journal_name", "jcr_abbreviation", "issn", "eissn", "best_category",
       "best_ais", "best_ais_rank", "best_ais_rank_ratio", "best_ais_percentile_top",
       "best_ais_quartile", "best_ais_decile", "best_ais_centile",
-      "best_jif", "best_jif_year", "occurrence_count", "categories_seen"
+      "best_jif", "best_jif_year", "category_count", "categories_seen"
     ];
     const lines = [headers.join(";")];
     rows.forEach((row) => {
       lines.push(headers.map((h) => {
+        if (h === "source_year") {
+          const val = row.best_source_year || row.source_year || "";
+          const s = n(val);
+          return s.includes(";") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+        }
         const val = h === "categories_seen" ? (row.categories_seen || []).join(", ") : (row[h] ?? "");
         const s = n(val);
         return s.includes(";") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
@@ -500,7 +519,7 @@
         <div class="sectionHeader">
           <div>
             <h2>Databáze časopisů</h2>
-            <p class="hint">Import exportů JCR podle roků a oborů (CSV, TSV, CSC). Sloupce se rozpoznají flexibilně. V každém oboru se spočítá počet časopisů, seřadí podle AIS a vypočítají kvartily, decily a centily. Napříč výskyty se vybere <strong>nejlepší výsledek</strong> pro další kroky.</p>
+            <p class="hint">Import exportů JCR podle roků a oborů (CSV, TSV, CSC). Sloupce se rozpoznají flexibilně. Pořadí AIS, kvartily, decily a centily se počítají v rámci oboru a roku. Napříč obory v tom samém roce se vybere nejlepší výsledek pro navazující kroky.</p>
           </div>
           <div class="sectionActions">
             <button type="button" id="journalDbReloadBtn" class="button small secondary">Načíst ze Supabase</button>
@@ -605,10 +624,25 @@
 
   window.kbJournalDb = {
     getRecords: () => records.slice(),
-    getAnalyzed: () => analysisCache.analyzed.slice(),
-    getBestResults: () => analysisCache.best.slice(),
-    getCategories: () => analysisCache.categories.slice(),
-    lookupBest: (ref) => window.kbJournalDbAnalysis?.lookupBestJournal?.(ref, analysisCache.best),
+    getAnalyzed: (sourceYear) => {
+      const list = analysisCache.analyzed.slice();
+      const year = n(sourceYear);
+      return year ? list.filter((row) => n(row.source_year) === year) : list;
+    },
+    getBestResults: (sourceYear) => {
+      const list = analysisCache.best.slice();
+      const year = n(sourceYear);
+      return year
+        ? list.filter((row) => n(row.best_source_year || row.source_year) === year)
+        : list;
+    },
+    getCategories: (sourceYear) => {
+      const list = analysisCache.categories.slice();
+      const year = n(sourceYear);
+      return year ? list.filter((row) => n(row.source_year) === year) : list;
+    },
+    lookupBest: (ref, sourceYear) =>
+      window.kbJournalDbAnalysis?.lookupBestJournal?.(ref, analysisCache.best, sourceYear),
     loadRecords,
     importFromText,
     recomputeAnalysis
