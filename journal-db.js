@@ -185,7 +185,7 @@
       [",", (line.match(/,/g) || []).length]
     ];
     counts.sort((a, b) => b[1] - a[1]);
-    return counts[0][1] > 0 ? counts[0][0] : ";";
+    return counts[0][1] > 0 ? counts[0][0] : ",";
   }
 
   function journalHeaderRowScore(cells) {
@@ -207,30 +207,54 @@
     return bestScore >= 2 ? bestIdx : 0;
   }
 
+  function scoreParsedTable(recordsParsed) {
+    const headerIdx = findJournalHeaderRowIndex(recordsParsed);
+    const headerRow = recordsParsed[headerIdx] || [];
+    const headerScore = journalHeaderRowScore(headerRow);
+    const colCount = headerRow.filter((cell) => n(cell)).length;
+    // Wrong delimiter often yields one column with the whole CSV line in it.
+    const colBonus = colCount >= 3 ? colCount : (colCount === 1 ? -50 : 0);
+    return {
+      headerIdx,
+      headerScore,
+      colCount,
+      total: headerScore * 100 + colBonus
+    };
+  }
+
   function parseJournalImportTable(text) {
     const clean = text.replace(/^\uFEFF/, "").trim();
     if (!clean) return { rows: [], meta: { headers: [], delimiter: ";", headerRow: 0 } };
 
-    const firstLine = clean.split(/\r?\n/, 1)[0] || clean;
-    let delimiter = detectDelimiter(firstLine);
-    let recordsParsed = parseCsvRecords(clean, delimiter);
-    let headerIdx = findJournalHeaderRowIndex(recordsParsed);
-
-    if (headerIdx === 0 && journalHeaderRowScore(recordsParsed[0] || []) < 2) {
-      for (const candidate of [";", ",", "\t"]) {
-        if (candidate === delimiter) continue;
-        const attempt = parseCsvRecords(clean, candidate);
-        const idx = findJournalHeaderRowIndex(attempt);
-        if (journalHeaderRowScore(attempt[idx] || []) > journalHeaderRowScore(recordsParsed[headerIdx] || [])) {
-          delimiter = candidate;
-          recordsParsed = attempt;
-          headerIdx = idx;
-        }
+    const lines = clean.split(/\r?\n/).filter((line) => n(line));
+    const probeLines = lines.slice(0, 25);
+    let delimiterHint = ",";
+    let bestDelimScore = -1;
+    for (const line of probeLines) {
+      const candidate = detectDelimiter(line);
+      const score = journalHeaderRowScore(parseCsvRecords(line, candidate)[0] || []);
+      if (score > bestDelimScore) {
+        bestDelimScore = score;
+        delimiterHint = candidate;
       }
     }
 
-    if (!recordsParsed.length) return { rows: [], meta: { headers: [], delimiter, headerRow: 0 } };
+    let best = null;
+    for (const candidate of new Set([delimiterHint, "\t", ",", ";"])) {
+      const recordsParsed = parseCsvRecords(clean, candidate);
+      if (!recordsParsed.length) continue;
+      const scored = scoreParsedTable(recordsParsed);
+      if (!best || scored.total > best.scored.total || (
+        scored.total === best.scored.total && scored.colCount > best.scored.colCount
+      )) {
+        best = { delimiter: candidate, recordsParsed, scored };
+      }
+    }
 
+    if (!best) return { rows: [], meta: { headers: [], delimiter: ";", headerRow: 0 } };
+
+    const { delimiter, recordsParsed, scored } = best;
+    const headerIdx = scored.headerIdx;
     const headers = recordsParsed[headerIdx].map((h) => n(h).replace(/^\uFEFF/, "").replace(/^"|"$/g, ""));
     const rows = [];
     for (let i = headerIdx + 1; i < recordsParsed.length; i += 1) {
