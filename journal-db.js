@@ -263,11 +263,42 @@
       }
     }
 
-    if (!best) return { rows: [], meta: { headers: [], delimiter: ";", headerRow: 0 } };
+    if (!best) return { rows: [], meta: { headers: [], delimiter: ";", headerRow: 0, format: "text" } };
 
-    const { delimiter, recordsParsed, scored } = best;
+    return parseJournalImportRows(best.recordsParsed, { delimiter: best.delimiter, format: "text" });
+  }
+
+  function sheetCellValue(cell) {
+    if (cell == null || cell === "") return "";
+    if (typeof cell === "number" && Number.isFinite(cell)) {
+      if (Number.isInteger(cell) && cell >= 0 && cell <= 99999999) {
+        const digits = String(Math.trunc(Math.abs(cell))).padStart(8, "0").slice(-8);
+        if (digits.length === 8 && !/^0+$/.test(digits)) {
+          return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+        }
+      }
+      return Number.isInteger(cell) ? String(cell) : String(cell);
+    }
+    return n(cell).replace(/^"|"$/g, "");
+  }
+
+  function normalizeSheetRows(rawRows) {
+    return (rawRows || [])
+      .map((row) => (Array.isArray(row) ? row : Object.values(row)).map(sheetCellValue))
+      .filter((row) => row.some((cell) => n(cell)));
+  }
+
+  function parseJournalImportRows(recordsParsed, meta = {}) {
+    if (!recordsParsed.length) {
+      return {
+        rows: [],
+        meta: { headers: [], delimiter: meta.delimiter || "", headerRow: 0, format: meta.format || "text", sheet: meta.sheet || "" }
+      };
+    }
+
+    const scored = scoreParsedTable(recordsParsed);
     const headerIdx = scored.headerIdx;
-    const headers = recordsParsed[headerIdx].map((h) => n(h).replace(/^\uFEFF/, "").replace(/^"|"$/g, ""));
+    const headers = recordsParsed[headerIdx].map((h) => sheetCellValue(h).replace(/^\uFEFF/, ""));
     const rows = [];
     for (let i = headerIdx + 1; i < recordsParsed.length; i += 1) {
       const cols = recordsParsed[i];
@@ -275,25 +306,79 @@
       let hasValue = false;
       headers.forEach((header, j) => {
         if (!header) return;
-        const val = (cols[j] ?? "").replace(/^"|"$/g, "").trim();
+        const val = sheetCellValue(cols[j] ?? "");
         row[header] = val;
         if (val) hasValue = true;
       });
       if (hasValue) rows.push(row);
     }
 
-    return { rows, meta: { headers, delimiter, headerRow: headerIdx + 1 } };
+    return {
+      rows,
+      meta: {
+        headers,
+        delimiter: meta.delimiter || "",
+        headerRow: headerIdx + 1,
+        format: meta.format || "text",
+        sheet: meta.sheet || ""
+      }
+    };
+  }
+
+  function parseJournalImportXlsx(buffer) {
+    const XLSX = window.XLSX;
+    if (!XLSX?.read) {
+      throw new Error("Chybí knihovna pro Excel (.xlsx). Obnovte stránku (Ctrl+F5).");
+    }
+
+    const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
+    let bestRows = null;
+    let bestScore = -1;
+    let bestSheetName = "";
+
+    for (const sheetName of workbook.SheetNames || []) {
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet) continue;
+      const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
+      const rows = normalizeSheetRows(raw);
+      if (!rows.length) continue;
+      const headerIdx = findJournalHeaderRowIndex(rows);
+      const score = journalHeaderRowScore(rows[headerIdx] || []);
+      if (score > bestScore) {
+        bestScore = score;
+        bestRows = rows;
+        bestSheetName = sheetName;
+      }
+    }
+
+    if (!bestRows || bestScore < 2) {
+      throw new Error("V Excelu nelze najít záhlaví JCR (Journal name, ISSN, Category, AIS…).");
+    }
+
+    return parseJournalImportRows(bestRows, { format: "xlsx", sheet: bestSheetName });
+  }
+
+  function isXlsxFile(file) {
+    const name = n(file?.name).toLowerCase();
+    const type = n(file?.type).toLowerCase();
+    return (
+      name.endsWith(".xlsx") || name.endsWith(".xlsm") || name.endsWith(".xls") ||
+      type.includes("spreadsheetml") || type.includes("ms-excel")
+    );
   }
 
   function buildImportError(parsed, skippedNoIssn, skippedNoCategory, normalizedCount) {
     const headers = parsed.meta?.headers || [];
     const headerPreview = headers.slice(0, 12).join(", ") || "?";
+    const formatInfo = parsed.meta?.format === "xlsx"
+      ? `Excel${parsed.meta.sheet ? `, list ${parsed.meta.sheet}` : ""}`
+      : `oddělovač „${parsed.meta?.delimiter || "?"}“`;
     return (
       `Import selhal — platných řádků: ${normalizedCount}. ` +
       `Načteno ${parsed.rows.length} řádků, přeskočeno ${skippedNoIssn} bez ISSN/eISSN, ${skippedNoCategory} bez oboru. ` +
-      `Oddělovač: „${parsed.meta?.delimiter || "?"}“, záhlaví na řádku ${parsed.meta?.headerRow || "?"}. ` +
+      `Formát: ${formatInfo}, záhlaví na řádku ${parsed.meta?.headerRow || "?"}. ` +
       `Sloupce: ${headerPreview}. ` +
-      `Každý řádek musí mít ISSN nebo eISSN a Category. Tip: export z JCR jako CSV; u Excelu uložit jako CSV UTF-8 (středník).`
+      `Každý řádek musí mít ISSN nebo eISSN a Category. Podporované formáty: CSV, TSV, CSC, XLSX (Excel).`
     );
   }
 
@@ -384,12 +469,11 @@
     });
   }
 
-  async function importFromText(text, meta = {}, options = {}) {
+  async function importFromParsed(parsed, meta = {}, options = {}) {
     const replace = !!options.replace;
     const skipSupabase = !!options.skipSupabase;
     const skipRecompute = !!options.skipRecompute;
 
-    const parsed = parseJournalImportTable(text);
     const parsedRows = parsed.rows.map((row, i) => normalizeImportRow(row, i, meta));
     const skippedNoIssn = parsedRows.filter((row) => row?.__skipped?.reason === "no_issn").length;
     const skippedNoCategory = parsedRows.filter((row) => row?.__skipped?.reason === "no_category").length;
@@ -454,6 +538,20 @@
       total: records.length,
       upsertRows: withIds
     };
+  }
+
+  async function importFromFile(file, meta = {}, options = {}) {
+    const fileMeta = { ...meta, fileName: meta.fileName || file.name };
+    if (isXlsxFile(file)) {
+      const buffer = await file.arrayBuffer();
+      return importFromParsed(parseJournalImportXlsx(buffer), fileMeta, options);
+    }
+    const text = await readImportFileText(file);
+    return importFromParsed(parseJournalImportTable(text), fileMeta, options);
+  }
+
+  async function importFromText(text, meta = {}, options = {}) {
+    return importFromParsed(parseJournalImportTable(text), meta, options);
   }
 
   async function loadRecords() {
@@ -813,14 +911,14 @@
         <div class="sectionHeader">
           <div>
             <h2>Databáze časopisů</h2>
-            <p class="hint">Import exportů JCR po částech (CSV, TSV, CSC). Klíč časopisu je <strong>ISSN nebo eISSN</strong> — název a zkratka slouží jen pro zobrazení. Nové soubory se <strong>doplňují</strong> k existujícím záznamům (stejný rok+obor+ISSN se aktualizuje).</p>
+            <p class="hint">Import exportů JCR po částech (CSV, TSV, CSC, <strong>XLSX</strong>). Klíč časopisu je <strong>ISSN nebo eISSN</strong> — název a zkratka slouží jen pro zobrazení. Nové soubory se <strong>doplňují</strong> k existujícím záznamům (stejný rok+obor+ISSN se aktualizuje).</p>
           </div>
           <div class="sectionActions">
             <button type="button" id="journalDbReloadBtn" class="button small secondary">Načíst ze Supabase</button>
             <label class="button small secondary" for="journalDbImportFile">Import (doplnit)</label>
-            <input type="file" id="journalDbImportFile" accept=".csv,.tsv,.txt,.csc,text/csv,text/tab-separated-values" hidden multiple />
+            <input type="file" id="journalDbImportFile" accept=".csv,.tsv,.txt,.csc,.xlsx,.xlsm,.xls,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden multiple />
             <label class="button small secondary" for="journalDbImportReplaceFile">Import (nahradit vše)</label>
-            <input type="file" id="journalDbImportReplaceFile" accept=".csv,.tsv,.txt,.csc,text/csv,text/tab-separated-values" hidden multiple />
+            <input type="file" id="journalDbImportReplaceFile" accept=".csv,.tsv,.txt,.csc,.xlsx,.xlsm,.xls,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden multiple />
             <button type="button" id="journalDbExportBestBtn" class="button small secondary">Export nejlepších (CSV)</button>
             <button type="button" id="journalDbExportJsonBtn" class="button small secondary">Export JSON</button>
           </div>
@@ -853,10 +951,9 @@
         const batchRows = [];
         for (let i = 0; i < files.length; i += 1) {
           const file = files[i];
-          const text = await readImportFileText(file);
           const yearFromName = file.name.match(/(20\d{2})/)?.[1] || "";
           setStatus(`Importuji soubor ${i + 1} / ${files.length}: ${file.name}…`);
-          const result = await importFromText(text, { fileName: file.name, sourceYear: yearFromName }, {
+          const result = await importFromFile(file, { fileName: file.name, sourceYear: yearFromName }, {
             replace: replace && i === 0,
             skipSupabase: true,
             skipRecompute: true,
@@ -1020,8 +1117,10 @@
     lookupBest: (ref, sourceYear) =>
       window.kbJournalDbAnalysis?.lookupBestJournal?.(ref, analysisCache.best, sourceYear),
     loadRecords,
+    importFromFile,
     importFromText,
     parseJournalImportTable,
+    parseJournalImportXlsx,
     recomputeAnalysis
   };
 
