@@ -282,7 +282,33 @@
       }
     }
 
-    return [...byKey.values()];
+    return [...byKey.values()].map(attachBestTier);
+  }
+
+  function pickBestTier(row) {
+    const ratio = row.best_ais_rank_ratio ?? row.ais_rank_ratio;
+    if (ratio == null || ratio === "") return "";
+    const r = Number(ratio);
+    if (!Number.isFinite(r)) return "";
+    if (r <= 0.01) return "P1";
+    if (r <= 0.05) return "P5";
+    return row.best_ais_decile || row.ais_decile || row.best_ais_quartile || row.ais_quartile || "";
+  }
+
+  function tierSortKey(tier) {
+    if (!tier) return 999;
+    if (tier === "P1") return 1;
+    if (tier === "P5") return 2;
+    const decile = tier.match(/^D(\d+)$/);
+    if (decile) return 10 + Number(decile[1]);
+    const quartile = tier.match(/^Q(\d+)$/);
+    if (quartile) return 20 + Number(quartile[1]);
+    return 999;
+  }
+
+  function attachBestTier(entry) {
+    entry.best_tier = pickBestTier(entry);
+    return entry;
   }
 
   function runAnalysis(rawRows) {
@@ -313,6 +339,8 @@
     applyJournalIdentity,
     resolveSourceYear,
     classifyFromRatio,
+    pickBestTier,
+    tierSortKey,
     recordRankKey,
     rankRecordsInPlace,
     aggregateBestResults,
