@@ -378,7 +378,7 @@
       `Načteno ${parsed.rows.length} řádků, přeskočeno ${skippedNoIssn} bez ISSN/eISSN, ${skippedNoCategory} bez oboru. ` +
       `Formát: ${formatInfo}, záhlaví na řádku ${parsed.meta?.headerRow || "?"}. ` +
       `Sloupce: ${headerPreview}. ` +
-      `Každý řádek musí mít ISSN nebo eISSN a Category. Podporované formáty: CSV, TSV, CSC, XLSX (Excel).`
+      `Každý řádek musí mít ISSN nebo eISSN a Category. Podporované formáty: CSV, TSV, CSC, XLSX/XLS (Excel).`
     );
   }
 
@@ -454,12 +454,39 @@
     return row;
   }
 
+  function isExcelBuffer(buffer) {
+    if (!buffer || buffer.byteLength < 4) return false;
+    const u8 = new Uint8Array(buffer, 0, 4);
+    if (u8[0] === 0x50 && u8[1] === 0x4B) return true;
+    if (u8[0] === 0xD0 && u8[1] === 0xCF && u8[2] === 0x11 && u8[3] === 0xE0) return true;
+    return false;
+  }
+
+  function decodeImportBuffer(buffer) {
+    const encodings = ["utf-8", "windows-1250", "iso-8859-2"];
+    let bestText = "";
+    let bestScore = -1;
+    for (const encoding of encodings) {
+      try {
+        const text = new TextDecoder(encoding).decode(buffer);
+        const bad = (text.match(/\uFFFD/g) || []).length;
+        const czech = (text.match(/[ěščřžýáíéúůďťň]/gi) || []).length;
+        const score = czech * 3 - bad * 10;
+        if (score > bestScore) {
+          bestScore = score;
+          bestText = text;
+        }
+      } catch (_) {}
+    }
+    return (bestText || new TextDecoder("utf-8").decode(buffer)).replace(/^\uFEFF/, "");
+  }
+
   async function readImportFileText(file) {
     if (window.kbPersons?.readImportFileText) {
       return window.kbPersons.readImportFileText(file);
     }
     const buffer = await file.arrayBuffer();
-    return new TextDecoder("utf-8").decode(buffer).replace(/^\uFEFF/, "");
+    return decodeImportBuffer(buffer);
   }
 
   function refreshRecordKeys(list) {
@@ -542,12 +569,11 @@
 
   async function importFromFile(file, meta = {}, options = {}) {
     const fileMeta = { ...meta, fileName: meta.fileName || file.name };
-    if (isXlsxFile(file)) {
-      const buffer = await file.arrayBuffer();
+    const buffer = await file.arrayBuffer();
+    if (isXlsxFile(file) || isExcelBuffer(buffer)) {
       return importFromParsed(parseJournalImportXlsx(buffer), fileMeta, options);
     }
-    const text = await readImportFileText(file);
-    return importFromParsed(parseJournalImportTable(text), fileMeta, options);
+    return importFromParsed(parseJournalImportTable(decodeImportBuffer(buffer)), fileMeta, options);
   }
 
   async function importFromText(text, meta = {}, options = {}) {
@@ -911,7 +937,7 @@
         <div class="sectionHeader">
           <div>
             <h2>Databáze časopisů</h2>
-            <p class="hint">Import exportů JCR po částech (CSV, TSV, CSC, <strong>XLSX</strong>). Klíč časopisu je <strong>ISSN nebo eISSN</strong> — název a zkratka slouží jen pro zobrazení. Nové soubory se <strong>doplňují</strong> k existujícím záznamům (stejný rok+obor+ISSN se aktualizuje).</p>
+            <p class="hint">Import exportů JCR po částech (CSV, TSV, CSC, <strong>XLSX/XLS</strong>). Klíč časopisu je <strong>ISSN nebo eISSN</strong> — název a zkratka slouží jen pro zobrazení. Nové soubory se <strong>doplňují</strong> k existujícím záznamům (stejný rok+obor+ISSN se aktualizuje).</p>
           </div>
           <div class="sectionActions">
             <button type="button" id="journalDbReloadBtn" class="button small secondary">Načíst ze Supabase</button>
