@@ -669,39 +669,152 @@
     return n(row.journal_name || row.jcr_abbreviation) || "—";
   }
 
-  function matchesJournalSearch(row, query) {
-    if (!query) return true;
-    const q = l(query);
-    const tier = pickBestTier(row);
-    return l([
+  const SEARCH_STOP_WORDS = new Set(["od", "a", "an", "the", "and", "or", "pro", "ze", "z", "v", "na", "do"]);
+
+  function normalizeSearchText(s) {
+    return l(s).replace(/[^a-z0-9\u00C0-\u024F]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function normalizeIssnDigits(s) {
+    return n(s).replace(/[^0-9X]/gi, "");
+  }
+
+  function searchTokens(query) {
+    return normalizeSearchText(query)
+      .split(" ")
+      .filter((token) => token.length >= 2 && !SEARCH_STOP_WORDS.has(token));
+  }
+
+  function rowSearchHaystack(row) {
+    const issnNorm = normalizeIssnDigits(row.issn);
+    const eissnNorm = normalizeIssnDigits(row.eissn);
+    const keyDigits = normalizeIssnDigits((row.journal_key || "").replace(/^(issn|eissn):/i, ""));
+    return normalizeSearchText([
       row.journal_name, row.jcr_abbreviation, row.issn, row.eissn,
-      row.category, row.best_category, tier
-    ].join(" ")).includes(q);
+      issnNorm, eissnNorm, keyDigits, row.journal_key,
+      row.category, row.best_category, row.label, pickBestTier(row)
+    ].join(" "));
+  }
+
+  function tokenMatchesHay(token, hay) {
+    if (!token) return false;
+    if (hay.includes(token)) return true;
+    const digits = normalizeIssnDigits(token);
+    if (digits.length >= 4 && hay.includes(digits)) return true;
+    return false;
+  }
+
+  function findJournalKeysByIssnQuery(query) {
+    const digits = normalizeIssnDigits(query);
+    if (digits.length < 4) return new Set();
+    const keys = new Set();
+    const ingest = (row) => {
+      if (!row.journal_key) return;
+      const issn = normalizeIssnDigits(row.issn);
+      const eissn = normalizeIssnDigits(row.eissn);
+      const fromKey = normalizeIssnDigits(row.journal_key.replace(/^(issn|eissn):/i, ""));
+      if (
+        (issn && (issn.includes(digits) || digits.includes(issn))) ||
+        (eissn && (eissn.includes(digits) || digits.includes(eissn))) ||
+        (fromKey && (fromKey.includes(digits) || digits.includes(fromKey)))
+      ) {
+        keys.add(row.journal_key);
+      }
+    };
+    analysisCache.best.forEach(ingest);
+    records.forEach(ingest);
+    return keys;
+  }
+
+  function searchMatchScore(row, query) {
+    if (!query) return 0;
+    const hay = rowSearchHaystack(row);
+    const normalizedQuery = normalizeSearchText(query);
+    if (normalizedQuery && hay.includes(normalizedQuery)) return 100;
+
+    const issnKeys = findJournalKeysByIssnQuery(query);
+    if (issnKeys.size && row.journal_key && issnKeys.has(row.journal_key)) return 90;
+
+    const tokens = searchTokens(query);
+    if (!tokens.length) return hay.includes(normalizedQuery) ? 50 : 0;
+
+    const matched = tokens.filter((token) => tokenMatchesHay(token, hay));
+    if (!matched.length) return 0;
+    if (matched.length === tokens.length) return 70 + matched.length;
+
+    const longTokens = tokens.filter((token) => token.length >= 4);
+    if (longTokens.length && longTokens.every((token) => tokenMatchesHay(token, hay))) {
+      return 55 + longTokens.length;
+    }
+
+    if (tokens.some((token) => token.length >= 3 && tokenMatchesHay(token, hay))) {
+      return 40 + matched.length;
+    }
+    return 0;
+  }
+
+  function matchesJournalSearch(row, query) {
+    return searchMatchScore(row, query) > 0;
+  }
+
+  function mergeSuggestEntry(existing, row) {
+    const label = journalDisplayName(row);
+    if (label.length > existing.label.length) existing.label = label;
+    if (row.issn && !existing.issn) existing.issn = row.issn;
+    if (row.eissn && !existing.eissn) existing.eissn = row.eissn;
+    if (row.jcr_abbreviation && !existing.jcr_abbreviation) existing.jcr_abbreviation = row.jcr_abbreviation;
+    const year = n(row.best_source_year || row.source_year);
+    if (year && !existing.years.includes(year)) existing.years.push(year);
+    const tier = row.best_tier || pickBestTier(row);
+    if (tier && tierSortKey(tier) < tierSortKey(existing.best_tier)) existing.best_tier = tier;
   }
 
   function buildJournalSuggestIndex() {
     const map = new Map();
-    analysisCache.best.forEach((row) => {
+    const ensure = (row) => {
       const key = row.journal_key;
-      if (!key || map.has(key)) return;
-      map.set(key, {
-        journal_key: key,
-        label: journalDisplayName(row),
-        issn: row.issn,
-        eissn: row.eissn,
-        jcr_abbreviation: row.jcr_abbreviation,
-        best_tier: row.best_tier || pickBestTier(row)
-      });
+      if (!key) return null;
+      if (!map.has(key)) {
+        map.set(key, {
+          journal_key: key,
+          journal_name: row.journal_name,
+          label: journalDisplayName(row),
+          issn: row.issn || "",
+          eissn: row.eissn || "",
+          jcr_abbreviation: row.jcr_abbreviation || "",
+          best_tier: row.best_tier || pickBestTier(row) || "",
+          years: []
+        });
+      }
+      return map.get(key);
+    };
+
+    analysisCache.best.forEach((row) => {
+      const entry = ensure(row);
+      if (entry) mergeSuggestEntry(entry, row);
     });
-    return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, "cs"));
+    records.forEach((row) => {
+      if (!window.kbJournalDbAnalysis?.hasJournalKey?.(row)) return;
+      const entry = ensure(row);
+      if (entry) mergeSuggestEntry(entry, row);
+    });
+
+    return [...map.values()]
+      .map((entry) => {
+        entry.years.sort((a, b) => b.localeCompare(a, "cs"));
+        return entry;
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, "cs"));
   }
 
   function journalSuggestMatches(query, limit = 12) {
-    const q = l(query);
-    if (q.length < 2) return [];
+    if (n(query).length < 2) return [];
     return buildJournalSuggestIndex()
-      .filter((item) => l([item.label, item.jcr_abbreviation, item.issn, item.eissn].join(" ")).includes(q))
-      .slice(0, limit);
+      .map((item) => ({ item, score: searchMatchScore(item, query) }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score || a.item.label.localeCompare(b.item.label, "cs"))
+      .slice(0, limit)
+      .map((entry) => entry.item);
   }
 
   function renderTierBadge(tier) {
@@ -768,6 +881,14 @@
         return (a.ais_rank_ratio ?? 1) - (b.ais_rank_ratio ?? 1);
       });
     const primary = bestRows[0] || recordRows[0] || records.find((row) => l(row.journal_key) === key);
+    if (primary) {
+      [...bestRows, ...recordRows].forEach((row) => {
+        if (!primary.issn && row.issn) primary.issn = row.issn;
+        if (!primary.eissn && row.eissn) primary.eissn = row.eissn;
+        if (!primary.jcr_abbreviation && row.jcr_abbreviation) primary.jcr_abbreviation = row.jcr_abbreviation;
+        if (!primary.journal_name && row.journal_name) primary.journal_name = row.journal_name;
+      });
+    }
     return { primary, bestRows, recordRows };
   }
 
@@ -875,15 +996,16 @@
         <label>Rok exportu <select id="journalDbFilterYear"><option value="">Vše</option>${yearOpts}</select></label>
         <label class="journalDbSearchField">Hledat časopis
           <div class="journalDbSearchWrap">
-            <input id="journalDbFilterSearch" type="search" value="${html(filterSearch)}" placeholder="Název, ISSN, zkratka…" autocomplete="off" />
+            <input id="journalDbFilterSearch" type="search" value="${html(filterSearch)}" placeholder="Název, ISSN, zkratka… (stačí část názvu)" autocomplete="off" />
             ${suggestItems.length ? `<ul id="journalDbSearchResults" class="journalDbSearchResults">${suggestItems.map((item) =>
               `<li><button type="button" class="journalDbSearchOption" data-journal-key="${html(item.journal_key)}" data-label="${html(item.label)}">
                 <strong>${html(item.label)}</strong>
                 ${item.jcr_abbreviation ? `<span class="hint">${html(item.jcr_abbreviation)}</span>` : ""}
                 ${item.issn ? `<span class="hint">${html(item.issn)}</span>` : ""}
+                ${item.years?.length ? `<span class="hint">${item.years.slice(0, 5).join(", ")}${item.years.length > 5 ? "…" : ""}</span>` : ""}
                 ${item.best_tier ? renderTierBadge(item.best_tier) : ""}
               </button></li>`
-            ).join("")}</ul>` : `<ul id="journalDbSearchResults" class="journalDbSearchResults" hidden></ul>`}
+            ).join("")}</ul>` : (filterSearch.length >= 2 ? `<ul id="journalDbSearchResults" class="journalDbSearchResults"><li class="journalDbSearchNone">Žádná shoda — zkuste kratší název (např. „Mathematics“) nebo ISSN</li></ul>` : `<ul id="journalDbSearchResults" class="journalDbSearchResults" hidden></ul>`)}
           </div>
         </label>
         ${bestSortBlock}
@@ -938,14 +1060,35 @@
   function renderBestView() {
     const filtered = filteredBestRows();
     if (!analysisCache.best.length) return `<p class="hint">Nejlepší výsledky se vypočítají po importu.</p>`;
-    if (!filtered.length) return `<p class="hint">Žádný časopis nevyhovuje filtru${filterSearch ? ` „${html(filterSearch)}"` : ""}.</p>`;
+    if (!filtered.length) {
+      return `<p class="hint">Žádný časopis nevyhovuje filtru${filterSearch ? ` „${html(filterSearch)}"` : ""}. Zkuste kratší název (např. <strong>Mathematics</strong> místo celého popisu) nebo ISSN bez pomlček.</p>`;
+    }
 
     const total = filtered.length;
     const page = Math.min(bestPage, Math.max(0, Math.ceil(total / TABLE_PAGE_SIZE) - 1));
     const shown = filtered.slice(page * TABLE_PAGE_SIZE, (page + 1) * TABLE_PAGE_SIZE);
 
+    let yearHint = "";
+    if (filterSearch) {
+      const issnKeys = findJournalKeysByIssnQuery(filterSearch);
+      const keySet = issnKeys.size
+        ? issnKeys
+        : new Set(filtered.map((row) => row.journal_key).filter(Boolean));
+      if (keySet.size === 1) {
+        const key = [...keySet][0];
+        const allForJournal = analysisCache.best.filter((row) => row.journal_key === key);
+        const allYears = [...new Set(allForJournal.map((row) => n(row.best_source_year || row.source_year)).filter(Boolean))].sort((a, b) => b.localeCompare(a, "cs"));
+        if (filterSourceYear && allForJournal.length > filtered.length) {
+          yearHint = `<p class="hint journalDbHint">Filtr roku <strong>${html(filterSourceYear)}</strong> zobrazuje jen jeden rok. V datech jsou roky: <strong>${allYears.join(", ")}</strong> — pro všechny roky zvolte u filtru „Rok exportu“ hodnotu <strong>Vše</strong>.</p>`;
+        } else if (!filterSourceYear && allYears.length > 1 && filtered.length > 1) {
+          yearHint = `<p class="hint journalDbHint">Zobrazeny všechny roky tohoto časopisu v datech (${allYears.join(", ")}).</p>`;
+        }
+      }
+    }
+
     return `
-      <p class="hint journalDbHint">Kvalita = nejlepší pásma z poměru pořadí/počet v oboru: <strong>P1</strong> (top 1&nbsp;%), <strong>P5</strong> (top 5&nbsp;%), decil <strong>D1</strong>, kvartily <strong>Q1–Q4</strong>. Seznam je seřazen podle poměru — nižší = lepší pozice.</p>
+      ${yearHint}
+      <p class="hint journalDbHint">Kvalita = nejlepší pásma z poměru pořadí/počet v oboru: <strong>P1</strong> (top 1&nbsp;%), <strong>P5</strong> (top 5&nbsp;%), decil <strong>D1</strong>, kvartily <strong>Q1–Q4</strong>. Hledání podle ISSN zobrazí <strong>všechny roky</strong>, ve kterých je časopis v databázi.</p>
       ${renderPagination(total, page, TABLE_PAGE_SIZE, "best")}
       <div class="journalDbTableWrap"><table class="journalDbTable">
         <thead><tr>
@@ -1329,6 +1472,7 @@
       .journalDbSearchResults li { margin: 0; }
       .journalDbSearchOption { display: flex; flex-wrap: wrap; gap: .35rem .55rem; align-items: center; width: 100%; text-align: left; padding: .5rem .65rem; border: 0; background: transparent; cursor: pointer; font-size: .84rem; }
       .journalDbSearchOption:hover { background: #f2f4f7; }
+      .journalDbSearchNone { padding: .5rem .65rem; color: var(--muted); font-size: .85rem; }
       .journalDbJournalLink { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; font: inherit; }
       .journalDbJournalLink:hover strong { color: var(--accent-dark, #2446b5); text-decoration: underline; }
       .journalDbTier { display: inline-block; padding: .12rem .45rem; border-radius: 999px; font-size: .76rem; font-weight: 800; letter-spacing: .02em; }
