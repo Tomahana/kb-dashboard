@@ -42,12 +42,14 @@
   let analysisCache = { best: [], categories: [] };
   let useSupabase = false;
   let loading = false;
-  let activeView = "records";
+  let activeView = "best";
   let filterCategory = "";
   let filterSourceYear = "";
   let filterSearch = "";
   let analysisCategory = "";
   let recordsPage = 0;
+  let bestPage = 0;
+  let bestSort = "ratio";
 
   const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -635,13 +637,7 @@
     return records.filter((row) => {
       if (filterCategory && n(row.category) !== filterCategory) return false;
       if (filterSourceYear && n(row.source_year) !== filterSourceYear) return false;
-      if (filterSearch) {
-        const hay = l([
-          row.journal_name, row.jcr_abbreviation, row.issn, row.eissn, row.category,
-          row.ais, row.jif, row.ais_rank, row.ais_quartile, row.ais_percentile_band
-        ].join(" "));
-        if (!hay.includes(l(filterSearch))) return false;
-      }
+      if (!matchesJournalSearch(row, filterSearch)) return false;
       return true;
     });
   }
@@ -659,6 +655,181 @@
         <span>Strana ${current + 1} / ${pages}</span>
         <button type="button" class="button small secondary" data-page-nav="${targetId}" data-page="${current + 1}" ${current >= pages - 1 ? "disabled" : ""}>Další →</button>
       </div>`;
+  }
+
+  function pickBestTier(row) {
+    return window.kbJournalDbAnalysis?.pickBestTier?.(row) || "";
+  }
+
+  function tierSortKey(tier) {
+    return window.kbJournalDbAnalysis?.tierSortKey?.(tier) ?? 999;
+  }
+
+  function journalDisplayName(row) {
+    return n(row.journal_name || row.jcr_abbreviation) || "—";
+  }
+
+  function matchesJournalSearch(row, query) {
+    if (!query) return true;
+    const q = l(query);
+    const tier = pickBestTier(row);
+    return l([
+      row.journal_name, row.jcr_abbreviation, row.issn, row.eissn,
+      row.category, row.best_category, tier
+    ].join(" ")).includes(q);
+  }
+
+  function buildJournalSuggestIndex() {
+    const map = new Map();
+    analysisCache.best.forEach((row) => {
+      const key = row.journal_key;
+      if (!key || map.has(key)) return;
+      map.set(key, {
+        journal_key: key,
+        label: journalDisplayName(row),
+        issn: row.issn,
+        eissn: row.eissn,
+        jcr_abbreviation: row.jcr_abbreviation,
+        best_tier: row.best_tier || pickBestTier(row)
+      });
+    });
+    return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, "cs"));
+  }
+
+  function journalSuggestMatches(query, limit = 12) {
+    const q = l(query);
+    if (q.length < 2) return [];
+    return buildJournalSuggestIndex()
+      .filter((item) => l([item.label, item.jcr_abbreviation, item.issn, item.eissn].join(" ")).includes(q))
+      .slice(0, limit);
+  }
+
+  function renderTierBadge(tier) {
+    if (!tier) return "—";
+    const cls = tier.startsWith("P") ? "tierP" : tier.startsWith("D") ? "tierD" : "tierQ";
+    return `<span class="journalDbTier journalDbTier-${cls}">${html(tier)}</span>`;
+  }
+
+  function renderJournalNameCell(row) {
+    const key = row.journal_key || "";
+    const name = journalDisplayName(row);
+    const sub = [
+      row.jcr_abbreviation && row.journal_name ? row.jcr_abbreviation : "",
+      row.issn || row.eissn || ""
+    ].filter(Boolean).map(html).join(" · ");
+    return `<button type="button" class="journalDbJournalLink" data-journal-key="${html(key)}" title="Přehled časopisu">
+      <strong>${html(name)}</strong>${sub ? `<br><span class="hint">${sub}</span>` : ""}
+    </button>`;
+  }
+
+  function sortBestRows(list) {
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      if (bestSort === "name") {
+        return journalDisplayName(a).localeCompare(journalDisplayName(b), "cs");
+      }
+      if (bestSort === "year") {
+        return n(b.best_source_year || b.source_year).localeCompare(n(a.best_source_year || a.source_year), "cs");
+      }
+      if (bestSort === "ais") {
+        return (b.best_ais ?? -Infinity) - (a.best_ais ?? -Infinity);
+      }
+      if (bestSort === "tier") {
+        const diff = tierSortKey(pickBestTier(a)) - tierSortKey(pickBestTier(b));
+        if (diff !== 0) return diff;
+        return (a.best_ais_rank_ratio ?? 1) - (b.best_ais_rank_ratio ?? 1);
+      }
+      const ratioDiff = (a.best_ais_rank_ratio ?? 1) - (b.best_ais_rank_ratio ?? 1);
+      if (ratioDiff !== 0) return ratioDiff;
+      return journalDisplayName(a).localeCompare(journalDisplayName(b), "cs");
+    });
+    return sorted;
+  }
+
+  function filteredBestRows() {
+    return sortBestRows(analysisCache.best.filter((row) => {
+      if (filterCategory && n(row.best_category) !== filterCategory) return false;
+      if (filterSourceYear && n(row.best_source_year || row.source_year) !== filterSourceYear) return false;
+      if (!matchesJournalSearch(row, filterSearch)) return false;
+      return true;
+    }));
+  }
+
+  function getJournalDetailData(journalKey) {
+    const key = l(journalKey);
+    const bestRows = analysisCache.best
+      .filter((row) => l(row.journal_key) === key)
+      .sort((a, b) => n(b.best_source_year || b.source_year).localeCompare(n(a.best_source_year || a.source_year), "cs"));
+    const recordRows = records
+      .filter((row) => l(row.journal_key) === key && row.ais_rank)
+      .sort((a, b) => {
+        const yearDiff = n(b.source_year).localeCompare(n(a.source_year), "cs");
+        if (yearDiff !== 0) return yearDiff;
+        return (a.ais_rank_ratio ?? 1) - (b.ais_rank_ratio ?? 1);
+      });
+    const primary = bestRows[0] || recordRows[0] || records.find((row) => l(row.journal_key) === key);
+    return { primary, bestRows, recordRows };
+  }
+
+  function renderJournalDetailBody(journalKey) {
+    const { primary, bestRows, recordRows } = getJournalDetailData(journalKey);
+    if (!primary) return `<p class="hint">Časopis nenalezen.</p>`;
+
+    const idLines = [
+      primary.issn ? `ISSN ${html(primary.issn)}` : "",
+      primary.eissn ? `eISSN ${html(primary.eissn)}` : "",
+      primary.jcr_abbreviation ? html(primary.jcr_abbreviation) : ""
+    ].filter(Boolean).join(" · ");
+
+    const bestSummary = bestRows.map((row) => {
+      const year = n(row.best_source_year || row.source_year);
+      const tier = row.best_tier || pickBestTier(row);
+      return `<tr>
+        <td>${html(year) || "—"}</td>
+        <td>${renderTierBadge(tier)}</td>
+        <td>${html(row.best_ais_rank_fraction) || "—"}</td>
+        <td>${row.best_ais_rank_ratio ?? "—"}</td>
+        <td>${formatNum(row.best_ais)}</td>
+        <td>${html(row.best_category)}</td>
+        <td>${row.category_count ?? 1}</td>
+      </tr>`;
+    }).join("");
+
+    const categoryRows = recordRows.map((row) => `<tr>
+      <td>${html(row.source_year) || "—"}</td>
+      <td>${html(row.category)}</td>
+      <td>${formatNum(row.ais)}</td>
+      <td>${html(row.ais_rank_fraction) || "—"}</td>
+      <td>${row.ais_rank_ratio ?? "—"}</td>
+      <td>${renderTierBadge(pickBestTier(row))}</td>
+      <td>${formatNum(row.jif, 2)}</td>
+    </tr>`).join("");
+
+    return `
+      <div class="journalDbDetailHead">
+        <h3>${html(journalDisplayName(primary))}</h3>
+        ${idLines ? `<p class="hint">${idLines}</p>` : ""}
+      </div>
+      ${bestRows.length ? `
+        <h4>Nejlepší výsledek podle roku</h4>
+        <div class="journalDbTableWrap"><table class="journalDbTable journalDbTableCompact">
+          <thead><tr><th>Rok</th><th>Kvalita</th><th>Pořadí</th><th>Poměr</th><th>AIS</th><th>Nejlepší obor</th><th>Oborů</th></tr></thead>
+          <tbody>${bestSummary}</tbody>
+        </table></div>` : ""}
+      ${recordRows.length ? `
+        <h4>Všechny obory v datech (${recordRows.length})</h4>
+        <div class="journalDbTableWrap"><table class="journalDbTable journalDbTableCompact">
+          <thead><tr><th>Rok</th><th>Obor</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>Kvalita</th><th>JIF</th></tr></thead>
+          <tbody>${categoryRows}</tbody>
+        </table></div>` : `<p class="hint">Pro tento časopis nejsou vypočtená pořadí — importujte JCR export.</p>`}`;
+  }
+
+  function openJournalDetail(journalKey) {
+    const dialog = el("journalDbDetailDialog");
+    const body = el("journalDbDetailBody");
+    if (!dialog || !body || !journalKey) return;
+    body.innerHTML = renderJournalDetailBody(journalKey);
+    dialog.showModal();
   }
 
   function formatNum(value, digits = 3) {
@@ -687,11 +858,35 @@
     const yearOpts = uniqueValues("source_year").map((v) =>
       `<option value="${html(v)}"${v === filterSourceYear ? " selected" : ""}>${html(v)}</option>`
     ).join("");
+    const suggestItems = journalSuggestMatches(filterSearch, 10);
+    const bestSortBlock = activeView === "best" ? `
+        <label>Řazení
+          <select id="journalDbBestSort">
+            <option value="ratio"${bestSort === "ratio" ? " selected" : ""}>Poměr (nejlepší první)</option>
+            <option value="tier"${bestSort === "tier" ? " selected" : ""}>Kvalita (P1 → Q4)</option>
+            <option value="ais"${bestSort === "ais" ? " selected" : ""}>AIS (nejvyšší)</option>
+            <option value="year"${bestSort === "year" ? " selected" : ""}>Rok (nejnovější)</option>
+            <option value="name"${bestSort === "name" ? " selected" : ""}>Název A–Z</option>
+          </select>
+        </label>` : "";
     return `
       <div class="journalDbFilters">
         <label>Obor <select id="journalDbFilterCategory"><option value="">Vše</option>${catOpts}</select></label>
         <label>Rok exportu <select id="journalDbFilterYear"><option value="">Vše</option>${yearOpts}</select></label>
-        <label>Hledat <input id="journalDbFilterSearch" type="search" value="${html(filterSearch)}" placeholder="Název, ISSN, obor…" /></label>
+        <label class="journalDbSearchField">Hledat časopis
+          <div class="journalDbSearchWrap">
+            <input id="journalDbFilterSearch" type="search" value="${html(filterSearch)}" placeholder="Název, ISSN, zkratka…" autocomplete="off" />
+            ${suggestItems.length ? `<ul id="journalDbSearchResults" class="journalDbSearchResults">${suggestItems.map((item) =>
+              `<li><button type="button" class="journalDbSearchOption" data-journal-key="${html(item.journal_key)}" data-label="${html(item.label)}">
+                <strong>${html(item.label)}</strong>
+                ${item.jcr_abbreviation ? `<span class="hint">${html(item.jcr_abbreviation)}</span>` : ""}
+                ${item.issn ? `<span class="hint">${html(item.issn)}</span>` : ""}
+                ${item.best_tier ? renderTierBadge(item.best_tier) : ""}
+              </button></li>`
+            ).join("")}</ul>` : `<ul id="journalDbSearchResults" class="journalDbSearchResults" hidden></ul>`}
+          </div>
+        </label>
+        ${bestSortBlock}
       </div>`;
   }
 
@@ -704,21 +899,15 @@
       ${renderPagination(total, page, TABLE_PAGE_SIZE, "records")}
       <div class="journalDbTableWrap"><table class="journalDbTable">
       <thead><tr>
-        <th>Časopis</th><th>Obor</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>P</th><th>Q</th><th>D</th><th>C</th><th>JIF</th><th>Rok</th>
+        <th>Časopis</th><th>Obor</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>Kvalita</th><th>JIF</th><th>Rok</th>
       </tr></thead>
       <tbody>${slice.map((row) => `<tr>
-          <td><strong>${html(row.journal_name || row.jcr_abbreviation)}</strong>
-            ${row.jcr_abbreviation && row.journal_name ? `<br><span class="hint">${html(row.jcr_abbreviation)}</span>` : ""}
-            ${row.issn ? `<br><span class="hint">${html(row.issn)}</span>` : ""}
-          </td>
+          <td>${renderJournalNameCell(row)}</td>
           <td>${html(row.category)}</td>
           <td>${formatNum(row.ais)}</td>
           <td>${row.ais_rank_fraction || (row.ais_rank ? `${row.ais_rank} / ${row.category_journal_count}` : "—")}</td>
           <td>${row.ais_rank_ratio ?? "—"}</td>
-          <td>${html(row.ais_percentile_band) || "—"}</td>
-          <td>${html(row.ais_quartile) || "—"}</td>
-          <td>${html(row.ais_decile) || "—"}</td>
-          <td>${html(row.ais_centile) || "—"}</td>
+          <td>${renderTierBadge(pickBestTier(row))}</td>
           <td>${formatNum(row.jif, 2)}${row.jif_year ? ` <span class="hint">(${html(row.jif_year)})</span>` : ""}</td>
           <td>${html(row.source_year) || "—"}</td>
         </tr>`).join("")}</tbody>
@@ -747,37 +936,32 @@
   }
 
   function renderBestView() {
-    const list = analysisCache.best;
-    if (!list.length) return `<p class="hint">Nejlepší výsledky se vypočítají po importu.</p>`;
-    const filtered = list.filter((r) => {
-      if (filterCategory && n(r.best_category) !== filterCategory) return false;
-      if (filterSourceYear && n(r.best_source_year || r.source_year) !== filterSourceYear) return false;
-      return true;
-    });
-    const shown = filtered.slice(0, 500);
+    const filtered = filteredBestRows();
+    if (!analysisCache.best.length) return `<p class="hint">Nejlepší výsledky se vypočítají po importu.</p>`;
+    if (!filtered.length) return `<p class="hint">Žádný časopis nevyhovuje filtru${filterSearch ? ` „${html(filterSearch)}"` : ""}.</p>`;
+
+    const total = filtered.length;
+    const page = Math.min(bestPage, Math.max(0, Math.ceil(total / TABLE_PAGE_SIZE) - 1));
+    const shown = filtered.slice(page * TABLE_PAGE_SIZE, (page + 1) * TABLE_PAGE_SIZE);
+
     return `
-      <p class="hint journalDbHint">Poměr = pořadí / počet časopisů v oboru daného roku (např. 1/98). Z poměru vychází pásma P1 (top 1&nbsp;%), P5 (top 5&nbsp;%), decil D1–D10, centil C1–C100 a kvartil Q1–Q4 (Q1 = horních 25&nbsp;%).</p>
+      <p class="hint journalDbHint">Kvalita = nejlepší pásma z poměru pořadí/počet v oboru: <strong>P1</strong> (top 1&nbsp;%), <strong>P5</strong> (top 5&nbsp;%), decil <strong>D1</strong>, kvartily <strong>Q1–Q4</strong>. Seznam je seřazen podle poměru — nižší = lepší pozice.</p>
+      ${renderPagination(total, page, TABLE_PAGE_SIZE, "best")}
       <div class="journalDbTableWrap"><table class="journalDbTable">
         <thead><tr>
-          <th>Rok</th><th>Časopis</th><th>Nejlepší obor</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>P</th><th>Q</th><th>D</th><th>C</th><th>Oborů</th>
+          <th>Rok</th><th>Časopis</th><th>Nejlepší obor</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>Kvalita</th><th>Oborů</th>
         </tr></thead>
         <tbody>${shown.map((row) => `<tr>
           <td>${html(row.best_source_year || row.source_year) || "—"}</td>
-          <td><strong>${html(row.journal_name || row.jcr_abbreviation)}</strong>
-            ${row.issn ? `<br><span class="hint">${html(row.issn)}</span>` : ""}
-          </td>
+          <td>${renderJournalNameCell(row)}</td>
           <td>${html(row.best_category)}</td>
           <td>${formatNum(row.best_ais)}</td>
           <td>${html(row.best_ais_rank_fraction) || (row.best_ais_rank ? `${row.best_ais_rank} / ${row.category_journal_count}` : "—")}</td>
           <td>${row.best_ais_rank_ratio ?? "—"}</td>
-          <td>${html(row.best_ais_percentile_band) || "—"}</td>
-          <td>${html(row.best_ais_quartile) || "—"}</td>
-          <td>${html(row.best_ais_decile) || "—"}</td>
-          <td>${html(row.best_ais_centile) || "—"}</td>
+          <td>${renderTierBadge(row.best_tier || pickBestTier(row))}</td>
           <td>${row.category_count ?? 1}</td>
         </tr>`).join("")}</tbody>
-      </table></div>
-      ${filtered.length > 500 ? `<p class="hint">Zobrazeno 500 z ${filtered.length} časopisů — zpřesněte filtr oboru nebo roku.</p>` : ""}`;
+      </table></div>`;
   }
 
   let analysisPage = 0;
@@ -816,18 +1000,15 @@
       ${renderPagination(allRows.length, page, TABLE_PAGE_SIZE, "analysis")}
       <div class="journalDbTableWrap"><table class="journalDbTable journalDbTableCompact">
         <thead><tr>
-          <th>#</th><th>Časopis</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>P</th><th>Q</th><th>D</th><th>C</th><th>JIF</th>
+          <th>#</th><th>Časopis</th><th>AIS</th><th>Pořadí</th><th>Poměr</th><th>Kvalita</th><th>JIF</th>
         </tr></thead>
         <tbody>${rows.map((row) => `<tr>
           <td>${row.ais_rank}</td>
-          <td>${html(row.journal_name || row.jcr_abbreviation)}</td>
+          <td>${renderJournalNameCell(row)}</td>
           <td>${formatNum(row.ais)}</td>
           <td>${html(row.ais_rank_fraction) || "—"}</td>
           <td>${row.ais_rank_ratio ?? "—"}</td>
-          <td>${html(row.ais_percentile_band) || "—"}</td>
-          <td>${html(row.ais_quartile) || "—"}</td>
-          <td>${html(row.ais_decile) || "—"}</td>
-          <td>${html(row.ais_centile) || "—"}</td>
+          <td>${renderTierBadge(pickBestTier(row))}</td>
           <td>${formatNum(row.jif, 2)}</td>
         </tr>`).join("")}</tbody>
       </table></div>`;
@@ -866,8 +1047,7 @@
     }
     const headers = [
       "source_year", "journal_name", "jcr_abbreviation", "issn", "eissn", "best_category",
-      "best_ais", "best_ais_rank", "best_ais_rank_fraction", "best_ais_rank_ratio", "best_ais_percentile_band",
-      "best_ais_quartile", "best_ais_decile", "best_ais_centile",
+      "best_ais", "best_ais_rank", "best_ais_rank_fraction", "best_ais_rank_ratio", "best_tier",
       "best_jif", "best_jif_year", "category_count", "categories_seen"
     ];
     const lines = [headers.join(";")];
@@ -896,23 +1076,51 @@
     el("journalDbFilterCategory")?.addEventListener("change", (e) => {
       filterCategory = e.target.value;
       recordsPage = 0;
+      bestPage = 0;
       render();
     });
     el("journalDbFilterYear")?.addEventListener("change", (e) => {
       filterSourceYear = e.target.value;
       recordsPage = 0;
+      bestPage = 0;
       analysisPage = 0;
       render();
     });
     el("journalDbFilterSearch")?.addEventListener("input", (e) => {
       filterSearch = e.target.value;
       recordsPage = 0;
+      bestPage = 0;
+      const pos = e.target.selectionStart;
+      render({ restoreSearchFocus: true, searchCursor: pos });
+    });
+    el("journalDbBestSort")?.addEventListener("change", (e) => {
+      bestSort = e.target.value;
+      bestPage = 0;
       render();
     });
     el("journalDbAnalysisCategory")?.addEventListener("change", (e) => {
       analysisCategory = e.target.value;
       analysisPage = 0;
       render();
+    });
+  }
+
+  function bindSearchSuggestEvents(root) {
+    root.querySelectorAll(".journalDbSearchOption").forEach((btn) => {
+      btn.addEventListener("mousedown", (e) => e.preventDefault());
+      btn.addEventListener("click", () => {
+        filterSearch = btn.dataset.label || "";
+        bestPage = 0;
+        recordsPage = 0;
+        render();
+        if (btn.dataset.journalKey) openJournalDetail(btn.dataset.journalKey);
+      });
+    });
+  }
+
+  function bindJournalClickEvents(root) {
+    root.querySelectorAll(".journalDbJournalLink").forEach((btn) => {
+      btn.addEventListener("click", () => openJournalDetail(btn.dataset.journalKey));
     });
   }
 
@@ -923,12 +1131,13 @@
         if (!Number.isFinite(page) || page < 0) return;
         if (btn.dataset.pageNav === "records") recordsPage = page;
         else if (btn.dataset.pageNav === "analysis") analysisPage = page;
+        else if (btn.dataset.pageNav === "best") bestPage = page;
         render();
       });
     });
   }
 
-  function render() {
+  function render(options = {}) {
     const root = el("journalDbRoot");
     if (!root) return;
 
@@ -1064,6 +1273,7 @@
         if (activeView !== nextView) {
           recordsPage = 0;
           analysisPage = 0;
+          bestPage = 0;
         }
         activeView = nextView;
         render();
@@ -1072,6 +1282,16 @@
 
     bindFilterEvents();
     bindPaginationEvents(root);
+    bindSearchSuggestEvents(root);
+    bindJournalClickEvents(root);
+
+    if (options.restoreSearchFocus) {
+      const input = el("journalDbFilterSearch");
+      input?.focus();
+      if (input && options.searchCursor != null) {
+        input.setSelectionRange(options.searchCursor, options.searchCursor);
+      }
+    }
   }
 
   function injectStyles() {
@@ -1102,14 +1322,51 @@
       .journalDbAnalysisHead { margin-bottom: .75rem; display: grid; gap: .5rem; }
       .journalDbStatusError { color: #b42318; font-weight: 700; }
       .journalDbPagination { display: flex; flex-wrap: wrap; gap: .5rem .75rem; align-items: center; margin: .5rem 0 .65rem; }
+      .journalDbSearchField { min-width: 240px; flex: 1 1 240px; }
+      .journalDbSearchWrap { position: relative; }
+      .journalDbSearchWrap input { width: 100%; min-width: 220px; }
+      .journalDbSearchResults { list-style: none; margin: .25rem 0 0; padding: 0; position: absolute; z-index: 30; left: 0; right: 0; max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 10px 28px rgba(0,0,0,.1); }
+      .journalDbSearchResults li { margin: 0; }
+      .journalDbSearchOption { display: flex; flex-wrap: wrap; gap: .35rem .55rem; align-items: center; width: 100%; text-align: left; padding: .5rem .65rem; border: 0; background: transparent; cursor: pointer; font-size: .84rem; }
+      .journalDbSearchOption:hover { background: #f2f4f7; }
+      .journalDbJournalLink { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; font: inherit; }
+      .journalDbJournalLink:hover strong { color: var(--accent-dark, #2446b5); text-decoration: underline; }
+      .journalDbTier { display: inline-block; padding: .12rem .45rem; border-radius: 999px; font-size: .76rem; font-weight: 800; letter-spacing: .02em; }
+      .journalDbTier-tierP { background: #ecfdf3; color: #067647; border: 1px solid #abefc6; }
+      .journalDbTier-tierD { background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; }
+      .journalDbTier-tierQ { background: #f8f9fc; color: #344054; border: 1px solid #d0d5dd; }
+      .journalDbDetailDialog { width: min(920px, 96vw); max-height: 90vh; border: 0; border-radius: 16px; padding: 0; }
+      .journalDbDetailDialog form { display: grid; gap: .85rem; padding: 1rem 1.1rem 1.1rem; }
+      .journalDbDetailBody { max-height: calc(90vh - 120px); overflow: auto; display: grid; gap: .85rem; }
+      .journalDbDetailBody h4 { margin: .25rem 0; font-size: .95rem; }
+      .journalDbDetailHead h3 { margin: 0; }
     `;
     document.head.appendChild(style);
   }
 
   function injectPage() {
     const host = el("journalDbPageRoot");
-    if (!host || el("journalDbRoot")) return;
-    host.innerHTML = `<div id="journalDbRoot"></div>`;
+    if (!host) return;
+    if (!el("journalDbRoot")) {
+      host.innerHTML = `<div id="journalDbRoot"></div>`;
+    }
+    if (!el("journalDbDetailDialog")) {
+      const dialog = document.createElement("dialog");
+      dialog.id = "journalDbDetailDialog";
+      dialog.className = "journalDbDetailDialog";
+      dialog.innerHTML = `
+        <form method="dialog">
+          <div class="dialogHeader">
+            <div><h2>Přehled časopisu</h2></div>
+            <button class="iconButton" value="cancel" type="submit">×</button>
+          </div>
+          <div id="journalDbDetailBody" class="journalDbDetailBody"></div>
+          <div class="dialogActions">
+            <button type="submit" class="button secondary" value="cancel">Zavřít</button>
+          </div>
+        </form>`;
+      host.appendChild(dialog);
+    }
   }
 
   function init() {
@@ -1142,6 +1399,8 @@
     },
     lookupBest: (ref, sourceYear) =>
       window.kbJournalDbAnalysis?.lookupBestJournal?.(ref, analysisCache.best, sourceYear),
+    openJournalDetail,
+    getJournalDetailData,
     loadRecords,
     importFromFile,
     importFromText,
