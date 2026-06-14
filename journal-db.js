@@ -1399,6 +1399,8 @@
     },
     lookupBest: (ref, sourceYear) =>
       window.kbJournalDbAnalysis?.lookupBestJournal?.(ref, analysisCache.best, sourceYear),
+    openJournalDetail,
+    getJournalDetailData,
     loadRecords,
     importFromFile,
     importFromText,
