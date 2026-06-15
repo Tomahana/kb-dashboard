@@ -674,7 +674,24 @@
     return (comp.supported || []).some(s => s.application_id === appId);
   }
 
-  function buildSupportedFromApplication(app, existing) {
+  function parseConnectAllocatedAmount(app) {
+    if (app?.castka_alokovana != null && app.castka_alokovana !== "") {
+      return Number(app.castka_alokovana) || 0;
+    }
+    const match = String(app?.hodnoceni_komise || "").match(/Alokováno\s+([\d\s\u00a0]+)\s*Kč/i);
+    if (match) return Number(match[1].replace(/[\s\u00a0]/g, "")) || 0;
+    return null;
+  }
+
+  function applicationSupportAmount(programSlug, app, existingSup) {
+    if (usesCascadingAllocation(programSlug)) {
+      const allocated = parseConnectAllocatedAmount(app);
+      if (allocated != null) return allocated;
+    }
+    return Number(existingSup?.castka_podpory ?? app?.financni_pozadavek) || 0;
+  }
+
+  function buildSupportedFromApplication(app, existing, comp) {
     const linkedPerson = window.kbPersonLinks?.resolvePerson?.(app, "resitel")
       || (app.resitel_id ? getPerson(app.resitel_id) : null);
     return {
@@ -685,7 +702,7 @@
         nazev_projektu: app.nazev_projektu,
         fakulta: app.fakulta,
         katedra: app.katedra,
-        castka_podpory: app.financni_pozadavek,
+        castka_podpory: applicationSupportAmount(comp?.program_slug, app, existing),
         poznamka: existing?.poznamka || `Podpořeno – přihláška ${app.projekt_id || app.id}`,
         created_at: existing?.created_at || new Date().toISOString(),
         __existing: !!existing
@@ -711,7 +728,7 @@
     for (const app of applications) {
       if (app.stav !== "Podpořeno") continue;
       const idx = nextSupported.findIndex(s => s.application_id === app.id);
-      if (idx === -1) nextSupported.push(buildSupportedFromApplication(app));
+      if (idx === -1) nextSupported.push(buildSupportedFromApplication(app, null, comp));
       else {
         nextSupported[idx] = {
           ...nextSupported[idx],
@@ -719,7 +736,7 @@
           nazev_projektu: app.nazev_projektu,
           fakulta: app.fakulta,
           katedra: app.katedra,
-          castka_podpory: app.financni_pozadavek,
+          castka_podpory: applicationSupportAmount(comp.program_slug, app, nextSupported[idx]),
           resitel: resitelDisplay(app),
           __existing: true
         };
@@ -736,7 +753,7 @@
   function competitionSupportChanged(before, after) {
     if (!before || !after) return true;
     const appSig = (comp) => (comp.applications || []).map(a => `${a.id}:${a.stav}`).join("|");
-    const supSig = (comp) => (comp.supported || []).map(s => `${s.id}:${s.application_id}`).join("|");
+    const supSig = (comp) => (comp.supported || []).map(s => `${s.id}:${s.application_id}:${s.castka_podpory}`).join("|");
     return appSig(before) !== appSig(after) || supSig(before) !== supSig(after);
   }
 
@@ -928,7 +945,7 @@
         ? (row) => mapPrestigeApplicationRow(row, personByKey[row.person_key])
         : (row) => {
           const person = personByKey[row.person_key];
-          return {
+          const app = {
             id: row.id,
             projekt_id: row.projekt_id,
             nazev_projektu: row.nazev_projektu,
@@ -943,6 +960,10 @@
             created_at: new Date().toISOString(),
             __existing: false
           };
+          if (programSlug === "connect" && row.castka_alokovana != null) {
+            app.castka_alokovana = Number(row.castka_alokovana) || 0;
+          }
+          return app;
         };
       const applications = (data.applications || []).map(buildRow);
       const supported = (data.applications || [])
@@ -950,7 +971,7 @@
         .map(row => {
           const person = personByKey[row.person_key];
           const app = applications.find(a => a.id === row.id);
-          const castka = Number(row.castka_alokovana ?? row.financni_pozadavek) || 0;
+          const castka = applicationSupportAmount(programSlug, row, null);
           return {
             id: uuid(),
             application_id: row.id,
@@ -1811,7 +1832,7 @@
       a.id === appId ? { ...a, stav: "Podpořeno", __existing: true } : a
     ));
     const existingSup = (comp.supported || []).find(s => s.application_id === appId);
-    const item = buildSupportedFromApplication({ ...app, stav: "Podpořeno" }, existingSup);
+    const item = buildSupportedFromApplication({ ...app, stav: "Podpořeno" }, existingSup, comp);
     const supported = [...(comp.supported || []).filter(s => s.application_id !== appId), item];
     await saveCompetition({ ...comp, applications: apps, supported, __existing: true });
     render();
