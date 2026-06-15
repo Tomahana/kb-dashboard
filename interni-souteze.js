@@ -12,8 +12,17 @@
 
   const STORAGE_KEY = "kb-dashboard-competitions-v1";
   const YEAR_BUDGET_KEY = "kb-dashboard-competitions-year-budgets";
+  const EXTERNAL_LINKS = [
+    {
+      href: "https://tomahana.github.io/UHK_grants/pages/coordinator.html",
+      label: "Koordinátor grantů UHK"
+    },
+    {
+      href: "https://iga.uhk.cz/simplifyworks/epz/projects",
+      label: "EPZ – projekty (IGA UHK)"
+    }
+  ];
   let competitions = [];
-  let yearBudgets = {};
   let useSupabase = false;
   let loading = false;
   let activeProgram = PROGRAMS[0].slug;
@@ -1849,6 +1858,14 @@
     render();
   }
 
+  function renderExternalLinks() {
+    return `<p class="competitionExternalLinks hint">Související nástroje:
+      ${EXTERNAL_LINKS.map(link =>
+        `<a href="${html(link.href)}" target="_blank" rel="noopener">${html(link.label)}</a>`
+      ).join(" · ")}
+    </p>`;
+  }
+
   function injectPage() {
     const root = el("interniSoutezeRoot");
     if (!root || el("competitionProgramTabs")) return;
@@ -1858,6 +1875,7 @@
           <div>
             <h2>Interní soutěže</h2>
             <p class="hint">Programy UHK Connect, Prestige, Horizon, Rega, Návraty a PhD Seed — běhy, přihlášky, hodnocení a finance. Osoby spravujete v modulu <a href="#osoby" data-goto="osoby">Osoby</a>.</p>
+            ${renderExternalLinks()}
           </div>
           <div class="sectionActions">
             <button type="button" id="competitionsReloadBtn" class="button small secondary">Načíst ze Supabase</button>
@@ -2120,6 +2138,8 @@
       .competitionRegaSeedBox { margin: .75rem 0 0; padding: .85rem 1rem; border: 1px solid var(--line); border-radius: 10px; background: #f0f9ff; }
       .competitionRegaSeedBox p { margin: 0 0 .6rem; line-height: 1.5; }
       .competitionRegaSeedActions { display: flex; flex-wrap: wrap; gap: .5rem; }
+      .competitionExternalLinks { margin: .5rem 0 0; line-height: 1.5; }
+      .competitionExternalLinks a { font-weight: 650; }
       .competitionOverviewPanel { margin-bottom: 1rem; }
       .competitionOverviewFilters { display: flex; flex-wrap: wrap; gap: .75rem 1rem; margin-bottom: 1rem; }
       .competitionOverviewFilters label { min-width: 120px; }
