@@ -33,6 +33,7 @@ create table if not exists public.kb_competition_applications (
   fakulta text,
   katedra text,
   financni_pozadavek numeric(14, 2) default 0,
+  castka_alokovana numeric(14, 2),
   hodnoceni text,
   hodnoceni_komise text,
   stav text default 'Přihláška',
