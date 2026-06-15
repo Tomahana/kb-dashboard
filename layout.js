@@ -3,7 +3,7 @@
 (function () {
   const PAGES = {
     prehled: { title: "Přehled", subtitle: "Moduly a oblasti práce OVV" },
-    emaily: { title: "Znalostní báze z e-mailů", subtitle: "Třídění, klasifikace a práce se záznamy" },
+    emaily: { title: "Znalostní báze z e-mailů", subtitle: "Zachytávání, třídění, klasifikace a práce se záznamy" },
     temata: { title: "Témata", subtitle: "Seskupení e-mailů a AI shrnutí" },
     analyza: { title: "Analýza", subtitle: "Přehled agend, rizik a vývoje v čase" },
     terminy: { title: "Termíny", subtitle: "Termíny sběrů dat a odesílání na úřady" },
@@ -120,6 +120,7 @@
   function mountTopbarActions() {
     const map = {
       loadSupabaseBtn: "actionsData",
+      captureKnowledgeBtn: "actionsInbox",
       autoClassifyBtn: "actionsInbox",
       reviewAiBtn: "actionsInbox",
       aiSettingsBtn: "actionsSettings",

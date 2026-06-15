@@ -307,7 +307,40 @@ revoke all on public.kb_journal_records from anon;
 grant select, insert, update, delete on public.kb_journal_records to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 9) Ověření
+-- 10) kb_record_attachments (přílohy znalostní báze)
+-- ---------------------------------------------------------------------------
+alter table if exists public.kb_record_attachments enable row level security;
+
+drop policy if exists "kb_record_attachments authenticated read" on public.kb_record_attachments;
+drop policy if exists "kb_record_attachments authenticated write" on public.kb_record_attachments;
+
+create policy "kb_record_attachments authenticated read"
+  on public.kb_record_attachments for select to authenticated using (true);
+
+create policy "kb_record_attachments authenticated write"
+  on public.kb_record_attachments for all to authenticated using (true) with check (true);
+
+revoke all on public.kb_record_attachments from anon;
+grant select, insert, update, delete on public.kb_record_attachments to authenticated;
+
+-- INSERT záznamů a těla z aplikace (zachytávání znalostí)
+drop policy if exists "kb_records authenticated insert" on public.kb_records;
+create policy "kb_records authenticated insert"
+  on public.kb_records for insert to authenticated with check (true);
+
+drop policy if exists "kb_record_bodies authenticated insert" on public.kb_record_bodies;
+create policy "kb_record_bodies authenticated insert"
+  on public.kb_record_bodies for insert to authenticated with check (true);
+
+drop policy if exists "kb_record_bodies authenticated update" on public.kb_record_bodies;
+create policy "kb_record_bodies authenticated update"
+  on public.kb_record_bodies for update to authenticated using (true) with check (true);
+
+grant insert on public.kb_records to authenticated;
+grant insert, update on public.kb_record_bodies to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 11) Ověření
 -- ---------------------------------------------------------------------------
 select schemaname, tablename, policyname, roles, cmd
 from pg_policies
@@ -317,6 +350,6 @@ where schemaname = 'public'
     'kb_deadlines', 'kb_persons', 'kb_competitions', 'kb_competition_applications', 'kb_competition_supported',
     'kb_pcr_research_topics', 'kb_ai_advisor_saved',
     'kb_eiz_contracts', 'kb_eiz_contract_years', 'kb_eiz_publications',
-    'kb_journal_records'
+    'kb_journal_records', 'kb_record_attachments'
   )
 order by tablename, policyname;

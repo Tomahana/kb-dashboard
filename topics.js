@@ -847,6 +847,7 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
     recordsForTopic,
     deadlinesForTopic,
     topicsForDeadline,
+    addRecordsToTopic,
     addDeadlineToTopic,
     removeDeadlineFromTopic,
     loadTopics,
