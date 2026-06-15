@@ -30,14 +30,24 @@ body {
   padding: 1.25rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow: hidden;
 }
 .brand strong { display: block; font-size: 1.1rem; color: white; }
 .brand span { display: block; margin-top: .2rem; font-size: .78rem; color: #94a3b8; }
-.sidebarNav { display: grid; gap: .35rem; }
+.sidebarNav {
+  display: grid;
+  gap: .35rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: .15rem;
+}
+.sidebarNav::-webkit-scrollbar { width: 6px; }
+.sidebarNav::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 999px; }
 .navItem {
   display: flex;
   align-items: center;
@@ -65,8 +75,16 @@ body {
   justify-content: center;
 }
 .navBadgeAi { background: #38bdf8; color: #0c4a6e; }
-.sidebarFoot { margin-top: auto; font-size: .78rem; color: #94a3b8; }
-.appVersion { margin-top: .5rem; font-weight: 700; color: #64748b; }
+.sidebarFoot {
+  flex-shrink: 0;
+  margin-top: 0;
+  padding-top: .75rem;
+  border-top: 1px solid rgba(255,255,255,.08);
+  font-size: .78rem;
+  color: #94a3b8;
+}
+.appVersion { margin-top: .5rem; margin-bottom: 0; font-weight: 700; color: #cbd5e1; font-size: .82rem; }
+.topbarVersion { margin: .35rem 0 0; font-size: .78rem; font-weight: 650; color: var(--muted); }
 .aiKeyStatus.ok { color: var(--ok); font-weight: 650; }
 .taskExportKeyStatus.ok { color: var(--ok); font-weight: 650; }
 .taskExportPanel {
@@ -244,7 +262,7 @@ body.auth-locked .appMain {
 .authLinks { margin-top: .75rem; text-align: center; }
 .authUserLabel {
   font-size: .8rem;
-  color: var(--muted);
+  color: #94a3b8;
   margin: 0 0 .45rem;
   word-break: break-all;
 }
@@ -696,7 +714,8 @@ dialog form { padding: 1rem; }
 .button.danger:hover { background: #fecdca; }
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; }
+  .sidebar { position: static; height: auto; max-height: none; overflow: visible; }
+  .sidebarNav { flex: none; overflow: visible; max-height: none; }
   .inboxLayout { grid-template-columns: 1fr; }
   .inboxFilters { position: static; }
   .cards, .overviewGrid { grid-template-columns: 1fr 1fr; }

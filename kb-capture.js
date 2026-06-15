@@ -387,16 +387,17 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
   }
 
   function injectCaptureUi() {
-    if (el("captureDialog")) return;
-
-    const pool = el("globalActionPool");
-    if (pool && !el("captureKnowledgeBtn")) {
+    if (!el("captureKnowledgeBtn") && el("globalActionPool")) {
       const btn = document.createElement("button");
       btn.id = "captureKnowledgeBtn";
       btn.type = "button";
       btn.className = "button accent";
       btn.textContent = "Zachytit znalost";
-      pool.appendChild(btn);
+      el("globalActionPool").prepend(btn);
+    }
+    if (el("captureDialog")) {
+      window.kbLayout?.mountTopbarActions?.();
+      return;
     }
 
     document.body.insertAdjacentHTML("beforeend", `
@@ -474,6 +475,9 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
       e.target.value = "";
       if (file) await handleEmlImport(file);
     });
+
+    window.kbLayout?.mountTopbarActions?.();
+    document.dispatchEvent(new CustomEvent("kb:ui-ready"));
   }
 
   function injectStyles() {

@@ -147,14 +147,18 @@
   }
 
   function loadAppVersion() {
-    const box = el("appVersion");
-    if (!box) return;
+    const apply = (text) => {
+      const box = el("appVersion");
+      const top = el("topbarVersion");
+      if (box) box.textContent = text;
+      if (top) top.textContent = text;
+    };
     fetch(`version.json?_${Date.now()}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!data?.version) return;
         const date = data.bumpedAt ? ` · ${data.bumpedAt}` : "";
-        box.textContent = `Verze ${data.version}${date}`;
+        apply(`Verze ${data.version}${date}`);
       })
       .catch(() => {});
   }
@@ -177,9 +181,10 @@
     document.addEventListener("kb:page-changed", () => {
       if (window.kbPickers?.closeOpenMenu) window.kbPickers.closeOpenMenu();
     });
+    document.addEventListener("kb:ui-ready", () => mountTopbarActions());
   }
 
-  window.kbLayout = { setActivePage, updateBadges, getPage, resolveRoute };
+  window.kbLayout = { setActivePage, updateBadges, getPage, resolveRoute, mountTopbarActions };
 
   document.addEventListener("DOMContentLoaded", init);
 })();
