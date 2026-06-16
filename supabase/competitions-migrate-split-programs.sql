@@ -26,6 +26,10 @@ alter table public.kb_competition_supported add column if not exists projekt_id 
 alter table public.kb_competition_supported add column if not exists katedra text;
 alter table public.kb_competition_supported add column if not exists resitel_id uuid;
 
+-- ---------------------------------------------------------------------------
+-- resitel_id / resitel_osobni_cislo: pouze pokud existuje v kb_persons (jinak NULL)
+-- ---------------------------------------------------------------------------
+
 -- Connect
 insert into public.kb_competition_connect (
   id, nazev, rok, beh_cislo, alokovana_castka, pokyn, pokyn_nazev, vyvza, vyvza_nazev,
@@ -48,7 +52,10 @@ insert into public.kb_competition_connect_applications (
   fakulta, katedra, financni_pozadavek, castka_alokovana, hodnoceni, hodnoceni_komise, stav, poznamka, created_at
 )
 select
-  a.id, a.competition_id, a.projekt_id, a.nazev_projektu, a.resitel_id, a.resitel_osobni_cislo, a.resitel,
+  a.id, a.competition_id, a.projekt_id, a.nazev_projektu,
+  case when a.resitel_id is not null and exists (select 1 from public.kb_persons p where p.id = a.resitel_id) then a.resitel_id else null end,
+  case when a.resitel_osobni_cislo is not null and a.resitel_osobni_cislo <> '' and exists (select 1 from public.kb_persons p where p.osobni_cislo = a.resitel_osobni_cislo) then a.resitel_osobni_cislo else null end,
+  a.resitel,
   a.fakulta, a.katedra, a.financni_pozadavek, a.castka_alokovana, a.hodnoceni, a.hodnoceni_komise, a.stav, a.poznamka, a.created_at
 from public.kb_competition_applications a
 join public.kb_competitions c on c.id = a.competition_id
@@ -60,7 +67,10 @@ insert into public.kb_competition_connect_supported (
   fakulta, katedra, castka_podpory, poznamka, created_at
 )
 select
-  s.id, s.competition_id, s.application_id, s.projekt_id, s.nazev_projektu, s.resitel_id, s.resitel_osobni_cislo, s.resitel,
+  s.id, s.competition_id, s.application_id, s.projekt_id, s.nazev_projektu,
+  case when s.resitel_id is not null and exists (select 1 from public.kb_persons p where p.id = s.resitel_id) then s.resitel_id else null end,
+  case when s.resitel_osobni_cislo is not null and s.resitel_osobni_cislo <> '' and exists (select 1 from public.kb_persons p where p.osobni_cislo = s.resitel_osobni_cislo) then s.resitel_osobni_cislo else null end,
+  s.resitel,
   s.fakulta, s.katedra, s.castka_podpory, s.poznamka, s.created_at
 from public.kb_competition_supported s
 join public.kb_competitions c on c.id = s.competition_id
@@ -88,7 +98,10 @@ insert into public.kb_competition_prestige_applications (
   cilova_soutez, termin_podani, rozpocet_rok_2, hodnoceni_prumer, rozhodnuti_poradi, hodnoceni_kriteria, created_at
 )
 select
-  a.id, a.competition_id, a.projekt_id, a.nazev_projektu, a.resitel_id, a.resitel_osobni_cislo, a.resitel,
+  a.id, a.competition_id, a.projekt_id, a.nazev_projektu,
+  case when a.resitel_id is not null and exists (select 1 from public.kb_persons p where p.id = a.resitel_id) then a.resitel_id else null end,
+  case when a.resitel_osobni_cislo is not null and a.resitel_osobni_cislo <> '' and exists (select 1 from public.kb_persons p where p.osobni_cislo = a.resitel_osobni_cislo) then a.resitel_osobni_cislo else null end,
+  a.resitel,
   a.fakulta, a.katedra, a.financni_pozadavek, a.hodnoceni, a.hodnoceni_komise, a.stav, a.poznamka,
   a.cilova_soutez, a.termin_podani, a.rozpocet_rok_2, a.hodnoceni_prumer, a.rozhodnuti_poradi, a.hodnoceni_kriteria, a.created_at
 from public.kb_competition_applications a
@@ -101,7 +114,10 @@ insert into public.kb_competition_prestige_supported (
   fakulta, katedra, castka_podpory, poznamka, created_at
 )
 select
-  s.id, s.competition_id, s.application_id, s.projekt_id, s.nazev_projektu, s.resitel_id, s.resitel_osobni_cislo, s.resitel,
+  s.id, s.competition_id, s.application_id, s.projekt_id, s.nazev_projektu,
+  case when s.resitel_id is not null and exists (select 1 from public.kb_persons p where p.id = s.resitel_id) then s.resitel_id else null end,
+  case when s.resitel_osobni_cislo is not null and s.resitel_osobni_cislo <> '' and exists (select 1 from public.kb_persons p where p.osobni_cislo = s.resitel_osobni_cislo) then s.resitel_osobni_cislo else null end,
+  s.resitel,
   s.fakulta, s.katedra, s.castka_podpory, s.poznamka, s.created_at
 from public.kb_competition_supported s
 join public.kb_competitions c on c.id = s.competition_id
@@ -128,7 +144,10 @@ insert into public.kb_competition_rega_applications (
   fakulta, katedra, financni_pozadavek, hodnoceni, hodnoceni_komise, stav, poznamka, created_at
 )
 select
-  a.id, a.competition_id, a.projekt_id, a.nazev_projektu, a.resitel_id, a.resitel_osobni_cislo, a.resitel,
+  a.id, a.competition_id, a.projekt_id, a.nazev_projektu,
+  case when a.resitel_id is not null and exists (select 1 from public.kb_persons p where p.id = a.resitel_id) then a.resitel_id else null end,
+  case when a.resitel_osobni_cislo is not null and a.resitel_osobni_cislo <> '' and exists (select 1 from public.kb_persons p where p.osobni_cislo = a.resitel_osobni_cislo) then a.resitel_osobni_cislo else null end,
+  a.resitel,
   a.fakulta, a.katedra, a.financni_pozadavek, a.hodnoceni, a.hodnoceni_komise, a.stav, a.poznamka, a.created_at
 from public.kb_competition_applications a
 join public.kb_competitions c on c.id = a.competition_id
@@ -140,7 +159,10 @@ insert into public.kb_competition_rega_supported (
   fakulta, katedra, castka_podpory, poznamka, created_at
 )
 select
-  s.id, s.competition_id, s.application_id, s.projekt_id, s.nazev_projektu, s.resitel_id, s.resitel_osobni_cislo, s.resitel,
+  s.id, s.competition_id, s.application_id, s.projekt_id, s.nazev_projektu,
+  case when s.resitel_id is not null and exists (select 1 from public.kb_persons p where p.id = s.resitel_id) then s.resitel_id else null end,
+  case when s.resitel_osobni_cislo is not null and s.resitel_osobni_cislo <> '' and exists (select 1 from public.kb_persons p where p.osobni_cislo = s.resitel_osobni_cislo) then s.resitel_osobni_cislo else null end,
+  s.resitel,
   s.fakulta, s.katedra, s.castka_podpory, s.poznamka, s.created_at
 from public.kb_competition_supported s
 join public.kb_competitions c on c.id = s.competition_id
@@ -167,7 +189,10 @@ insert into public.kb_competition_horizon_applications (
   fakulta, katedra, financni_pozadavek, hodnoceni, hodnoceni_komise, stav, poznamka, created_at
 )
 select
-  a.id, a.competition_id, a.projekt_id, a.nazev_projektu, a.resitel_id, a.resitel_osobni_cislo, a.resitel,
+  a.id, a.competition_id, a.projekt_id, a.nazev_projektu,
+  case when a.resitel_id is not null and exists (select 1 from public.kb_persons p where p.id = a.resitel_id) then a.resitel_id else null end,
+  case when a.resitel_osobni_cislo is not null and a.resitel_osobni_cislo <> '' and exists (select 1 from public.kb_persons p where p.osobni_cislo = a.resitel_osobni_cislo) then a.resitel_osobni_cislo else null end,
+  a.resitel,
   a.fakulta, a.katedra, a.financni_pozadavek, a.hodnoceni, a.hodnoceni_komise, a.stav, a.poznamka, a.created_at
 from public.kb_competition_applications a
 join public.kb_competitions c on c.id = a.competition_id
@@ -179,7 +204,10 @@ insert into public.kb_competition_horizon_supported (
   fakulta, katedra, castka_podpory, poznamka, created_at
 )
 select
-  s.id, s.competition_id, s.application_id, s.projekt_id, s.nazev_projektu, s.resitel_id, s.resitel_osobni_cislo, s.resitel,
+  s.id, s.competition_id, s.application_id, s.projekt_id, s.nazev_projektu,
+  case when s.resitel_id is not null and exists (select 1 from public.kb_persons p where p.id = s.resitel_id) then s.resitel_id else null end,
+  case when s.resitel_osobni_cislo is not null and s.resitel_osobni_cislo <> '' and exists (select 1 from public.kb_persons p where p.osobni_cislo = s.resitel_osobni_cislo) then s.resitel_osobni_cislo else null end,
+  s.resitel,
   s.fakulta, s.katedra, s.castka_podpory, s.poznamka, s.created_at
 from public.kb_competition_supported s
 join public.kb_competitions c on c.id = s.competition_id
