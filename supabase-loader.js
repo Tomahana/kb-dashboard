@@ -45,6 +45,17 @@
     return [text];
   }
 
+  function parseNotionLink(raw) {
+    if (raw == null || raw === "") return null;
+    if (typeof raw === "object") return raw;
+    try {
+      const parsed = JSON.parse(String(raw));
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function mapRecordToSupabase(record) {
     return {
       "Agenda": toSupabaseArray(record.agenda),
@@ -60,6 +71,7 @@
       odesilatel_osobni_cislo: record.odesilatel_osobni_cislo || null,
       odpovedna_osoba_osobni_cislo: record.odpovedna_osoba_osobni_cislo || null,
       "Poznámka": record.poznamka || null,
+      notion_link: record.notion_link || null,
       "KB_SYNC": new Date().toISOString()
     };
   }
@@ -101,6 +113,7 @@
       odpovedna_osoba_osobni_cislo: firstDefined(row, ["odpovedna_osoba_osobni_cislo"]),
       odkaz_na_email: firstDefined(row, ["Odkaz na e-mail", "odkaz_na_email"]),
       poznamka: firstDefined(row, ["Poznámka", "poznamka"]),
+      notion_link: parseNotionLink(firstDefined(row, ["notion_link", "Notion link"])),
       kb_sync: firstDefined(row, ["KB_SYNC", "kb_sync"]),
       text: "",
       __source: "supabase"
@@ -206,7 +219,7 @@
       const id = document.getElementById("editId")?.value;
       const idx = Array.isArray(records) ? records.findIndex(x => x.id === id || x.kb_id === id) : -1;
       const before = idx >= 0 ? { ...records[idx] } : null;
-      original(e);
+      await original(e);
       const after = idx >= 0 ? records[idx] : null;
       if (!after || after.__source !== "supabase") return;
       const btn = document.getElementById("saveRecordBtn");

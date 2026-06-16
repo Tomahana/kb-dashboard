@@ -59,6 +59,7 @@ Nebo ze složky repozitáře:
 
 1. Tvrdý refresh (`Ctrl+Shift+R`)
 2. **Přihlásit se** (proxy vyžaduje Supabase session)
+3. V Supabase SQL Editoru spusťte **`supabase/notion-link-migrate.sql`** — propojení s Notion se pak ukládá trvale u záznamu (sloupec `notion_link`)
 
 ### Hned teď — bez proxy
 
