@@ -2,6 +2,30 @@
 -- Spusťte až po supabase/competitions-program-tables.sql
 -- Návraty a PhD Seed zůstávají v kb_competitions (legacy)
 
+-- ---------------------------------------------------------------------------
+-- Doplnění sloupců v legacy tabulkách (pokud chybí z dřívějších migrací)
+-- ---------------------------------------------------------------------------
+alter table public.kb_competitions add column if not exists pokyn text;
+alter table public.kb_competitions add column if not exists pokyn_nazev text;
+alter table public.kb_competitions add column if not exists vyvza text;
+alter table public.kb_competitions add column if not exists vyvza_nazev text;
+
+alter table public.kb_competition_applications add column if not exists projekt_id text;
+alter table public.kb_competition_applications add column if not exists katedra text;
+alter table public.kb_competition_applications add column if not exists hodnoceni_komise text;
+alter table public.kb_competition_applications add column if not exists resitel_id uuid;
+alter table public.kb_competition_applications add column if not exists castka_alokovana numeric(14, 2);
+alter table public.kb_competition_applications add column if not exists cilova_soutez text;
+alter table public.kb_competition_applications add column if not exists termin_podani text;
+alter table public.kb_competition_applications add column if not exists rozpocet_rok_2 numeric(14, 2);
+alter table public.kb_competition_applications add column if not exists hodnoceni_prumer numeric(10, 4);
+alter table public.kb_competition_applications add column if not exists rozhodnuti_poradi integer;
+alter table public.kb_competition_applications add column if not exists hodnoceni_kriteria jsonb;
+
+alter table public.kb_competition_supported add column if not exists projekt_id text;
+alter table public.kb_competition_supported add column if not exists katedra text;
+alter table public.kb_competition_supported add column if not exists resitel_id uuid;
+
 -- Connect
 insert into public.kb_competition_connect (
   id, nazev, rok, beh_cislo, alokovana_castka, pokyn, pokyn_nazev, vyvza, vyvza_nazev,
