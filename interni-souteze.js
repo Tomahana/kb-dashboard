@@ -58,6 +58,18 @@
     return programSlug === "prestige";
   }
 
+  function normalizeApplicationForProgram(app, programSlug) {
+    if (usesPrestigeBudget(programSlug)) return app;
+    const clean = { ...app };
+    delete clean.rozpocet_rok_2;
+    delete clean.cilova_soutez;
+    delete clean.termin_podani;
+    delete clean.hodnoceni_prumer;
+    delete clean.rozhodnuti_poradi;
+    delete clean.hodnoceni_kriteria;
+    return clean;
+  }
+
   function prestigeApplicationSupport(app) {
     return (Number(app?.financni_pozadavek) || 0) + (Number(app?.rozpocet_rok_2) || 0);
   }
@@ -1825,7 +1837,8 @@
       app.rozhodnuti_poradi = existing?.rozhodnuti_poradi ?? null;
       app.hodnoceni_kriteria = existing?.hodnoceni_kriteria ?? null;
     }
-    const apps = [...(comp.applications || []).filter(a => a.id !== id), app];
+    const normalizedApp = normalizeApplicationForProgram(app, comp.program_slug);
+    const apps = [...(comp.applications || []).filter(a => a.id !== id), normalizedApp];
     try {
       await saveCompetition({ ...comp, applications: apps, __existing: true });
       el("applicationDialog").close();
