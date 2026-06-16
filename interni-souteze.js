@@ -623,8 +623,11 @@
 
   function formatSaveError(err) {
     const msg = (err?.message || err || "").toString();
+    if (/schema cache|could not find the table/i.test(msg)) {
+      return `${msg}\n\nV Supabase chybí tabulky pro interní soutěže.\nSpusťte v SQL Editoru:\n1. supabase/competitions-program-tables.sql\n2. supabase/competitions-migrate-split-programs.sql (pokud máte data v kb_competitions)\n\nPoté obnovte stránku (Ctrl+F5).`;
+    }
     if (/schema cache|could not find the .* column/i.test(msg)) {
-      return `${msg}\n\nV Supabase chybí nové sloupce tabulky kb_competitions.\nSpusťte v SQL Editoru soubor:\nsupabase/competitions-migrate-v3.sql\n\nPoté obnovte stránku (Ctrl+F5) a zkuste uložit znovu.`;
+      return `${msg}\n\nV Supabase chybí sloupce tabulky soutěží.\nSpusťte supabase/competitions-migrate-v3.sql nebo competitions-program-tables.sql.\n\nPoté obnovte stránku (Ctrl+F5).`;
     }
     return msg;
   }
@@ -646,7 +649,7 @@
         if (!Array.isArray(competitions)) competitions = [];
         competitions = competitions.map(reconcileCompetitionSupport);
         await window.kbPersons?.ensureLoaded?.();
-        setStatus("Data v prohlížeči. Pro Supabase spusťte supabase/competitions-schema.sql.");
+        setStatus("Data v prohlížeči. Pro Supabase spusťte supabase/competitions-program-tables.sql.");
         return;
       }
       const available = await window.kbSupabaseCompetitions.probeTables();
@@ -654,7 +657,7 @@
         useSupabase = false;
         competitions = (window.kbSupabaseCompetitions.loadLocal() || []).map(reconcileCompetitionSupport);
         await window.kbPersons?.ensureLoaded?.();
-        setStatus("Tabulky v Supabase zatím neexistují. Spusťte supabase/competitions-schema.sql.");
+        setStatus("Tabulky v Supabase zatím neexistují. Spusťte supabase/competitions-program-tables.sql.");
         return;
       }
       useSupabase = true;
@@ -1724,8 +1727,11 @@
 
   async function deleteCompetition(id) {
     if (!confirm("Smazat tento běh včetně přihlášek a podpořených projektů?")) return;
+    const comp = getCompetition(id);
     try {
-      if (useSupabase && window.kbSupabaseCompetitions) await window.kbSupabaseCompetitions.deleteCompetition(id);
+      if (useSupabase && window.kbSupabaseCompetitions) {
+        await window.kbSupabaseCompetitions.deleteCompetition(id, comp?.program_slug);
+      }
       competitions = competitions.filter(c => c.id !== id);
       if (!useSupabase) persistLocal();
       if (activeCompetitionId === id) activeCompetitionId = null;

@@ -4,8 +4,13 @@
   const STORAGE_KEY = "kb-dashboard-competitions-v1";
   const PDF_BUCKET = "kb-competition-docs";
   const PDF_MAX_BYTES = 15 * 1024 * 1024;
+
+  const SPLIT_PROGRAMS = ["connect", "prestige", "rega", "horizon"];
+  const LEGACY_PROGRAMS = ["navraty", "phd-seed"];
+
   let client = null;
   let tablesAvailable = null;
+  let splitTablesAvailable = null;
   let storageAvailable = null;
 
   function getClient() {
@@ -15,6 +20,26 @@
     if (!window.KB_SUPABASE?.url || !window.KB_SUPABASE?.anonKey) throw new Error("Chybí supabase-config.js.");
     client = window.supabase.createClient(window.KB_SUPABASE.url, window.KB_SUPABASE.anonKey);
     return client;
+  }
+
+  function tablesForProgram(programSlug) {
+    const slug = programSlug || "connect";
+    if (SPLIT_PROGRAMS.includes(slug)) {
+      return {
+        programSlug: slug,
+        split: true,
+        runs: `kb_competition_${slug}`,
+        applications: `kb_competition_${slug}_applications`,
+        supported: `kb_competition_${slug}_supported`
+      };
+    }
+    return {
+      programSlug: slug,
+      split: false,
+      runs: "kb_competitions",
+      applications: "kb_competition_applications",
+      supported: "kb_competition_supported"
+    };
   }
 
   function mapApplication(row) {
@@ -62,10 +87,10 @@
     };
   }
 
-  function mapCompetition(row, applications, supported) {
+  function mapCompetition(row, programSlug, applications, supported) {
     return {
       id: row.id,
-      program_slug: row.program_slug,
+      program_slug: programSlug,
       nazev: row.nazev,
       rok: row.rok,
       beh_cislo: row.beh_cislo ?? 1,
@@ -87,38 +112,106 @@
     };
   }
 
+  function isMissingTableError(error) {
+    return error?.code === "PGRST205" || /Could not find the table/i.test(error?.message || "");
+  }
+
+  async function probeSplitTables() {
+    if (splitTablesAvailable !== null) return splitTablesAvailable;
+    try {
+      const { error } = await getClient().from("kb_competition_connect").select("id").limit(1);
+      splitTablesAvailable = !error || !isMissingTableError(error);
+      if (error && isMissingTableError(error)) splitTablesAvailable = false;
+    } catch (_) {
+      splitTablesAvailable = false;
+    }
+    return splitTablesAvailable;
+  }
+
   async function probeTables() {
     if (tablesAvailable !== null) return tablesAvailable;
+    if (await probeSplitTables()) {
+      tablesAvailable = true;
+      return true;
+    }
     try {
       const { error } = await getClient().from("kb_competitions").select("id").limit(1);
-      tablesAvailable = !error || error.code !== "PGRST205";
-      if (error?.code === "PGRST205") tablesAvailable = false;
+      tablesAvailable = !error || !isMissingTableError(error);
+      if (error && isMissingTableError(error)) tablesAvailable = false;
     } catch (_) {
       tablesAvailable = false;
     }
     return tablesAvailable;
   }
 
-  async function loadAll() {
+  async function loadProgramRuns(tables) {
     const supa = getClient();
-    const { data: comps, error: cErr } = await supa.from("kb_competitions").select("*").order("rok", { ascending: false });
+    const { data: comps, error: cErr } = await supa.from(tables.runs).select("*").order("rok", { ascending: false });
     if (cErr) throw cErr;
-    const { data: apps, error: aErr } = await supa.from("kb_competition_applications").select("*");
+    const { data: apps, error: aErr } = await supa.from(tables.applications).select("*");
     if (aErr) throw aErr;
-    const { data: supp, error: sErr } = await supa.from("kb_competition_supported").select("*");
+    const { data: supp, error: sErr } = await supa.from(tables.supported).select("*");
     if (sErr) throw sErr;
     const appsBy = {};
     (apps || []).forEach(a => { appsBy[a.competition_id] ||= []; appsBy[a.competition_id].push(mapApplication(a)); });
     const suppBy = {};
     (supp || []).forEach(s => { suppBy[s.competition_id] ||= []; suppBy[s.competition_id].push(mapSupported(s)); });
-    return (comps || []).map(c => mapCompetition(c, appsBy[c.id], suppBy[c.id]));
+    return (comps || []).map(c => mapCompetition(
+      c,
+      tables.programSlug,
+      appsBy[c.id],
+      suppBy[c.id]
+    ));
   }
 
-  async function saveCompetition(comp) {
+  async function loadLegacyCompetitions() {
     const supa = getClient();
+    const { data: comps, error: cErr } = await supa.from("kb_competitions").select("*").order("rok", { ascending: false });
+    if (cErr) {
+      if (isMissingTableError(cErr)) return [];
+      throw cErr;
+    }
+    const legacyComps = (comps || []).filter(c => {
+      if (SPLIT_PROGRAMS.includes(c.program_slug) && splitTablesAvailable) return false;
+      return true;
+    });
+    if (!legacyComps.length) return [];
+    const { data: apps, error: aErr } = await supa.from("kb_competition_applications").select("*");
+    if (aErr) throw aErr;
+    const { data: supp, error: sErr } = await supa.from("kb_competition_supported").select("*");
+    if (sErr) throw sErr;
+    const legacyIds = new Set(legacyComps.map(c => c.id));
+    const appsBy = {};
+    (apps || []).forEach(a => {
+      if (!legacyIds.has(a.competition_id)) return;
+      appsBy[a.competition_id] ||= [];
+      appsBy[a.competition_id].push(mapApplication(a));
+    });
+    const suppBy = {};
+    (supp || []).forEach(s => {
+      if (!legacyIds.has(s.competition_id)) return;
+      suppBy[s.competition_id] ||= [];
+      suppBy[s.competition_id].push(mapSupported(s));
+    });
+    return legacyComps.map(c => mapCompetition(c, c.program_slug, appsBy[c.id], suppBy[c.id]));
+  }
+
+  async function loadAll() {
+    await probeSplitTables();
+    const results = [];
+    if (splitTablesAvailable) {
+      for (const slug of SPLIT_PROGRAMS) {
+        const loaded = await loadProgramRuns(tablesForProgram(slug));
+        results.push(...loaded);
+      }
+    }
+    results.push(...await loadLegacyCompetitions());
+    return results.sort((a, b) => (b.rok || 0) - (a.rok || 0) || (b.beh_cislo || 0) - (a.beh_cislo || 0));
+  }
+
+  function buildRunPayload(comp, tables) {
     const payload = {
       id: comp.id,
-      program_slug: comp.program_slug,
       nazev: comp.nazev,
       rok: comp.rok || null,
       beh_cislo: comp.beh_cislo || 1,
@@ -134,17 +227,26 @@
       stav: comp.stav || "Aktivní",
       updated_at: new Date().toISOString()
     };
+    if (!tables.split) payload.program_slug = comp.program_slug;
     if (!comp.__existing) payload.created_at = comp.created_at || new Date().toISOString();
-    const { data, error } = await supa.from("kb_competitions").upsert(payload, { onConflict: "id" }).select("*").single();
-    if (error) throw error;
-    await syncApplications(data.id, comp.applications || []);
-    await syncSupported(data.id, comp.supported || []);
-    return mapCompetition(data, comp.applications || [], comp.supported || []);
+    return payload;
   }
 
-  async function deleteCompetition(id) {
+  async function saveCompetition(comp) {
+    const tables = tablesForProgram(comp.program_slug);
+    const supa = getClient();
+    const payload = buildRunPayload(comp, tables);
+    const { data, error } = await supa.from(tables.runs).upsert(payload, { onConflict: "id" }).select("*").single();
+    if (error) throw error;
+    await syncApplications(tables.applications, data.id, comp.applications || []);
+    await syncSupported(tables.supported, data.id, comp.supported || []);
+    return mapCompetition(data, comp.program_slug, comp.applications || [], comp.supported || []);
+  }
+
+  async function deleteCompetition(id, programSlug) {
     await deleteCompetitionDocs(id);
-    const { error } = await getClient().from("kb_competitions").delete().eq("id", id);
+    const tables = tablesForProgram(programSlug);
+    const { error } = await getClient().from(tables.runs).delete().eq("id", id);
     if (error) throw error;
   }
 
@@ -207,49 +309,53 @@
     await deletePdf(`${compId}/vyvza.pdf`);
   }
 
-  async function syncApplications(compId, items) {
+  function applicationRow(item, compId) {
+    return {
+      id: item.id,
+      competition_id: compId,
+      projekt_id: item.projekt_id || null,
+      nazev_projektu: item.nazev_projektu,
+      resitel_id: item.resitel_id || null,
+      resitel_osobni_cislo: item.resitel_osobni_cislo || null,
+      resitel: item.resitel || null,
+      fakulta: item.fakulta || null,
+      katedra: item.katedra || null,
+      financni_pozadavek: item.financni_pozadavek || 0,
+      castka_alokovana: item.castka_alokovana ?? null,
+      hodnoceni: item.hodnoceni || null,
+      hodnoceni_komise: item.hodnoceni_komise || null,
+      stav: item.stav || "Přihláška",
+      poznamka: item.poznamka || null,
+      cilova_soutez: item.cilova_soutez || null,
+      termin_podani: item.termin_podani || null,
+      rozpocet_rok_2: item.rozpocet_rok_2 || null,
+      hodnoceni_prumer: item.hodnoceni_prumer ?? null,
+      rozhodnuti_poradi: item.rozhodnuti_poradi ?? null,
+      hodnoceni_kriteria: item.hodnoceni_kriteria || null
+    };
+  }
+
+  async function syncApplications(tableName, compId, items) {
     const supa = getClient();
-    const { data: existing } = await supa.from("kb_competition_applications").select("id").eq("competition_id", compId);
+    const { data: existing } = await supa.from(tableName).select("id").eq("competition_id", compId);
     const existingIds = new Set((existing || []).map(r => r.id));
     const desiredIds = new Set(items.filter(i => i.id).map(i => i.id));
     const toRemove = [...existingIds].filter(id => !desiredIds.has(id));
-    if (toRemove.length) await supa.from("kb_competition_applications").delete().in("id", toRemove);
+    if (toRemove.length) await supa.from(tableName).delete().in("id", toRemove);
     for (const item of items) {
-      const row = {
-        id: item.id,
-        competition_id: compId,
-        projekt_id: item.projekt_id || null,
-        nazev_projektu: item.nazev_projektu,
-        resitel_id: item.resitel_id || null,
-        resitel_osobni_cislo: item.resitel_osobni_cislo || null,
-        resitel: item.resitel || null,
-        fakulta: item.fakulta || null,
-        katedra: item.katedra || null,
-        financni_pozadavek: item.financni_pozadavek || 0,
-        castka_alokovana: item.castka_alokovana ?? null,
-        hodnoceni: item.hodnoceni || null,
-        hodnoceni_komise: item.hodnoceni_komise || null,
-        stav: item.stav || "Přihláška",
-        poznamka: item.poznamka || null,
-        cilova_soutez: item.cilova_soutez || null,
-        termin_podani: item.termin_podani || null,
-        rozpocet_rok_2: item.rozpocet_rok_2 || null,
-        hodnoceni_prumer: item.hodnoceni_prumer ?? null,
-        rozhodnuti_poradi: item.rozhodnuti_poradi ?? null,
-        hodnoceni_kriteria: item.hodnoceni_kriteria || null
-      };
+      const row = applicationRow(item, compId);
       if (!item.__existing) row.created_at = item.created_at || new Date().toISOString();
-      await supa.from("kb_competition_applications").upsert(row, { onConflict: "id" });
+      await supa.from(tableName).upsert(row, { onConflict: "id" });
     }
   }
 
-  async function syncSupported(compId, items) {
+  async function syncSupported(tableName, compId, items) {
     const supa = getClient();
-    const { data: existing } = await supa.from("kb_competition_supported").select("id").eq("competition_id", compId);
+    const { data: existing } = await supa.from(tableName).select("id").eq("competition_id", compId);
     const existingIds = new Set((existing || []).map(r => r.id));
     const desiredIds = new Set(items.filter(i => i.id).map(i => i.id));
     const toRemove = [...existingIds].filter(id => !desiredIds.has(id));
-    if (toRemove.length) await supa.from("kb_competition_supported").delete().in("id", toRemove);
+    if (toRemove.length) await supa.from(tableName).delete().in("id", toRemove);
     for (const item of items) {
       const row = {
         id: item.id,
@@ -266,7 +372,7 @@
         poznamka: item.poznamka || null
       };
       if (!item.__existing) row.created_at = item.created_at || new Date().toISOString();
-      await supa.from("kb_competition_supported").upsert(row, { onConflict: "id" });
+      await supa.from(tableName).upsert(row, { onConflict: "id" });
     }
   }
 
@@ -285,7 +391,9 @@
 
   window.kbSupabaseCompetitions = {
     probeTables,
+    probeSplitTables,
     probeStorage,
+    tablesForProgram,
     loadAll,
     saveCompetition,
     deleteCompetition,
@@ -294,6 +402,8 @@
     deleteCompetitionDocs,
     resolvePdfUrl,
     loadLocal,
-    saveLocal
+    saveLocal,
+    SPLIT_PROGRAMS,
+    LEGACY_PROGRAMS
   };
 })();
