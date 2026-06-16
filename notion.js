@@ -103,6 +103,7 @@
   }
 
   function parseNotionError(data, status) {
+    if (data?.message && data?.code) return `${data.message} (${data.code})`;
     if (data?.message) return data.message;
     if (data?.error) return typeof data.error === "string" ? data.error : JSON.stringify(data.error);
     if (status === 401) return "Neplatný Notion token nebo nepřihlášená session.";
@@ -123,45 +124,40 @@
   }
 
   async function notionFetchViaProxy(path, options, notionToken) {
-    const client = window.kbAuth?.getClient?.();
-    if (!client) throw new Error("Chybí Supabase klient — přihlaste se znovu.");
+    const accessToken = await getSupabaseAccessToken();
+    if (!accessToken) throw new Error("Pro Notion se nejdříve přihlaste do KB Dashboardu (Supabase Auth).");
+
+    const supabaseUrl = n(window.KB_SUPABASE?.url).replace(/\/$/, "");
+    const anonKey = n(window.KB_SUPABASE?.anonKey);
+    if (!supabaseUrl || !anonKey) {
+      throw new Error("Chybí Supabase konfigurace (supabase-config.js) pro Notion proxy.");
+    }
 
     const method = options.method || (options.body ? "POST" : "GET");
     const body = options.body ? JSON.parse(options.body) : null;
 
-    let data = null;
-    let error = null;
+    let res;
     try {
-      const result = await client.functions.invoke("notion-proxy", {
-        body: { notionToken, path, method, body }
+      res = await fetch(`${supabaseUrl}/functions/v1/notion-proxy`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          apikey: anonKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ notionToken, path, method, body })
       });
-      data = result.data;
-      error = result.error;
-    } catch (invokeError) {
-      if (isCorsError(invokeError)) throw new Error(proxyNotDeployedMessage());
-      throw invokeError;
+    } catch (fetchError) {
+      if (isCorsError(fetchError)) throw new Error(proxyNotDeployedMessage());
+      throw fetchError;
     }
 
-    if (error) {
-      const ctx = error.context;
-      let status = 0;
-      let payload = {};
-      if (ctx && typeof ctx.json === "function") {
-        try {
-          payload = await ctx.json();
-          status = ctx.status || 0;
-        } catch (_) {}
-      }
-      const msg = (payload?.error || payload?.message || error.message || "").toString();
-      if (isProxyMissingError({ message: msg }, status) || /failed to fetch/i.test(msg)) {
-        throw new Error(proxyNotDeployedMessage());
-      }
-      throw new Error(parseNotionError(payload, status) || msg);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (isProxyMissingError(data, res.status)) throw new Error(proxyNotDeployedMessage());
+      throw new Error(parseNotionError(data, res.status));
     }
-
-    if (data?.error) {
-      throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
-    }
+    if (data?.object === "error") throw new Error(parseNotionError(data, res.status || 400));
     return data;
   }
 
@@ -203,13 +199,17 @@
   function detectPropertiesFromSchema(schema) {
     const props = schema?.properties || {};
     const detected = { ...DEFAULTS.properties };
+    const propertyTypes = {};
     for (const [name, prop] of Object.entries(props)) {
+      if (prop?.type) propertyTypes[name] = prop.type;
       if (prop?.type === "title") detected.title = name;
       if (prop?.type === "date" && !detected.date) detected.date = name;
       if (prop?.type === "rich_text" && /kb/i.test(name)) detected.kbId = name;
-      if (prop?.type === "select" && /typ|schůz|meeting/i.test(name)) detected.meetingType = name;
+      if ((prop?.type === "select" || prop?.type === "rich_text") && /typ|schůz|meeting/i.test(name)) {
+        detected.meetingType = name;
+      }
     }
-    return detected;
+    return { properties: detected, propertyTypes };
   }
 
   async function fetchDatabaseSchema(databaseId, settings) {
@@ -303,8 +303,12 @@
     if (!dbId) throw new Error("Vyplňte Integration Token a ID databáze schůzek.");
 
     const schema = await fetchDatabaseSchema(dbId, settings);
-    const detected = detectPropertiesFromSchema(schema);
-    const merged = { ...settings, properties: { ...settings.properties, ...detected } };
+    const { properties: detected, propertyTypes } = detectPropertiesFromSchema(schema);
+    const merged = {
+      ...settings,
+      properties: { ...settings.properties, ...detected },
+      propertyTypes: { ...(settings.propertyTypes || {}), ...propertyTypes }
+    };
     if (!overrideSettings) saveSettings(merged);
 
     const data = await queryDatabase(dbId, { page_size: 3 });
@@ -361,7 +365,33 @@
   function dateProperty(dateStr) {
     const d = n(dateStr);
     if (!d) return null;
-    return { date: { start: d } };
+    const parsed = new Date(d);
+    const start = Number.isNaN(parsed.getTime()) ? d.slice(0, 10) : parsed.toISOString().slice(0, 10);
+    return { date: { start } };
+  }
+
+  function selectProperty(text) {
+    const name = n(text).slice(0, 100);
+    if (!name) return null;
+    return { select: { name } };
+  }
+
+  function propertyValueForField(settings, fieldKey, value) {
+    const propName = settings.properties?.[fieldKey];
+    if (!propName || value == null || n(value) === "") return null;
+    const propType = settings.propertyTypes?.[propName];
+    if (fieldKey === "date" || propType === "date") return dateProperty(value);
+    if (fieldKey === "meetingType" || propType === "select") return selectProperty(value);
+    return richTextProperty(value);
+  }
+
+  async function persistNotionLinkToSupabase(record) {
+    if (record?.__source !== "supabase" || !window.kbSupabase?.saveRecordToSupabase) return;
+    try {
+      await window.kbSupabase.saveRecordToSupabase(record);
+    } catch (err) {
+      console.warn("Uložení Notion odkazu do Supabase selhalo:", err);
+    }
   }
 
   function richTextProperty(text) {
@@ -381,19 +411,19 @@
 
     const dateKey = settings.properties.date;
     if (dateKey) {
-      const dv = dateProperty(record.termin || record.datum_emailu || record.datum_pridani);
+      const dv = propertyValueForField(settings, "date", record.termin || record.datum_emailu || record.datum_pridani);
       if (dv) props[dateKey] = dv;
     }
 
     const kbKey = settings.properties.kbId;
     if (kbKey) {
-      const kv = richTextProperty(getRecordIdSafe(record));
+      const kv = propertyValueForField(settings, "kbId", getRecordIdSafe(record));
       if (kv) props[kbKey] = kv;
     }
 
     const meetingKey = settings.properties.meetingType;
     if (meetingKey && record.kam_patri) {
-      const mv = richTextProperty(record.kam_patri);
+      const mv = propertyValueForField(settings, "meetingType", record.kam_patri);
       if (mv) props[meetingKey] = mv;
     }
 
@@ -444,12 +474,14 @@
     };
     if (typeof persist === "function") persist();
     if (typeof render === "function") render();
+    persistNotionLinkToSupabase(record);
   }
 
   function clearNotionLink(record) {
     delete record.notion_link;
     if (typeof persist === "function") persist();
     if (typeof render === "function") render();
+    persistNotionLinkToSupabase(record);
   }
 
   function getNotionBadge(record) {
@@ -892,7 +924,7 @@ function json(body, status = 200) {
     panel.innerHTML = `
       <h2>Notion — zápisy ze schůzek</h2>
       <p id="notionKeyStatus" class="notionKeyStatus hint">Kontroluji nastavení…</p>
-      <p class="hint">Propojte e-maily se zápisy schůzek v Notion. Nejdříve nasajte Edge Function <code>notion-proxy</code> (ne SQL Editor — viz NOTION.md).</p>
+      <p class="hint">Propojte e-maily se zápisy schůzek v Notion. Nasajte Edge Function <code>notion-proxy</code> (ne SQL Editor — viz <code>NOTION.md</code>). Pro trvalé propojení v Supabase spusťte <code>supabase/notion-link-migrate.sql</code>.</p>
       <div class="settingsActions">
         <button id="notionSettingsPageBtn" type="button" class="button secondary">Nastavení Notion</button>
       </div>
@@ -968,6 +1000,7 @@ function json(body, status = 200) {
       if (notionLink && idx >= 0 && records[idx]) {
         records[idx].notion_link = notionLink;
         if (typeof persist === "function") persist();
+        if (typeof render === "function") render();
       }
     };
     window.saveRecord.__notionEnhanced = true;
