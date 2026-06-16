@@ -41,7 +41,7 @@ create table if not exists public.kb_competition_applications (
   poznamka text,
   cilova_soutez text,
   termin_podani text,
-  rozpocet_rok_2 numeric(14, 2),
+  rozpocet_rok_2 numeric(14, 2), -- legacy: pouze Prestige; u split tabulek jen kb_competition_prestige_applications
   hodnoceni_prumer numeric(10, 4),
   rozhodnuti_poradi integer,
   hodnoceni_kriteria jsonb,

@@ -17,7 +17,7 @@ alter table public.kb_competition_applications add column if not exists resitel_
 alter table public.kb_competition_applications add column if not exists castka_alokovana numeric(14, 2);
 alter table public.kb_competition_applications add column if not exists cilova_soutez text;
 alter table public.kb_competition_applications add column if not exists termin_podani text;
-alter table public.kb_competition_applications add column if not exists rozpocet_rok_2 numeric(14, 2);
+alter table public.kb_competition_applications add column if not exists rozpocet_rok_2 numeric(14, 2); -- legacy Prestige
 alter table public.kb_competition_applications add column if not exists hodnoceni_prumer numeric(10, 4);
 alter table public.kb_competition_applications add column if not exists rozhodnuti_poradi integer;
 alter table public.kb_competition_applications add column if not exists hodnoceni_kriteria jsonb;

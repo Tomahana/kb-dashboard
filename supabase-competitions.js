@@ -42,8 +42,16 @@
     };
   }
 
-  function mapApplication(row) {
-    return {
+  function isPrestigeProgram(programSlug) {
+    return programSlug === "prestige";
+  }
+
+  function isConnectProgram(programSlug) {
+    return programSlug === "connect";
+  }
+
+  function mapApplication(row, programSlug) {
+    const app = {
       id: row.id,
       competition_id: row.competition_id,
       projekt_id: row.projekt_id || "",
@@ -54,19 +62,24 @@
       fakulta: row.fakulta || "",
       katedra: row.katedra || "",
       financni_pozadavek: Number(row.financni_pozadavek) || 0,
-      castka_alokovana: row.castka_alokovana != null ? Number(row.castka_alokovana) : null,
       hodnoceni: row.hodnoceni || "",
       hodnoceni_komise: row.hodnoceni_komise || "",
       stav: row.stav || "Přihláška",
       poznamka: row.poznamka || "",
-      cilova_soutez: row.cilova_soutez || "",
-      termin_podani: row.termin_podani || "",
-      rozpocet_rok_2: Number(row.rozpocet_rok_2) || 0,
-      hodnoceni_prumer: row.hodnoceni_prumer != null ? Number(row.hodnoceni_prumer) : null,
-      rozhodnuti_poradi: row.rozhodnuti_poradi != null ? Number(row.rozhodnuti_poradi) : null,
-      hodnoceni_kriteria: row.hodnoceni_kriteria || null,
       created_at: row.created_at
     };
+    if (isConnectProgram(programSlug) && row.castka_alokovana != null) {
+      app.castka_alokovana = Number(row.castka_alokovana);
+    }
+    if (isPrestigeProgram(programSlug)) {
+      app.cilova_soutez = row.cilova_soutez || "";
+      app.termin_podani = row.termin_podani || "";
+      app.rozpocet_rok_2 = Number(row.rozpocet_rok_2) || 0;
+      app.hodnoceni_prumer = row.hodnoceni_prumer != null ? Number(row.hodnoceni_prumer) : null;
+      app.rozhodnuti_poradi = row.rozhodnuti_poradi != null ? Number(row.rozhodnuti_poradi) : null;
+      app.hodnoceni_kriteria = row.hodnoceni_kriteria || null;
+    }
+    return app;
   }
 
   function mapSupported(row) {
@@ -153,7 +166,10 @@
     const { data: supp, error: sErr } = await supa.from(tables.supported).select("*");
     if (sErr) throw sErr;
     const appsBy = {};
-    (apps || []).forEach(a => { appsBy[a.competition_id] ||= []; appsBy[a.competition_id].push(mapApplication(a)); });
+    (apps || []).forEach(a => {
+      appsBy[a.competition_id] ||= [];
+      appsBy[a.competition_id].push(mapApplication(a, tables.programSlug));
+    });
     const suppBy = {};
     (supp || []).forEach(s => { suppBy[s.competition_id] ||= []; suppBy[s.competition_id].push(mapSupported(s)); });
     return (comps || []).map(c => mapCompetition(
@@ -181,11 +197,12 @@
     const { data: supp, error: sErr } = await supa.from("kb_competition_supported").select("*");
     if (sErr) throw sErr;
     const legacyIds = new Set(legacyComps.map(c => c.id));
+    const slugByCompId = new Map(legacyComps.map(c => [c.id, c.program_slug]));
     const appsBy = {};
     (apps || []).forEach(a => {
       if (!legacyIds.has(a.competition_id)) return;
       appsBy[a.competition_id] ||= [];
-      appsBy[a.competition_id].push(mapApplication(a));
+      appsBy[a.competition_id].push(mapApplication(a, slugByCompId.get(a.competition_id)));
     });
     const suppBy = {};
     (supp || []).forEach(s => {
@@ -238,7 +255,7 @@
     const payload = buildRunPayload(comp, tables);
     const { data, error } = await supa.from(tables.runs).upsert(payload, { onConflict: "id" }).select("*").single();
     if (error) throw error;
-    await syncApplications(tables.applications, data.id, comp.applications || []);
+    await syncApplications(tables, data.id, comp.applications || []);
     await syncSupported(tables.supported, data.id, comp.supported || []);
     return mapCompetition(data, comp.program_slug, comp.applications || [], comp.supported || []);
   }
@@ -309,8 +326,8 @@
     await deletePdf(`${compId}/vyvza.pdf`);
   }
 
-  function applicationRow(item, compId) {
-    return {
+  function applicationRow(item, compId, programSlug) {
+    const row = {
       id: item.id,
       competition_id: compId,
       projekt_id: item.projekt_id || null,
@@ -321,29 +338,35 @@
       fakulta: item.fakulta || null,
       katedra: item.katedra || null,
       financni_pozadavek: item.financni_pozadavek || 0,
-      castka_alokovana: item.castka_alokovana ?? null,
       hodnoceni: item.hodnoceni || null,
       hodnoceni_komise: item.hodnoceni_komise || null,
       stav: item.stav || "Přihláška",
-      poznamka: item.poznamka || null,
-      cilova_soutez: item.cilova_soutez || null,
-      termin_podani: item.termin_podani || null,
-      rozpocet_rok_2: item.rozpocet_rok_2 || null,
-      hodnoceni_prumer: item.hodnoceni_prumer ?? null,
-      rozhodnuti_poradi: item.rozhodnuti_poradi ?? null,
-      hodnoceni_kriteria: item.hodnoceni_kriteria || null
+      poznamka: item.poznamka || null
     };
+    if (isConnectProgram(programSlug)) {
+      row.castka_alokovana = item.castka_alokovana ?? null;
+    }
+    if (isPrestigeProgram(programSlug)) {
+      row.cilova_soutez = item.cilova_soutez || null;
+      row.termin_podani = item.termin_podani || null;
+      row.rozpocet_rok_2 = item.rozpocet_rok_2 || null;
+      row.hodnoceni_prumer = item.hodnoceni_prumer ?? null;
+      row.rozhodnuti_poradi = item.rozhodnuti_poradi ?? null;
+      row.hodnoceni_kriteria = item.hodnoceni_kriteria || null;
+    }
+    return row;
   }
 
-  async function syncApplications(tableName, compId, items) {
+  async function syncApplications(tables, compId, items) {
     const supa = getClient();
+    const tableName = tables.applications;
     const { data: existing } = await supa.from(tableName).select("id").eq("competition_id", compId);
     const existingIds = new Set((existing || []).map(r => r.id));
     const desiredIds = new Set(items.filter(i => i.id).map(i => i.id));
     const toRemove = [...existingIds].filter(id => !desiredIds.has(id));
     if (toRemove.length) await supa.from(tableName).delete().in("id", toRemove);
     for (const item of items) {
-      const row = applicationRow(item, compId);
+      const row = applicationRow(item, compId, tables.programSlug);
       if (!item.__existing) row.created_at = item.created_at || new Date().toISOString();
       await supa.from(tableName).upsert(row, { onConflict: "id" });
     }
