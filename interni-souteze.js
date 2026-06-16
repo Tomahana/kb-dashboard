@@ -54,8 +54,35 @@
     return competitions.find(c => c.id === id) || null;
   }
 
+  function usesPrestigeBudget(programSlug) {
+    return programSlug === "prestige";
+  }
+
+  function prestigeApplicationSupport(app) {
+    return Number(app?.financni_pozadavek) || 0;
+  }
+
+  function supportedEntryAmount(comp, row) {
+    const explicit = Number(row?.castka_podpory) || 0;
+    const app = (comp?.applications || []).find(a => a.id === row?.application_id);
+    if (usesPrestigeBudget(comp?.program_slug)) {
+      if (explicit > 0) return explicit;
+      return prestigeApplicationSupport(app);
+    }
+    if (usesCascadingAllocation(comp?.program_slug) && explicit === 0 && app) {
+      const allocated = parseConnectAllocatedAmount(app);
+      if (allocated != null) return allocated;
+    }
+    return explicit;
+  }
+
   function sumSupported(comp) {
-    return (comp?.supported || []).reduce((s, r) => s + (Number(r.castka_podpory) || 0), 0);
+    const supported = comp?.supported || [];
+    const fromRows = supported.reduce((s, r) => s + supportedEntryAmount(comp, r), 0);
+    if (fromRows > 0 || !usesPrestigeBudget(comp?.program_slug)) return fromRows;
+    return (comp?.applications || [])
+      .filter(a => a.stav === "Podpořeno")
+      .reduce((s, a) => s + prestigeApplicationSupport(a), 0);
   }
 
   function sumApplications(comp) {
@@ -329,7 +356,10 @@
     }
 
     const groups = overviewGroups(items);
-    const used = items.reduce((s, c) => s + sumSupported(c), 0);
+    const used = groups.reduce(
+      (s, g) => s + programAllocationStats(g.programSlug, g.rok, g.runs).used,
+      0
+    );
     const requested = items.reduce((s, c) => s + sumApplications(c), 0);
     const programsAlloc = sumProgramsAllocation(groups);
     const yearAlloc = overviewFilterRok ? getYearBudgetTotal(overviewFilterRok) : 0;
@@ -611,6 +641,7 @@
         useSupabase = false;
         competitions = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
         if (!Array.isArray(competitions)) competitions = [];
+        competitions = competitions.map(reconcileCompetitionSupport);
         await window.kbPersons?.ensureLoaded?.();
         setStatus("Data v prohlížeči. Pro Supabase spusťte supabase/competitions-schema.sql.");
         return;
@@ -618,7 +649,7 @@
       const available = await window.kbSupabaseCompetitions.probeTables();
       if (!available) {
         useSupabase = false;
-        competitions = window.kbSupabaseCompetitions.loadLocal();
+        competitions = (window.kbSupabaseCompetitions.loadLocal() || []).map(reconcileCompetitionSupport);
         await window.kbPersons?.ensureLoaded?.();
         setStatus("Tabulky v Supabase zatím neexistují. Spusťte supabase/competitions-schema.sql.");
         return;
@@ -649,7 +680,7 @@
     } catch (e) {
       console.error(e);
       useSupabase = false;
-      competitions = window.kbSupabaseCompetitions?.loadLocal?.() || [];
+      competitions = (window.kbSupabaseCompetitions?.loadLocal?.() || []).map(reconcileCompetitionSupport);
       await window.kbPersons?.ensureLoaded?.();
       setStatus(`Chyba: ${e.message || e}`, true);
     } finally {
@@ -696,6 +727,11 @@
     if (usesCascadingAllocation(programSlug)) {
       const allocated = parseConnectAllocatedAmount(app);
       if (allocated != null) return allocated;
+    }
+    if (usesPrestigeBudget(programSlug)) {
+      const explicit = Number(existingSup?.castka_podpory);
+      if (explicit > 0) return explicit;
+      return prestigeApplicationSupport(app);
     }
     return Number(existingSup?.castka_podpory ?? app?.financni_pozadavek) || 0;
   }
@@ -1537,7 +1573,7 @@
         <td>${html(resitelDisplay(s))}</td>
         <td>${html(s.fakulta)}</td>
         <td>${html(s.katedra)}</td>
-        <td class="money">${fmtMoney(s.castka_podpory)}</td>
+        <td class="money">${fmtMoney(supportedEntryAmount(c, s))}</td>
         <td class="rowActions">
           <button type="button" class="button small secondary" data-edit-supp="${html(s.id)}">Upravit</button>
           <button type="button" class="button small secondary" data-del-supp="${html(s.id)}">×</button>
