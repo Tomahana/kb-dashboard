@@ -244,6 +244,7 @@ body.auth-locked .appMain {
   background: rgba(15, 23, 42, .72);
   backdrop-filter: blur(4px);
 }
+[hidden] { display: none !important; }
 .authOverlay[hidden] { display: none !important; }
 .authCard {
   width: min(420px, 96vw);
