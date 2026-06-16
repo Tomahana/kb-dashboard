@@ -59,15 +59,15 @@
   }
 
   function prestigeApplicationSupport(app) {
-    return Number(app?.financni_pozadavek) || 0;
+    return (Number(app?.financni_pozadavek) || 0) + (Number(app?.rozpocet_rok_2) || 0);
   }
 
   function supportedEntryAmount(comp, row) {
     const explicit = Number(row?.castka_podpory) || 0;
     const app = (comp?.applications || []).find(a => a.id === row?.application_id);
     if (usesPrestigeBudget(comp?.program_slug)) {
-      if (explicit > 0) return explicit;
-      return prestigeApplicationSupport(app);
+      if (app) return prestigeApplicationSupport(app);
+      return explicit;
     }
     if (usesCascadingAllocation(comp?.program_slug) && explicit === 0 && app) {
       const allocated = parseConnectAllocatedAmount(app);
@@ -86,6 +86,9 @@
   }
 
   function sumApplications(comp) {
+    if (usesPrestigeBudget(comp?.program_slug)) {
+      return (comp?.applications || []).reduce((s, r) => s + prestigeApplicationSupport(r), 0);
+    }
     return (comp?.applications || []).reduce((s, r) => s + (Number(r.financni_pozadavek) || 0), 0);
   }
 
@@ -729,8 +732,6 @@
       if (allocated != null) return allocated;
     }
     if (usesPrestigeBudget(programSlug)) {
-      const explicit = Number(existingSup?.castka_podpory);
-      if (explicit > 0) return explicit;
       return prestigeApplicationSupport(app);
     }
     return Number(existingSup?.castka_podpory ?? app?.financni_pozadavek) || 0;
@@ -1748,10 +1749,23 @@
     if (el("suppKatedra")) el("suppKatedra").value = p.katedra || "";
   }
 
+  function configureApplicationDialog(comp) {
+    const isPrestige = usesPrestigeBudget(comp?.program_slug);
+    const prestigeFields = el("appPrestigeFields");
+    const katedraWrap = el("appKatedraWrap");
+    const castkaLabel = el("appCastkaLabelText");
+    if (prestigeFields) prestigeFields.hidden = !isPrestige;
+    if (katedraWrap) katedraWrap.hidden = isPrestige;
+    if (castkaLabel) {
+      castkaLabel.textContent = isPrestige ? "Rozpočet 1. rok (Kč)" : "Finanční požadavek (Kč)";
+    }
+  }
+
   async function openApplicationDialog(compId, appId) {
     await window.kbPersons?.ensureLoaded?.();
     const comp = getCompetition(compId);
     if (!comp) return;
+    configureApplicationDialog(comp);
     const existing = appId ? (comp.applications || []).find(a => a.id === appId) : null;
     el("appEditId").value = existing?.id || "";
     el("appCompId").value = compId;
@@ -1764,6 +1778,9 @@
     el("appFakulta").value = existing?.fakulta || "";
     el("appKatedra").value = existing?.katedra || "";
     el("appCastka").value = existing?.financni_pozadavek || "";
+    el("appRozpocetRok2").value = existing?.rozpocet_rok_2 || "";
+    el("appCilovaSoutez").value = existing?.cilova_soutez || "";
+    el("appTerminPodani").value = existing?.termin_podani || "";
     el("appHodnoceni").value = existing?.hodnoceni || "";
     el("appHodnoceniKomise").value = existing?.hodnoceni_komise || "";
     el("appStav").value = existing?.stav || "Přihláška";
@@ -1794,6 +1811,14 @@
       created_at: existing?.created_at || new Date().toISOString(),
       __existing: !!existing
     }, person);
+    if (usesPrestigeBudget(comp.program_slug)) {
+      app.cilova_soutez = n(el("appCilovaSoutez").value);
+      app.termin_podani = n(el("appTerminPodani").value);
+      app.rozpocet_rok_2 = Number(el("appRozpocetRok2").value) || 0;
+      app.hodnoceni_prumer = existing?.hodnoceni_prumer ?? null;
+      app.rozhodnuti_poradi = existing?.rozhodnuti_poradi ?? null;
+      app.hodnoceni_kriteria = existing?.hodnoceni_kriteria ?? null;
+    }
     const apps = [...(comp.applications || []).filter(a => a.id !== id), app];
     try {
       await saveCompetition({ ...comp, applications: apps, __existing: true });
@@ -2031,9 +2056,14 @@
           </label>
           <div class="grid2">
             <label>Fakulta<input id="appFakulta" /></label>
-            <label>Katedra<input id="appKatedra" /></label>
-            <label>Finanční požadavek (Kč)<input id="appCastka" type="number" min="0" step="1000" /></label>
+            <label id="appKatedraWrap">Katedra<input id="appKatedra" /></label>
+            <label id="appCastkaLabel"><span id="appCastkaLabelText">Finanční požadavek (Kč)</span><input id="appCastka" type="number" min="0" step="1000" /></label>
             <label>Stav<select id="appStav"><option>Přihláška</option><option>Hodnoceno</option><option>Podpořeno</option><option>Zamítnuto</option></select></label>
+          </div>
+          <div id="appPrestigeFields" class="grid2" hidden>
+            <label>Rozpočet 2. rok (Kč)<input id="appRozpocetRok2" type="number" min="0" step="1000" /></label>
+            <label>Cílová soutěž<input id="appCilovaSoutez" placeholder="ERC, Horizon Europe…" /></label>
+            <label>Termín podání<input id="appTerminPodani" placeholder="2027 / 31.10.2027" /></label>
           </div>
           <label>Hodnocení proděkana<textarea id="appHodnoceni" rows="2" placeholder="Krátké hodnocení proděkana…"></textarea></label>
           <label>Hodnocení komise<textarea id="appHodnoceniKomise" rows="8" placeholder="Delší text hodnocení komise…"></textarea></label>
