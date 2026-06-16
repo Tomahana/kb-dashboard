@@ -1768,14 +1768,26 @@
   }
 
   function configureApplicationDialog(comp) {
-    const isPrestige = usesPrestigeBudget(comp?.program_slug);
+    const slug = comp?.program_slug || activeProgram;
+    const isPrestige = usesPrestigeBudget(slug);
     const prestigeFields = el("appPrestigeFields");
     const katedraWrap = el("appKatedraWrap");
     const castkaLabel = el("appCastkaLabelText");
-    if (prestigeFields) prestigeFields.hidden = !isPrestige;
-    if (katedraWrap) katedraWrap.hidden = isPrestige;
+    if (prestigeFields) {
+      prestigeFields.hidden = !isPrestige;
+      prestigeFields.style.display = isPrestige ? "" : "none";
+    }
+    if (katedraWrap) {
+      katedraWrap.hidden = isPrestige;
+      katedraWrap.style.display = isPrestige ? "none" : "";
+    }
     if (castkaLabel) {
       castkaLabel.textContent = isPrestige ? "Rozpočet 1. rok (Kč)" : "Finanční požadavek (Kč)";
+    }
+    if (!isPrestige) {
+      if (el("appRozpocetRok2")) el("appRozpocetRok2").value = "";
+      if (el("appCilovaSoutez")) el("appCilovaSoutez").value = "";
+      if (el("appTerminPodani")) el("appTerminPodani").value = "";
     }
   }
 
@@ -1796,9 +1808,11 @@
     el("appFakulta").value = existing?.fakulta || "";
     el("appKatedra").value = existing?.katedra || "";
     el("appCastka").value = existing?.financni_pozadavek || "";
-    el("appRozpocetRok2").value = existing?.rozpocet_rok_2 || "";
-    el("appCilovaSoutez").value = existing?.cilova_soutez || "";
-    el("appTerminPodani").value = existing?.termin_podani || "";
+    if (usesPrestigeBudget(comp.program_slug || activeProgram)) {
+      el("appRozpocetRok2").value = existing?.rozpocet_rok_2 || "";
+      el("appCilovaSoutez").value = existing?.cilova_soutez || "";
+      el("appTerminPodani").value = existing?.termin_podani || "";
+    }
     el("appHodnoceni").value = existing?.hodnoceni || "";
     el("appHodnoceniKomise").value = existing?.hodnoceni_komise || "";
     el("appStav").value = existing?.stav || "Přihláška";
