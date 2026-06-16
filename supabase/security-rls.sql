@@ -211,6 +211,37 @@ grant select, insert, update, delete on public.kb_competition_applications to au
 grant select, insert, update, delete on public.kb_competition_supported to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- 4b) Interní soutěže – programové tabulky (Connect, Prestige, ReGa, Horizon)
+--     Spusťte nejdříve supabase/competitions-program-tables.sql
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  tbl text;
+begin
+  foreach tbl in array array[
+    'kb_competition_connect', 'kb_competition_connect_applications', 'kb_competition_connect_supported',
+    'kb_competition_prestige', 'kb_competition_prestige_applications', 'kb_competition_prestige_supported',
+    'kb_competition_rega', 'kb_competition_rega_applications', 'kb_competition_rega_supported',
+    'kb_competition_horizon', 'kb_competition_horizon_applications', 'kb_competition_horizon_supported'
+  ] loop
+    if to_regclass('public.' || tbl) is null then continue; end if;
+    execute format('alter table public.%I enable row level security', tbl);
+    execute format('drop policy if exists "%s authenticated read" on public.%I', tbl, tbl);
+    execute format('drop policy if exists "%s authenticated write" on public.%I', tbl, tbl);
+    execute format(
+      'create policy "%s authenticated read" on public.%I for select to authenticated using (true)',
+      tbl, tbl
+    );
+    execute format(
+      'create policy "%s authenticated write" on public.%I for all to authenticated using (true) with check (true)',
+      tbl, tbl
+    );
+    execute format('revoke all on public.%I from anon', tbl);
+    execute format('grant select, insert, update, delete on public.%I to authenticated', tbl);
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- 5) kb_pcr_research_topics (výzkumné směry PČR)
 -- ---------------------------------------------------------------------------
 alter table if exists public.kb_pcr_research_topics enable row level security;
@@ -348,6 +379,10 @@ where schemaname = 'public'
   and tablename in (
     'kb_records', 'kb_record_bodies', 'kb_topics', 'kb_topic_records', 'kb_topic_deadlines',
     'kb_deadlines', 'kb_persons', 'kb_competitions', 'kb_competition_applications', 'kb_competition_supported',
+    'kb_competition_connect', 'kb_competition_connect_applications', 'kb_competition_connect_supported',
+    'kb_competition_prestige', 'kb_competition_prestige_applications', 'kb_competition_prestige_supported',
+    'kb_competition_rega', 'kb_competition_rega_applications', 'kb_competition_rega_supported',
+    'kb_competition_horizon', 'kb_competition_horizon_applications', 'kb_competition_horizon_supported',
     'kb_pcr_research_topics', 'kb_ai_advisor_saved',
     'kb_eiz_contracts', 'kb_eiz_contract_years', 'kb_eiz_publications',
     'kb_journal_records', 'kb_record_attachments'

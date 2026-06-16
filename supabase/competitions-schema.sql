@@ -1,4 +1,5 @@
--- Modul Interní soutěže – programy, běhy, přihlášky a podpořené projekty
+-- Modul Interní soutěže – legacy tabulky (Návraty, PhD Seed)
+-- Connect, Prestige, ReGa a Horizon: supabase/competitions-program-tables.sql
 
 create table if not exists public.kb_competitions (
   id uuid primary key default gen_random_uuid(),
