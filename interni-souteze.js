@@ -341,7 +341,7 @@
 
   function renderPrestigeAllocationSummary(stats, options = {}) {
     const y1 = stats.budgetYear1 ?? stats.callYear ?? "—";
-    const y2 = stats.budgetYear2 ?? (Number(stats.callYear) + 1) || "—";
+    const y2 = stats.budgetYear2 ?? (stats.callYear != null ? Number(stats.callYear) + 1 : "—");
     const bar = stats.allocY1 > 0 && options.showBar !== false ? `
       <div class="allocationBar" aria-hidden="true">
         <div class="allocationBarFill" style="width:${Math.min(stats.pctY1, 100)}%"></div>
