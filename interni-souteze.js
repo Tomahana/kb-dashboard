@@ -70,15 +70,118 @@
     return clean;
   }
 
-  function prestigeApplicationSupport(app) {
-    return (Number(app?.financni_pozadavek) || 0) + (Number(app?.rozpocet_rok_2) || 0);
+  function prestigeAppYear1(app) {
+    return Number(app?.financni_pozadavek) || 0;
+  }
+
+  function prestigeAppYear2(app) {
+    return Number(app?.rozpocet_rok_2) || 0;
+  }
+
+  function prestigeSupportedApps(comp) {
+    const linked = new Set((comp?.supported || []).map(s => s.application_id).filter(Boolean));
+    return (comp?.applications || []).filter(a => a.stav === "Podpořeno" || linked.has(a.id));
+  }
+
+  function prestigeCompStats(comp) {
+    const apps = comp?.applications || [];
+    const supported = prestigeSupportedApps(comp);
+    const callYear = Number(comp?.rok) || new Date().getFullYear();
+    const allocY1 = Number(comp?.alokovana_castka) || 0;
+    const requestedY1 = apps.reduce((s, a) => s + prestigeAppYear1(a), 0);
+    const requestedY2 = apps.reduce((s, a) => s + prestigeAppYear2(a), 0);
+    const supportedY1 = supported.reduce((s, a) => s + prestigeAppYear1(a), 0);
+    const supportedY2 = supported.reduce((s, a) => s + prestigeAppYear2(a), 0);
+    return {
+      callYear,
+      budgetYear1: callYear,
+      budgetYear2: callYear + 1,
+      allocY1,
+      requestedY1,
+      requestedY2,
+      supportedY1,
+      supportedY2,
+      remainingY1: allocY1 - supportedY1,
+      pctY1: allocY1 > 0 ? Math.round((supportedY1 / allocY1) * 100) : 0,
+      appsY1: apps.length,
+      supportedCountY1: supported.length,
+      appsY2: apps.filter(a => prestigeAppYear2(a) > 0).length,
+      supportedCountY2: supported.filter(a => prestigeAppYear2(a) > 0).length
+    };
+  }
+
+  function prestigeMergeStats(statsList) {
+    const base = {
+      callYear: null,
+      budgetYear1: null,
+      budgetYear2: null,
+      allocY1: 0,
+      requestedY1: 0,
+      requestedY2: 0,
+      supportedY1: 0,
+      supportedY2: 0,
+      remainingY1: 0,
+      pctY1: 0,
+      appsY1: 0,
+      supportedCountY1: 0,
+      appsY2: 0,
+      supportedCountY2: 0
+    };
+    if (!statsList.length) return base;
+    const merged = statsList.reduce((acc, s) => ({
+      callYear: acc.callYear ?? s.callYear,
+      budgetYear1: acc.budgetYear1 ?? s.budgetYear1,
+      budgetYear2: acc.budgetYear2 ?? s.budgetYear2,
+      allocY1: acc.allocY1 + s.allocY1,
+      requestedY1: acc.requestedY1 + s.requestedY1,
+      requestedY2: acc.requestedY2 + s.requestedY2,
+      supportedY1: acc.supportedY1 + s.supportedY1,
+      supportedY2: acc.supportedY2 + s.supportedY2,
+      remainingY1: acc.remainingY1 + s.remainingY1,
+      appsY1: acc.appsY1 + s.appsY1,
+      supportedCountY1: acc.supportedCountY1 + s.supportedCountY1,
+      appsY2: acc.appsY2 + s.appsY2,
+      supportedCountY2: acc.supportedCountY2 + s.supportedCountY2
+    }), base);
+    merged.pctY1 = merged.allocY1 > 0 ? Math.round((merged.supportedY1 / merged.allocY1) * 100) : 0;
+    return merged;
+  }
+
+  function prestigeCompsByCallYear(callYear) {
+    return competitions.filter(c => usesPrestigeBudget(c.program_slug) && Number(c.rok) === Number(callYear));
+  }
+
+  function prestigeCalendarStats(calendarYear) {
+    const y = Number(calendarYear);
+    const currentCall = prestigeMergeStats(prestigeCompsByCallYear(y).map(prestigeCompStats));
+    const priorCall = prestigeMergeStats(prestigeCompsByCallYear(y - 1).map(prestigeCompStats));
+    return {
+      calendarYear: y,
+      currentCall,
+      priorCallY2: {
+        callYear: y - 1,
+        budgetYear: y,
+        requestedY2: priorCall.requestedY2,
+        supportedY2: priorCall.supportedY2,
+        appsY2: priorCall.appsY2,
+        supportedCountY2: priorCall.supportedCountY2
+      },
+      usedInCalendarYear: currentCall.supportedY1 + priorCall.supportedY2
+    };
+  }
+
+  function prestigeUsedInOverview(calendarYear, groups) {
+    if (calendarYear) return prestigeCalendarStats(Number(calendarYear)).usedInCalendarYear;
+    return groups
+      .filter(g => usesPrestigeBudget(g.programSlug))
+      .reduce((s, g) => s + prestigeMergeStats(g.runs.map(prestigeCompStats)).supportedY1, 0);
   }
 
   function supportedEntryAmount(comp, row) {
     const explicit = Number(row?.castka_podpory) || 0;
     const app = (comp?.applications || []).find(a => a.id === row?.application_id);
     if (usesPrestigeBudget(comp?.program_slug)) {
-      if (app) return prestigeApplicationSupport(app);
+      if (app) return prestigeAppYear1(app);
       return explicit;
     }
     if (usesCascadingAllocation(comp?.program_slug) && explicit === 0 && app) {
@@ -89,17 +192,15 @@
   }
 
   function sumSupported(comp) {
-    const supported = comp?.supported || [];
-    const fromRows = supported.reduce((s, r) => s + supportedEntryAmount(comp, r), 0);
-    if (fromRows > 0 || !usesPrestigeBudget(comp?.program_slug)) return fromRows;
-    return (comp?.applications || [])
-      .filter(a => a.stav === "Podpořeno")
-      .reduce((s, a) => s + prestigeApplicationSupport(a), 0);
+    if (usesPrestigeBudget(comp?.program_slug)) {
+      return prestigeCompStats(comp).supportedY1;
+    }
+    return (comp?.supported || []).reduce((s, r) => s + supportedEntryAmount(comp, r), 0);
   }
 
   function sumApplications(comp) {
     if (usesPrestigeBudget(comp?.program_slug)) {
-      return (comp?.applications || []).reduce((s, r) => s + prestigeApplicationSupport(r), 0);
+      return prestigeCompStats(comp).requestedY1;
     }
     return (comp?.applications || []).reduce((s, r) => s + (Number(r.financni_pozadavek) || 0), 0);
   }
@@ -143,6 +244,9 @@
   }
 
   function allocationAllocLabel(c) {
+    if (usesPrestigeBudget(c?.program_slug)) {
+      return `Alokovaná částka — rok 1 (${c?.rok || "—"})`;
+    }
     if (usesCascadingAllocation(c?.program_slug) && (c?.beh_cislo || 1) > 1) {
       return "Zbývá z alokace";
     }
@@ -181,6 +285,19 @@
   }
 
   function programAllocationStats(programSlug, rok, runs) {
+    if (usesPrestigeBudget(programSlug)) {
+      const stats = prestigeMergeStats(runs.map(prestigeCompStats));
+      return {
+        alloc: stats.allocY1,
+        used: stats.supportedY1,
+        requested: stats.requestedY1,
+        remaining: stats.remainingY1,
+        pct: stats.pctY1,
+        annual: null,
+        allocLabel: `Alokovaná částka — rok 1 (${stats.budgetYear1 || rok})`,
+        prestigeStats: stats
+      };
+    }
     const used = runs.reduce((s, c) => s + sumSupported(c), 0);
     const requested = runs.reduce((s, c) => s + sumApplications(c), 0);
     const alloc = usesCascadingAllocation(programSlug)
@@ -200,6 +317,19 @@
   }
 
   function allocationStats(c) {
+    if (usesPrestigeBudget(c?.program_slug)) {
+      const stats = prestigeCompStats(c);
+      return {
+        alloc: stats.allocY1,
+        used: stats.supportedY1,
+        requested: stats.requestedY1,
+        remaining: stats.remainingY1,
+        pct: stats.pctY1,
+        annual: null,
+        allocLabel: `Alokovaná částka — rok 1 (${stats.budgetYear1})`,
+        prestigeStats: stats
+      };
+    }
     const alloc = effectiveAllocation(c);
     const used = sumSupported(c);
     const requested = sumApplications(c);
@@ -209,7 +339,74 @@
     return { alloc, used, requested, remaining, pct, annual, allocLabel: allocationAllocLabel(c) };
   }
 
+  function renderPrestigeAllocationSummary(stats, options = {}) {
+    const y1 = stats.budgetYear1 ?? stats.callYear ?? "—";
+    const y2 = stats.budgetYear2 ?? (Number(stats.callYear) + 1) || "—";
+    const bar = stats.allocY1 > 0 && options.showBar !== false ? `
+      <div class="allocationBar" aria-hidden="true">
+        <div class="allocationBarFill" style="width:${Math.min(stats.pctY1, 100)}%"></div>
+      </div>
+      <p class="allocationBarLabel">${stats.pctY1} % čerpáno (rok 1) · ${fmtMoney(stats.supportedY1)} z ${fmtMoney(stats.allocY1)}</p>` : "";
+    return `
+      ${bar}
+      <table class="competitionTable competitionSummaryTable competitionPrestigeSummary">
+        <tbody>
+          <tr class="prestigeSummarySection"><td colspan="2"><strong>Rozpočet roku 1 (${y1}) — čerpání alokace</strong></td></tr>
+          <tr><td>Alokovaná částka na rok 1</td><td class="money">${fmtMoney(stats.allocY1)}</td></tr>
+          <tr><td>Požadováno na rok 1</td><td class="money">${fmtMoney(stats.requestedY1)}</td></tr>
+          <tr><td>Podpořeno na rok 1</td><td class="money">${fmtMoney(stats.supportedY1)}</td></tr>
+          <tr><td><strong>Zbývá z alokace na rok 1</strong></td><td class="money"><strong>${fmtMoney(stats.remainingY1)}</strong></td></tr>
+          <tr><td>Přihlášek</td><td>${stats.appsY1}</td></tr>
+          <tr><td>Podpořených</td><td>${stats.supportedCountY1}</td></tr>
+          <tr class="prestigeSummarySection"><td colspan="2"><strong>Rozpočet roku 2 (${y2}) — informativně, nečerpá alokaci ${y1}</strong></td></tr>
+          <tr><td>Požadováno na rok 2</td><td class="money">${fmtMoney(stats.requestedY2)}</td></tr>
+          <tr><td>Podpořeno na rok 2 (plánované)</td><td class="money">${fmtMoney(stats.supportedY2)}</td></tr>
+          <tr><td>Přihlášek s rozpočtem rok 2</td><td>${stats.appsY2}</td></tr>
+          <tr><td>Podpořených s rozpočtem rok 2</td><td>${stats.supportedCountY2}</td></tr>
+        </tbody>
+      </table>
+      <p class="hint prestigeYearHint">Rozpočet roku 2 z výzvy ${y1} se do alokace ${y1} nepočítá. V kalendářním roce ${y2} budou žadatelé o pokračování konkurovat novým přihláškám Prestige ${y2} — viz přehled filtrovaný podle roku ${y2}.</p>`;
+  }
+
+  function renderPrestigeCalendarY2Summary(calendarYear) {
+    const cal = prestigeCalendarStats(Number(calendarYear));
+    const prior = cal.priorCallY2;
+    if (!prior.supportedY2 && !prior.requestedY2) return "";
+    return `
+      <article class="competitionOverviewCard competitionOverviewPrestigeY2">
+        <div class="competitionOverviewHead">
+          <span class="competitionOverviewProgram">⭐ UHK Prestige</span>
+        </div>
+        <h3 class="competitionOverviewTitle">Rozpočet roku 2 (${calendarYear}) — pokračování z výzvy ${prior.callYear}</h3>
+        <p class="hint competitionOverviewMeta">Podpořené projekty z výzvy ${prior.callYear} · čerpání v kalendářním roce ${calendarYear} · soupeření s novými přihláškami Prestige ${calendarYear}</p>
+        <table class="competitionTable competitionSummaryTable competitionPrestigeSummary">
+          <tbody>
+            <tr><td>Požadováno na rok 2 (z výzvy ${prior.callYear})</td><td class="money">${fmtMoney(prior.requestedY2)}</td></tr>
+            <tr><td>Podpořeno na rok 2</td><td class="money">${fmtMoney(prior.supportedY2)}</td></tr>
+            <tr><td>Přihlášek s rozpočtem rok 2</td><td>${prior.appsY2}</td></tr>
+            <tr><td>Podpořených s rozpočtem rok 2</td><td>${prior.supportedCountY2}</td></tr>
+          </tbody>
+        </table>
+      </article>`;
+  }
+
+  function renderPrestigeMetrics(stats) {
+    return `
+      <div class="competitionMetrics competitionMetricsPrestige">
+        <article class="metric"><span>${fmtMoney(stats.allocY1)}</span><small>alokace rok 1 (${stats.budgetYear1})</small></article>
+        <article class="metric"><span>${fmtMoney(stats.requestedY1)}</span><small>požadováno rok 1</small></article>
+        <article class="metric"><span>${fmtMoney(stats.supportedY1)}</span><small>podpořeno rok 1 (čerpání)</small></article>
+        <article class="metric"><span>${fmtMoney(stats.remainingY1)}</span><small>zbývá z alokace rok 1</small></article>
+        <article class="metric"><span>${fmtMoney(stats.supportedY2)}</span><small>plán rok 2 (${stats.budgetYear2})</small></article>
+        <article class="metric"><span>${stats.appsY1}</span><small>přihlášek</small></article>
+        <article class="metric"><span>${stats.supportedCountY1}</span><small>podpořených</small></article>
+      </div>`;
+  }
+
   function renderAllocationSummaryStats(stats, options = {}) {
+    if (stats.prestigeStats) {
+      return renderPrestigeAllocationSummary(stats.prestigeStats, options);
+    }
     const { alloc, used, requested, remaining, pct, allocLabel, annual } = stats;
     const bar = alloc > 0 ? `
       <div class="allocationBar" aria-hidden="true">
@@ -231,6 +428,12 @@
   }
 
   function renderAllocationSummary(c, options = {}) {
+    if (usesPrestigeBudget(c?.program_slug) && Array.isArray(c?.runs)) {
+      return renderPrestigeAllocationSummary(prestigeMergeStats(c.runs.map(prestigeCompStats)), options);
+    }
+    if (usesPrestigeBudget(c?.program_slug)) {
+      return renderPrestigeAllocationSummary(prestigeCompStats(c), options);
+    }
     const stats = typeof c?.program_slug === "string" && Array.isArray(c?.runs)
       ? programAllocationStats(c.program_slug, c.rok, c.runs)
       : allocationStats(c);
@@ -365,16 +568,18 @@
     }
 
     const items = filteredCompetitionsOverview();
-    if (!items.length) {
+    const prestigeY2Card = overviewFilterRok ? renderPrestigeCalendarY2Summary(overviewFilterRok) : "";
+    if (!items.length && !prestigeY2Card) {
       grid.innerHTML = `<p class="hint">${competitions.length ? "Žádný běh nevyhovuje filtrům." : "Zatím žádné soutěže — vytvořte běh nebo načtěte šablonu ReGa."}</p>`;
       return;
     }
 
-    const groups = overviewGroups(items);
-    const used = groups.reduce(
-      (s, g) => s + programAllocationStats(g.programSlug, g.rok, g.runs).used,
-      0
-    );
+    const groups = items.length ? overviewGroups(items) : [];
+    const prestigeUsed = prestigeUsedInOverview(overviewFilterRok, groups);
+    const otherUsed = groups
+      .filter(g => !usesPrestigeBudget(g.programSlug))
+      .reduce((s, g) => s + programAllocationStats(g.programSlug, g.rok, g.runs).used, 0);
+    const used = prestigeUsed + otherUsed;
     const requested = items.reduce((s, c) => s + sumApplications(c), 0);
     const programsAlloc = sumProgramsAllocation(groups);
     const yearAlloc = overviewFilterRok ? getYearBudgetTotal(overviewFilterRok) : 0;
@@ -389,7 +594,7 @@
       pct: totalPct,
       allocLabel: overviewFilterRok ? "Celková alokace roku" : "Celkem alokováno"
     };
-    const showTotal = overviewFilterRok || groups.length > 1;
+    const showTotal = overviewFilterRok || groups.length > 1 || prestigeY2Card;
     const totalTitle = overviewFilterRok
       ? `Celkem za rok ${overviewFilterRok} (${groups.length} ${groups.length === 1 ? "soutěž" : "soutěže"}, ${items.length} běhů)`
       : `Celkem ve filtru (${groups.length} soutěží, ${items.length} běhů)`;
@@ -404,6 +609,7 @@
           ${totalHint}
           ${renderAllocationSummaryStats(totalStats, { showBar: true })}
         </article>` : ""}
+      ${prestigeY2Card}
       <div class="competitionOverviewGrid">
         ${groups.map(g => {
           const prog = getProgram(g.programSlug);
@@ -747,7 +953,7 @@
       if (allocated != null) return allocated;
     }
     if (usesPrestigeBudget(programSlug)) {
-      return prestigeApplicationSupport(app);
+      return prestigeAppYear1(app);
     }
     return Number(existingSup?.castka_podpory ?? app?.financni_pozadavek) || 0;
   }
@@ -1450,13 +1656,17 @@
       return;
     }
     box.innerHTML = `<div class="competitionCards">${items.map(c => {
-      const { alloc, used, pct, allocLabel } = allocationStats(c);
-      const allocShort = allocLabel === "Zbývá z alokace" ? "zbývá" : "alokace";
+      const stats = allocationStats(c);
+      const { alloc, used, pct, allocLabel } = stats;
+      const allocShort = allocLabel === "Zbývá z alokace" ? "zbývá" : (usesPrestigeBudget(c.program_slug) ? "alok. R1" : "alokace");
+      const moneyLine = usesPrestigeBudget(c.program_slug)
+        ? `${fmtMoney(stats.alloc)} ${allocShort} · ${fmtMoney(stats.used)} podp. R1 (${stats.pct} %) · R2 plán ${fmtMoney(stats.prestigeStats?.supportedY2 || 0)}`
+        : `${fmtMoney(alloc)} ${allocShort} · ${fmtMoney(used)} čerpáno (${pct}%)`;
       const active = c.id === activeCompetitionId ? "active" : "";
       return `<article class="competitionCard ${active}" data-comp-id="${html(c.id)}" tabindex="0" role="button">
         <strong>${html(c.nazev)}</strong>
         <span class="competitionCardMeta">${c.rok || "—"} · běh ${c.beh_cislo || 1} · ${(c.applications || []).length} přihlášek</span>
-        <span class="competitionCardMoney">${fmtMoney(alloc)} ${allocShort} · ${fmtMoney(used)} čerpáno (${pct}%)</span>
+        <span class="competitionCardMoney">${moneyLine}</span>
         <span class="badge">${html(c.stav || "")}</span>
       </article>`;
     }).join("")}</div>`;
@@ -1475,9 +1685,13 @@
     }
     const { alloc, used, requested, remaining, annual, allocLabel } = allocationStats(c);
     const behCount = competitionsForProgram(c.program_slug).length;
+    const isPrestige = usesPrestigeBudget(c.program_slug);
+    const prestigeStats = isPrestige ? prestigeCompStats(c) : null;
     const cascadeHint = usesCascadingAllocation(c.program_slug) && (c.beh_cislo || 1) > 1 && annual > 0
       ? `<p class="hint">Celoroční alokace ${c.rok}: ${fmtMoney(annual)} · pro tento běh zbývá ${fmtMoney(alloc)} z předchozích kol</p>`
-      : "";
+      : isPrestige
+        ? `<p class="hint">Alokace se vztahuje jen na rok 1 (${c.rok}). Rozpočet roku 2 (${(Number(c.rok) || 0) + 1}) se do čerpání nezapočítává — bude relevantní až v kalendářním roce ${(Number(c.rok) || 0) + 1}.</p>`
+        : "";
 
     box.innerHTML = `
       <div class="competitionDetailHead">
@@ -1491,6 +1705,7 @@
           <button type="button" class="button small danger" id="deleteCompetitionBtn">Smazat</button>
         </div>
       </div>
+      ${isPrestige ? renderPrestigeMetrics(prestigeStats) : `
       <div class="competitionMetrics">
         <article class="metric"><span>${fmtMoney(alloc)}</span><small>${html(allocLabel.toLowerCase())}</small></article>
         <article class="metric"><span>${fmtMoney(requested)}</span><small>požadováno (přihlášky)</small></article>
@@ -1498,7 +1713,7 @@
         <article class="metric"><span>${fmtMoney(remaining)}</span><small>zbývá z alokace</small></article>
         <article class="metric"><span>${(c.applications || []).length}</span><small>přihlášek</small></article>
         <article class="metric"><span>${(c.supported || []).length}</span><small>podpořených projektů</small></article>
-      </div>
+      </div>`}
       <section class="competitionSection panel">
         <h3>Pokyn a výzva</h3>
         <div class="competitionDocs">
@@ -1581,6 +1796,26 @@
   function renderSupportedTable(c) {
     const items = c.supported || [];
     if (!items.length) return `<p class="hint">Žádné podpořené projekty.</p>`;
+    const isPrestige = usesPrestigeBudget(c.program_slug);
+    if (isPrestige) {
+      return `<div class="competitionTableWrap"><table class="competitionTable">
+        <thead><tr><th>ID</th><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Rok 1</th><th>Rok 2 (plán)</th><th></th></tr></thead>
+        <tbody>${items.map(s => {
+          const app = (c.applications || []).find(a => a.id === s.application_id);
+          return `<tr>
+            <td><code class="projektId">${html(s.projekt_id) || "—"}</code></td>
+            <td><strong>${html(s.nazev_projektu)}</strong></td>
+            <td>${html(resitelDisplay(s))}</td>
+            <td>${html(s.fakulta)}</td>
+            <td class="money">${fmtMoney(app ? prestigeAppYear1(app) : s.castka_podpory)}</td>
+            <td class="money">${fmtMoney(app ? prestigeAppYear2(app) : 0)}</td>
+            <td class="rowActions">
+              <button type="button" class="button small secondary" data-edit-supp="${html(s.id)}">Upravit</button>
+              <button type="button" class="button small secondary" data-del-supp="${html(s.id)}">×</button>
+            </td>
+          </tr>`;
+        }).join("")}</tbody></table></div>`;
+    }
     return `<div class="competitionTableWrap"><table class="competitionTable">
       <thead><tr><th>ID</th><th>Projekt</th><th>Řešitel</th><th>Fakulta</th><th>Katedra</th><th>Částka podpory</th><th></th></tr></thead>
       <tbody>${items.map(s => `<tr>
@@ -1613,6 +1848,10 @@
       allocInput.title = remaining === 0
         ? "Z předchozích kol nezbývá rozpočet — nové běhy až v dalším roce nebo po navýšení alokace u běhu 1."
         : "Automaticky z celoroční alokace mínus čerpání předchozích běhů stejného roku.";
+    } else if (usesPrestigeBudget(program)) {
+      allocLabel.textContent = `Alokovaná částka — rok 1 (${rok || "—"}) (Kč)`;
+      allocInput.readOnly = false;
+      allocInput.removeAttribute("title");
     } else {
       allocLabel.textContent = usesCascadingAllocation(program) && beh === 1
         ? "Celoroční alokace (Kč)"
@@ -2222,6 +2461,11 @@
       .competitionTable th, .competitionTable td { padding: .45rem .5rem; border-bottom: 1px solid var(--line); text-align: left; font-size: .88rem; }
       .competitionTablePrestige { min-width: 1200px; }
       .competitionTablePrestige td:nth-child(2) { max-width: 280px; white-space: normal; }
+      .competitionPrestigeSummary .prestigeSummarySection td { background: #f2f4f7; font-weight: 700; padding-top: .65rem; }
+      .prestigeYearHint { margin: .65rem 0 0; font-size: .82rem; }
+      .competitionMetricsPrestige { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+      .competitionOverviewPrestigeY2 { cursor: default; }
+      .competitionOverviewPrestigeY2:hover { border-color: var(--line); box-shadow: none; }
       .competitionTable .money { text-align: right; font-variant-numeric: tabular-nums; }
       .rowActions { white-space: nowrap; }
       .competitionDetailHead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; min-width: 0; }
