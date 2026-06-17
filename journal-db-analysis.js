@@ -3,7 +3,7 @@
 (function () {
   const METRIC_FIELDS = [
     "category_journal_count", "ais_rank", "ais_rank_ratio", "ais_rank_fraction",
-    "ais_percentile_band", "ais_decile", "ais_centile", "ais_quartile"
+    "ais_quality_tier", "ais_percentile_band", "ais_decile", "ais_centile", "ais_quartile"
   ];
 
   const n = (s) => (s || "").toString().trim();
@@ -64,14 +64,26 @@
     );
   }
 
+  function tierFromRatio(ratio) {
+    const r = Number(ratio);
+    if (!Number.isFinite(r) || r <= 0) return "";
+    if (r <= 0.09) {
+      const p = Math.min(9, Math.max(1, Math.ceil(r * 100)));
+      return `P${p}`;
+    }
+    if (r <= 0.10) return "D1";
+    if (r <= 0.20) return "D2";
+    if (r <= 0.25) return "Q1";
+    if (r <= 0.50) return "Q2";
+    if (r <= 0.75) return "Q3";
+    return "Q4";
+  }
+
   function classifyFromRatio(rank, total) {
     const safeTotal = Math.max(1, total);
     const ratio = rank / safeTotal;
     const roundedRatio = Math.round(ratio * 1000000) / 1000000;
-
-    let percentileBand = "";
-    if (ratio <= 0.01) percentileBand = "P1";
-    else if (ratio <= 0.05) percentileBand = "P5";
+    const qualityTier = tierFromRatio(ratio);
 
     const decileNum = Math.min(10, Math.max(1, Math.ceil(ratio * 10)));
     const centileNum = Math.min(100, Math.max(1, Math.ceil(ratio * 100)));
@@ -82,7 +94,8 @@
       ais_rank: rank,
       ais_rank_ratio: roundedRatio,
       ais_rank_fraction: `${rank}/${safeTotal}`,
-      ais_percentile_band: percentileBand,
+      ais_quality_tier: qualityTier,
+      ais_percentile_band: qualityTier.startsWith("P") ? qualityTier : "",
       ais_decile: `D${decileNum}`,
       ais_centile: `C${centileNum}`,
       ais_quartile: `Q${quartileNum}`
@@ -248,6 +261,7 @@
           best_ais_rank: row.ais_rank,
           best_ais_rank_ratio: row.ais_rank_ratio,
           best_ais_rank_fraction: row.ais_rank_fraction,
+          best_ais_quality_tier: row.ais_quality_tier,
           best_ais_percentile_band: row.ais_percentile_band,
           best_ais_quartile: row.ais_quartile,
           best_ais_decile: row.ais_decile,
@@ -271,6 +285,7 @@
         existing.best_ais_rank = row.ais_rank;
         existing.best_ais_rank_ratio = row.ais_rank_ratio;
         existing.best_ais_rank_fraction = row.ais_rank_fraction;
+        existing.best_ais_quality_tier = row.ais_quality_tier;
         existing.best_ais_percentile_band = row.ais_percentile_band;
         existing.best_ais_quartile = row.ais_quartile;
         existing.best_ais_decile = row.ais_decile;
@@ -286,23 +301,27 @@
   }
 
   function pickBestTier(row) {
+    const stored = row.best_ais_quality_tier || row.ais_quality_tier || row.best_tier;
+    if (stored) return stored;
     const ratio = row.best_ais_rank_ratio ?? row.ais_rank_ratio;
     if (ratio == null || ratio === "") return "";
-    const r = Number(ratio);
-    if (!Number.isFinite(r)) return "";
-    if (r <= 0.01) return "P1";
-    if (r <= 0.05) return "P5";
-    return row.best_ais_decile || row.ais_decile || row.best_ais_quartile || row.ais_quartile || "";
+    return tierFromRatio(ratio);
   }
 
   function tierSortKey(tier) {
     if (!tier) return 999;
-    if (tier === "P1") return 1;
-    if (tier === "P5") return 2;
+    const percentile = tier.match(/^P(\d+)$/);
+    if (percentile) return Number(percentile[1]);
+    if (tier === "D1") return 10;
+    if (tier === "D2") return 11;
+    if (tier === "Q1") return 12;
+    if (tier === "Q2") return 13;
+    if (tier === "Q3") return 14;
+    if (tier === "Q4") return 15;
     const decile = tier.match(/^D(\d+)$/);
-    if (decile) return 10 + Number(decile[1]);
+    if (decile) return 9 + Number(decile[1]);
     const quartile = tier.match(/^Q(\d+)$/);
-    if (quartile) return 20 + Number(quartile[1]);
+    if (quartile) return 11 + Number(quartile[1]);
     return 999;
   }
 
@@ -339,6 +358,7 @@
     applyJournalIdentity,
     resolveSourceYear,
     classifyFromRatio,
+    tierFromRatio,
     pickBestTier,
     tierSortKey,
     recordRankKey,

@@ -984,7 +984,7 @@
         <label>Řazení
           <select id="journalDbBestSort">
             <option value="ratio"${bestSort === "ratio" ? " selected" : ""}>Poměr (nejlepší první)</option>
-            <option value="tier"${bestSort === "tier" ? " selected" : ""}>Kvalita (P1 → Q4)</option>
+            <option value="tier"${bestSort === "tier" ? " selected" : ""}>Kvalita (P1–P9 → D1–D2 → Q1 → Q4)</option>
             <option value="ais"${bestSort === "ais" ? " selected" : ""}>AIS (nejvyšší)</option>
             <option value="year"${bestSort === "year" ? " selected" : ""}>Rok (nejnovější)</option>
             <option value="name"${bestSort === "name" ? " selected" : ""}>Název A–Z</option>
@@ -1088,7 +1088,7 @@
 
     return `
       ${yearHint}
-      <p class="hint journalDbHint">Kvalita = nejlepší pásma z poměru pořadí/počet v oboru: <strong>P1</strong> (top 1&nbsp;%), <strong>P5</strong> (top 5&nbsp;%), decil <strong>D1</strong>, kvartily <strong>Q1–Q4</strong>. Hledání podle ISSN zobrazí <strong>všechny roky</strong>, ve kterých je časopis v databázi.</p>
+      <p class="hint journalDbHint">Kvalita = nejlepší pásmo z poměru pořadí/počet v oboru: <strong>P1–P9</strong> (top 1–9&nbsp;%), <strong>D1–D2</strong> (top 10–20&nbsp;%), <strong>Q1</strong> (top 25&nbsp;%), dále <strong>Q2–Q4</strong>. Hledání podle ISSN zobrazí <strong>všechny roky</strong>, ve kterých je časopis v databázi.</p>
       ${renderPagination(total, page, TABLE_PAGE_SIZE, "best")}
       <div class="journalDbTableWrap"><table class="journalDbTable">
         <thead><tr>
@@ -1138,7 +1138,7 @@
           <select id="journalDbAnalysisCategory">${opts}</select>
         </label>
         ${selectedYear ? `<p class="hint">Rok exportu: <strong>${html(selectedYear)}</strong>${filterSourceYear ? "" : " — pro změnu roku použijte filtr „Rok exportu“ výše."}</p>` : ""}
-        ${catSummary ? `<p class="hint">V oboru je <strong>${catSummary.journal_count}</strong> časopisů seřazených podle AIS (1 = nejvyšší AIS). Poměr pořadí/počet určuje P1, P5, D1–D10, C1–C100 a Q1–Q4 (Q1 = horních 25&nbsp;%).</p>` : `<p class="hint">Pro zvolený obor a rok nejsou data.</p>`}
+        ${catSummary ? `<p class="hint">V oboru je <strong>${catSummary.journal_count}</strong> časopisů seřazených podle AIS (1 = nejvyšší AIS). Kvalita z poměru pořadí/počet: <strong>P1–P9</strong>, <strong>D1–D2</strong>, <strong>Q1</strong>, dále <strong>Q2–Q4</strong>.</p>` : `<p class="hint">Pro zvolený obor a rok nejsou data.</p>`}
       </div>
       ${renderPagination(allRows.length, page, TABLE_PAGE_SIZE, "analysis")}
       <div class="journalDbTableWrap"><table class="journalDbTable journalDbTableCompact">
