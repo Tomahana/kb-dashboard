@@ -134,8 +134,7 @@ comment on column public.kb_deadlines.odpovedna_osoba_osobni_cislo is 'FK na kb_
 
 -- =============================================================================
 -- Budoucí moduly (šablona – zatím nespouštět):
--- kb_publications (autor_osobni_cislo text references kb_persons(osobni_cislo))
--- kb_vysledky (resitel_osobni_cislo text references kb_persons(osobni_cislo))
+-- kb_vystupy (autor_osobni_cislo, resitel_osobni_cislo → kb_persons) — viz vystupy-schema.sql
 -- =============================================================================
 
 select table_name, column_name

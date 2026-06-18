@@ -15,8 +15,7 @@
     { id: "emaily", label: "E-maily / znalostní báze", page: "emaily", status: "active" },
     { id: "eiz-tokeny", label: "EIZ tokeny / publikace", page: "eiz-tokeny", status: "active" },
     { id: "casopisy", label: "Databáze časopisů / JCR", page: "casopisy", status: "active" },
-    { id: "publikace", label: "Publikační výstupy (ostatní)", page: null, status: "planned" },
-    { id: "vysledky", label: "Aplikované výsledky", page: null, status: "planned" }
+    { id: "vystupy", label: "Výstupy (Jimp, JSC, B, C, aplikované)", page: "vystupy", status: "active" }
   ];
 
   const n = (s) => (s || "").toString().trim();
@@ -244,6 +243,31 @@
     ));
   }
 
+  function buildVystupyChunks() {
+    const items = window.kbVystupy?.getVystupy?.() || [];
+    return items.map((v) => chunk(
+      `vystup:${v.id}`,
+      "vystupy",
+      v.kategorie === "aplikovany" ? "Výstupy · aplikované" : "Výstupy · publikace",
+      v.nazev,
+      [
+        v.typ_vystupu,
+        v.rok ? `rok ${v.rok}` : "",
+        v.autor || v.resitel,
+        v.zkr_fak || v.fakulta,
+        v.katedra,
+        v.doi,
+        v.isbn,
+        v.casopis,
+        v.riv_id,
+        v.cislo_na_riv,
+        v.poznamka
+      ].filter(Boolean).join(" · "),
+      "#vystupy",
+      { typ_vystupu: v.typ_vystupu, rok: v.rok, riv_id: v.riv_id }
+    ));
+  }
+
   function buildEmailChunks(limit = 400) {
     let data = [];
     try {
@@ -273,9 +297,8 @@
     temata: buildTopicChunks,
     emaily: buildEmailChunks,
     "eiz-tokeny": buildEizChunks,
-    casopisy: buildJournalChunks
-    // publikace: () => []  — Fáze 2 (ostatní výstupy)
-    // vysledky: () => []   — Fáze 2
+    casopisy: buildJournalChunks,
+    vystupy: buildVystupyChunks
   };
 
   function buildIndex() {
