@@ -13,6 +13,7 @@
     "ai-poradce": { title: "AI poradce", subtitle: "Dotazy nad daty aplikace — odpovědi jen z modulů KB Dashboardu" },
     "eiz-tokeny": { title: "EIZ tokeny", subtitle: "Transformační smlouvy, roční tokeny a publikace z APC" },
     casopisy: { title: "Databáze časopisů", subtitle: "JCR exporty, AIS pořadí v oborech, decily a nejlepší výsledky" },
+    vystupy: { title: "Výstupy", subtitle: "Publikační výstupy Jimp, JSC, B a C — samostatné tabulky pro DKRVO, PPK a analýzy" },
     nastaveni: { title: "Nastavení", subtitle: "Supabase, AI, import a export" },
     modul: { title: "Modul", subtitle: "Oblast v přípravě" }
   };

@@ -97,6 +97,14 @@
       stats: ["journalRecordsTotal", "journalCategoriesTotal"]
     },
     {
+      slug: "vystupy",
+      title: "Výstupy",
+      description: "Publikační výstupy Jimp, JSC, B a C — samostatné tabulky, import z IS VaVaI, analýzy pro DKRVO a PPK.",
+      status: "active",
+      icon: "📈",
+      stats: ["vystupyTotal", "vystupyJimp", "vystupyJsc"]
+    },
+    {
       slug: "modul-dkrvo",
       title: "DKRVO",
       description: "Roční výkaz výzkumu, sběr dat a odeslání na MŠMT.",
@@ -163,6 +171,7 @@
     const eizPublications = window.kbEizTokens?.getPublications?.() || [];
     const journalRecords = window.kbJournalDb?.getRecords?.() || [];
     const journalCategories = window.kbJournalDb?.getCategories?.() || [];
+    const vystupyItems = window.kbVystupy?.getVystupy?.() || [];
 
     return {
       emailsTotal: data.length,
@@ -179,7 +188,10 @@
       eizContractsTotal: eizContracts.length,
       eizPublicationsTotal: eizPublications.length,
       journalRecordsTotal: journalRecords.length,
-      journalCategoriesTotal: journalCategories.length
+      journalCategoriesTotal: journalCategories.length,
+      vystupyTotal: vystupyItems.length,
+      vystupyJimp: vystupyItems.filter((v) => v.typ_vystupu === "Jimp").length,
+      vystupyJsc: vystupyItems.filter((v) => v.typ_vystupu === "JSC").length
     };
   }
 
@@ -199,7 +211,10 @@
       eizContractsTotal: `${value} smluv EIZ`,
       eizPublicationsTotal: `${value} publikací EIZ`,
       journalRecordsTotal: `${value} záznamů časopisů`,
-      journalCategoriesTotal: `${value} oborů JCR`
+      journalCategoriesTotal: `${value} oborů JCR`,
+      vystupyTotal: `${value} výstupů`,
+      vystupyJimp: `${value} Jimp`,
+      vystupyJsc: `${value} JSC`
     };
     return labels[key] || String(value);
   }
@@ -364,6 +379,7 @@
     document.addEventListener("kb:pcr-research-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:eiz-tokens-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:journal-db-loaded", () => setTimeout(renderModulesGrid, 60));
+    document.addEventListener("kb:vystupy-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("input", () => setTimeout(renderModulesGrid, 120));
   }
 
