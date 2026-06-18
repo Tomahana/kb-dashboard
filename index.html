@@ -253,7 +253,13 @@
     <!-- NASTAVENÍ -->
     <section id="page-nastaveni" class="page">
       <section class="panel">
+        <h2>Migrace z Microsoft Lists</h2>
+        <p class="hint">Pokud máte export ze seznamu (ZIP/CSV z <code>vyzkum_*.zip</code>), nejdříve v Supabase SQL Editoru spusťte <code>supabase/kb-records-schema.sql</code>, poté <code>supabase/security-rls.sql</code>.</p>
+        <p class="hint">Import dat z počítače: <code>SUPABASE_SERVICE_ROLE_KEY=&lt;service_role&gt; node scripts/import-list-export.mjs cesta/k/exportu.zip</code> (Service Role klíč: Supabase → Settings → API). V aplikaci pak stačí přihlášení — data se načtou automaticky.</p>
+      </section>
+      <section class="panel">
         <h2>Data a připojení</h2>
+        <p class="hint">Hlavní tabulky e-mailů: <code>supabase/kb-records-schema.sql</code> (metadata) + <code>supabase/kb-capture-schema.sql</code> (přílohy, deduplikace). Po přihlášení se data načtou ze Supabase automaticky (<code>autoLoadOnLogin</code> v <code>supabase-config.js</code>).</p>
         <p class="hint">Načtení e-mailů ze Supabase a správa lokální kopie v prohlížeči.</p>
         <div id="actionsData" class="settingsActions"></div>
       </section>
