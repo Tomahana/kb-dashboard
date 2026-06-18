@@ -1,9 +1,10 @@
 -- =============================================================================
 -- KB Dashboard – Výstupy (samostatné tabulky Jimp, JSC, B, C)
 -- =============================================================================
--- Spusťte po persons-schema.sql (FK autor → kb_persons).
--- Aplikované výsledky budou řešeny v samostatném modulu později.
--- Použití: analýzy, DKRVO, PPK.
+-- Pořadí nasazení:
+--   1) supabase/persons-schema.sql
+--   2) tento soubor (vystupy-schema.sql) — včetně RLS na konci
+--   3) volitelně znovu: supabase/vystupy-rls.sql (idempotentní oprava RLS)
 -- =============================================================================
 
 -- Odstranění předchozí sjednocené tabulky (pokud existuje z dřívější verze)
@@ -173,6 +174,31 @@ grant select, insert, update, delete on public.kb_vystupy_jimp to anon, authenti
 grant select, insert, update, delete on public.kb_vystupy_jsc to anon, authenticated;
 grant select, insert, update, delete on public.kb_vystupy_b to anon, authenticated;
 grant select, insert, update, delete on public.kb_vystupy_c to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- RLS (volitelně lze znovu spustit samostatně: vystupy-rls.sql)
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['kb_vystupy_jimp', 'kb_vystupy_jsc', 'kb_vystupy_b', 'kb_vystupy_c']
+  loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "%s authenticated read" on public.%I', t, t);
+    execute format('drop policy if exists "%s authenticated write" on public.%I', t, t);
+    execute format(
+      'create policy "%s authenticated read" on public.%I for select to authenticated using (true)',
+      t, t
+    );
+    execute format(
+      'create policy "%s authenticated write" on public.%I for all to authenticated using (true) with check (true)',
+      t, t
+    );
+    execute format('revoke all on public.%I from anon', t);
+    execute format('grant select, insert, update, delete on public.%I to authenticated', t);
+  end loop;
+end $$;
 
 select table_name
 from information_schema.tables
