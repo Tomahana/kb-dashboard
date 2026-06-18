@@ -150,6 +150,36 @@
     return false;
   }
 
+  function shouldAutoLoad() {
+    return window.KB_SUPABASE?.autoLoadOnLogin !== false;
+  }
+
+  let autoLoadStarted = false;
+
+  async function tryAutoLoadFromSupabase() {
+    if (autoLoadStarted || !shouldAutoLoad()) return;
+    if (!window.KB_SUPABASE?.url || !window.KB_SUPABASE?.anonKey) return;
+    autoLoadStarted = true;
+    try {
+      if (!(await ensureAuthenticated())) {
+        autoLoadStarted = false;
+        return;
+      }
+      const data = await loadAllRecords();
+      if (!data.length) return;
+      records = data.map(mapRecord).filter(r => r.id);
+      if (typeof persist === "function") persist();
+      if (typeof populateFilters === "function") populateFilters();
+      if (typeof render === "function") render();
+      document.dispatchEvent(new Event("input"));
+      document.dispatchEvent(new CustomEvent("kb:records-loaded"));
+      console.info(`Supabase: automaticky načteno ${records.length} záznamů.`);
+    } catch (error) {
+      console.warn("Automatické načtení ze Supabase selhalo:", error);
+      autoLoadStarted = false;
+    }
+  }
+
   async function loadFromSupabase() {
     const button = document.getElementById("loadSupabaseBtn");
     try {
@@ -290,5 +320,9 @@
       enhanceOpenRecord();
       enhanceSaveRecord();
     }, 50);
+  });
+
+  document.addEventListener("kb:auth-ready", () => {
+    tryAutoLoadFromSupabase();
   });
 })();

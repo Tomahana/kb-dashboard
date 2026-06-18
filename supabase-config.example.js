@@ -5,6 +5,9 @@ window.KB_SUPABASE = {
   url: "https://VAS_PROJEKT.supabase.co",
   anonKey: "VAS_PUBLISHABLE_ANON_KEY",
 
+  // Po přihlášení automaticky načíst e-maily ze Supabase (místo lokální kopie / kb.json)
+  autoLoadOnLogin: true,
+
   auth: {
     // false = vypne přihlašovací bránu (jen pro vývoj)
     requireAuth: true,
