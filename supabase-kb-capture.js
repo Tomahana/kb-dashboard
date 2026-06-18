@@ -140,6 +140,34 @@
     return `${base}/storage/v1/object/public/${ATTACH_BUCKET}/${path}`;
   }
 
+  function fileExtension(name) {
+    const m = (name || "").toString().match(/\.([^.]+)$/);
+    return m ? m[1].toLowerCase() : "";
+  }
+
+  /** Prohlížeč u .msg často hlásí application/octet-stream — bucket to nepřijme bez migrace. */
+  function resolveContentType(file) {
+    const ext = fileExtension(file?.name);
+    const byExt = {
+      msg: "application/vnd.ms-outlook",
+      eml: "message/rfc822",
+      pdf: "application/pdf",
+      doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xls: "application/vnd.ms-excel",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      txt: "text/plain",
+      csv: "text/csv",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png"
+    };
+    if (byExt[ext]) return byExt[ext];
+    const browser = (file?.type || "").trim();
+    if (browser && browser !== "application/octet-stream") return browser;
+    return "application/octet-stream";
+  }
+
   async function uploadAttachment(kbId, file) {
     if (!file) throw new Error("Soubor chybí.");
     if (file.size > ATTACH_MAX_BYTES) throw new Error(`Soubor ${file.name} je větší než 15 MB.`);
@@ -152,9 +180,10 @@
     if (await probeStorage()) {
       const safeName = (file.name || "priloha").replace(/[^\w.\-()+ ]/g, "_");
       storagePath = `${kbId}/${attId}-${safeName}`;
+      const contentType = resolveContentType(file);
       const { error } = await supa.storage.from(ATTACH_BUCKET).upload(storagePath, file, {
         upsert: true,
-        contentType: file.type || "application/octet-stream"
+        contentType
       });
       if (error) throw error;
     } else {
@@ -162,7 +191,8 @@
     }
 
     if (!(await probeAttachmentsTable())) {
-      return { id: attId, kb_id: kbId, filename: file.name, storage_path: storagePath, mime_type: file.type, size_bytes: file.size };
+      const contentType = resolveContentType(file);
+      return { id: attId, kb_id: kbId, filename: file.name, storage_path: storagePath, mime_type: contentType, size_bytes: file.size };
     }
 
     const row = {
@@ -170,7 +200,7 @@
       kb_id: kbId,
       filename: file.name || "priloha",
       storage_path: storagePath,
-      mime_type: file.type || null,
+      mime_type: resolveContentType(file),
       size_bytes: file.size || 0
     };
     const { data, error } = await supa.from("kb_record_attachments").insert(row).select("*").single();

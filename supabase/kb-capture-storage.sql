@@ -15,6 +15,8 @@ values (
     'text/plain',
     'text/csv',
     'message/rfc822',
+    'application/vnd.ms-outlook',
+    'application/octet-stream',
     'image/jpeg',
     'image/png'
   ]
