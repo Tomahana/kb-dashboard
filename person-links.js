@@ -33,8 +33,10 @@
     { module: "terminy", table: "kb_deadlines", role: "odpovedna_osoba" },
     { module: "pcr-vyzkum", table: "kb_pcr_research_topics", role: "gestor" },
     { module: "eiz-tokeny", table: "kb_eiz_publications", role: "autor" },
-    { module: "vystupy", table: "kb_vystupy", role: "autor" },
-    { module: "vystupy", table: "kb_vystupy", role: "resitel" },
+    { module: "vystupy", table: "kb_vystupy_jimp", role: "autor" },
+    { module: "vystupy", table: "kb_vystupy_jsc", role: "autor" },
+    { module: "vystupy", table: "kb_vystupy_b", role: "autor" },
+    { module: "vystupy", table: "kb_vystupy_c", role: "autor" },
     { module: "emaily", table: "kb_records", role: "odesilatel" },
     { module: "emaily", table: "kb_records", role: "odpovedna_osoba" }
   ];

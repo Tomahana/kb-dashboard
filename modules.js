@@ -99,10 +99,10 @@
     {
       slug: "vystupy",
       title: "Výstupy",
-      description: "Publikační výstupy (Jimp, JSC, B, C) a aplikované výsledky — evidence, import z IS VaVaI, analýzy pro DKRVO a PPK.",
+      description: "Publikační výstupy Jimp, JSC, B a C — samostatné tabulky, import z IS VaVaI, analýzy pro DKRVO a PPK.",
       status: "active",
       icon: "📈",
-      stats: ["vystupyTotal", "vystupyJimp", "vystupyAplikovane"]
+      stats: ["vystupyTotal", "vystupyJimp", "vystupyJsc"]
     },
     {
       slug: "modul-dkrvo",
@@ -191,7 +191,7 @@
       journalCategoriesTotal: journalCategories.length,
       vystupyTotal: vystupyItems.length,
       vystupyJimp: vystupyItems.filter((v) => v.typ_vystupu === "Jimp").length,
-      vystupyAplikovane: vystupyItems.filter((v) => v.kategorie === "aplikovany").length
+      vystupyJsc: vystupyItems.filter((v) => v.typ_vystupu === "JSC").length
     };
   }
 
@@ -214,7 +214,7 @@
       journalCategoriesTotal: `${value} oborů JCR`,
       vystupyTotal: `${value} výstupů`,
       vystupyJimp: `${value} Jimp`,
-      vystupyAplikovane: `${value} aplikovaných`
+      vystupyJsc: `${value} JSC`
     };
     return labels[key] || String(value);
   }

@@ -1,15 +1,15 @@
-// Modul Výstupy — publikační výstupy (Jimp, JSC, B, C) a aplikované výsledky pro DKRVO, PPK a analýzy.
+// Modul Výstupy — publikační výstupy (Jimp, JSC, B, C) pro DKRVO, PPK a analýzy.
 
 (function () {
   const PUBL_TYPES = ["Jimp", "JSC", "B", "C"];
-  const APPLIED_TYPES = ["D", "F", "G", "H", "I", "J", "N", "O", "P", "R", "T", "U", "V", "Z"];
+  const ARTICLE_TYPES = ["Jimp", "JSC"];
+  const BOOK_TYPES = ["B", "C"];
 
   const IMPORT_ALIASES = {
     typ_vystupu: ["Typ výstupu", "Typ", "typ_vystupu", "Kód výstupu", "Druh"],
     rok: ["Rok", "rok", "Rok výstupu"],
     nazev: ["Název", "Nazev", "Titul", "nazev", "Název výstupu"],
     autor: ["Autor", "autor", "Autoři"],
-    resitel: ["Řešitel", "Resitel", "resitel"],
     fakulta: ["Fakulta", "fakulta", "Součást"],
     zkr_fak: ["Zkr. fak.", "zkr_fak", "Zkratka fakulty"],
     katedra: ["Katedra", "katedra", "Pracoviště"],
@@ -19,7 +19,6 @@
     isbn: ["ISBN", "isbn"],
     riv_id: ["RIV ID", "RIV_ID", "riv_id", "ID RIV"],
     cislo_na_riv: ["Číslo na RIV", "Cislo na RIV", "cislo_na_riv"],
-    druh_vysledku: ["Druh výsledku", "druh_vysledku"],
     poznamka: ["Poznámka", "Poznamka", "poznamka"]
   };
 
@@ -37,6 +36,7 @@
   let filterRok = "";
   let filterSearch = "";
   let editingId = null;
+  let editingTyp = null;
 
   const el = (id) => document.getElementById(id);
   const n = (s) => (s || "").toString().trim();
@@ -44,24 +44,17 @@
   const html = (s) => n(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;" }[c]));
   const uuid = () => crypto.randomUUID?.() || `vystup-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-  function isAppliedType(typ) {
-    const t = n(typ).toUpperCase();
-    return !PUBL_TYPES.includes(t) && (APPLIED_TYPES.includes(t) || t.length <= 2);
-  }
-
-  function inferKategorie(typ) {
-    return isAppliedType(typ) ? "aplikovany" : "publikacni";
-  }
-
   function normalizeTyp(typ) {
-    const t = n(typ);
-    const upper = t.toUpperCase();
+    const upper = n(typ).toUpperCase();
     if (upper === "JIMP") return "Jimp";
     if (upper === "JSC" || upper === "J") return "JSC";
     if (upper === "B") return "B";
     if (upper === "C") return "C";
-    if (APPLIED_TYPES.includes(upper)) return upper;
-    return t || "JSC";
+    return "";
+  }
+
+  function isArticleType(typ) {
+    return ARTICLE_TYPES.includes(typ);
   }
 
   function inferZkrFak(fakulta) {
@@ -79,7 +72,7 @@
       n(item.typ_vystupu),
       n(item.rok),
       n(item.riv_id) || n(item.cislo_na_riv) || n(item.doi) || n(item.isbn),
-      l(n(item.autor) || n(item.resitel)),
+      l(n(item.autor)),
       l(n(item.nazev)).slice(0, 80)
     ].filter(Boolean);
     return parts.join("|") || `manual-${uuid()}`;
@@ -118,13 +111,13 @@
       if (!available) {
         useSupabase = false;
         vystupy = window.kbSupabaseVystupy.loadLocal();
-        setStatus("Tabulka kb_vystupy v Supabase zatím neexistuje. Spusťte supabase/vystupy-schema.sql.");
+        setStatus("Tabulky kb_vystupy_* v Supabase zatím neexistují. Spusťte supabase/vystupy-schema.sql.");
         return;
       }
       useSupabase = true;
       if (await ensureAuth()) {
         vystupy = await window.kbSupabaseVystupy.loadVystupy();
-        setStatus(`Načteno ze Supabase: ${vystupy.length} výstupů.`);
+        setStatus(`Načteno ze Supabase: ${vystupy.length} výstupů (Jimp, JSC, B, C).`);
       }
     } catch (error) {
       console.error(error);
@@ -153,55 +146,44 @@
 
   function linkPerson(row) {
     let linked = { ...row };
-    const isAppl = row.kategorie === "aplikovany";
-    const role = isAppl ? "resitel" : "autor";
-    const label = isAppl ? row.resitel : row.autor;
-    const labelLower = l(label);
+    const labelLower = l(row.autor);
     if (labelLower.includes("@")) {
       const byEmail = window.kbPersons?.getPersons?.().find((p) => l(p.email) === labelLower);
-      if (byEmail) return window.kbPersonLinks?.applyPersonLink?.(linked, byEmail, role) || linked;
+      if (byEmail) return window.kbPersonLinks?.applyPersonLink?.(linked, byEmail, "autor") || linked;
     }
-    const name = parseAuthorName(label);
+    const name = parseAuthorName(row.autor);
     const matched = window.kbPersons?.matchPersonFromRegistry?.({
       jmeno: name.jmeno,
       prijmeni: name.prijmeni,
       fakulta: row.zkr_fak || row.fakulta
     });
-    if (matched) return window.kbPersonLinks?.applyPersonLink?.(linked, matched, role) || linked;
+    if (matched) return window.kbPersonLinks?.applyPersonLink?.(linked, matched, "autor") || linked;
     return linked;
   }
 
   function personDisplay(item) {
-    if (item.kategorie === "aplikovany") {
-      return window.kbPersonLinks?.personDisplay?.(item, "resitel") || n(item.resitel) || "—";
-    }
     return window.kbPersonLinks?.personDisplay?.(item, "autor") || n(item.autor) || "—";
   }
 
   function isLinked(item) {
-    if (item.kategorie === "aplikovany") {
-      return !!(item.resitel_osobni_cislo || window.kbPersonLinks?.resolvePerson?.(item, "resitel"));
-    }
     return !!(item.autor_osobni_cislo || window.kbPersonLinks?.resolvePerson?.(item, "autor"));
   }
 
   function typBadge(item) {
     const typ = n(item.typ_vystupu);
-    const cls = item.kategorie === "aplikovany" ? "vystupyTypApl" : `vystupyTyp${typ}`;
-    return `<span class="vystupyTypBadge ${cls}">${html(typ || "?")}</span>`;
+    return `<span class="vystupyTypBadge vystupyTyp${typ}">${html(typ || "?")}</span>`;
   }
 
   function filteredItems() {
     return vystupy.filter((item) => {
       if (filterTyp) {
-        if (filterTyp === "aplikovany" && item.kategorie !== "aplikovany") return false;
-        if (filterTyp === "B+C" && !["B", "C"].includes(item.typ_vystupu)) return false;
-        if (filterTyp !== "aplikovany" && filterTyp !== "B+C" && item.typ_vystupu !== filterTyp) return false;
+        if (filterTyp === "B+C" && !BOOK_TYPES.includes(item.typ_vystupu)) return false;
+        if (filterTyp !== "B+C" && item.typ_vystupu !== filterTyp) return false;
       }
       if (filterRok && String(item.rok) !== filterRok) return false;
       if (filterSearch) {
         const hay = l([
-          item.nazev, item.autor, item.resitel, item.typ_vystupu, item.zkr_fak, item.fakulta,
+          item.nazev, item.autor, item.typ_vystupu, item.zkr_fak, item.fakulta,
           item.katedra, item.doi, item.isbn, item.casopis, item.riv_id, item.poznamka
         ].join(" "));
         if (!hay.includes(l(filterSearch))) return false;
@@ -215,23 +197,15 @@
   }
 
   function countByTyp() {
-    const counts = { Jimp: 0, JSC: 0, B: 0, C: 0, aplikovany: 0 };
+    const counts = { Jimp: 0, JSC: 0, B: 0, C: 0 };
     for (const v of vystupy) {
-      if (v.kategorie === "aplikovany") counts.aplikovany += 1;
-      else if (counts[v.typ_vystupu] != null) counts[v.typ_vystupu] += 1;
+      if (counts[v.typ_vystupu] != null) counts[v.typ_vystupu] += 1;
     }
     return counts;
   }
 
   function analysisContext(items) {
-    return {
-      items,
-      filterRok,
-      personDisplay,
-      isLinked,
-      uniqueYears,
-      countByTyp
-    };
+    return { items, filterRok, personDisplay, isLinked, uniqueYears, countByTyp };
   }
 
   function renderTable(items) {
@@ -243,8 +217,8 @@
         <table class="vystupyTable">
           <thead>
             <tr>
-              <th>Typ</th><th>Rok</th><th>Název</th><th>Autor / řešitel</th>
-              <th>Fakulta</th><th>RIV / DOI</th><th></th>
+              <th>Typ</th><th>Rok</th><th>Název</th><th>Autor</th>
+              <th>Fakulta</th><th>RIV / DOI / ISBN</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -256,16 +230,12 @@
                 <td>${html(personDisplay(item))}</td>
                 <td>${html(item.zkr_fak || item.fakulta || "—")}</td>
                 <td class="vystupyMetaCell">${html(item.riv_id || item.doi || item.isbn || "—")}</td>
-                <td><button type="button" class="button ghost small" data-edit-vystup="${html(item.id)}">Upravit</button></td>
+                <td><button type="button" class="button ghost small" data-edit-vystup="${html(item.id)}" data-edit-typ="${html(item.typ_vystupu)}">Upravit</button></td>
               </tr>`).join("")}
           </tbody>
         </table>
       </div>
       <p class="hint vystupyTableFoot">Zobrazeno ${items.length} z ${vystupy.length} výstupů.</p>`;
-  }
-
-  function renderAnalysisView(items) {
-    return `<div id="vystupyAnalysisMount"></div>`;
   }
 
   function renderMain() {
@@ -277,13 +247,12 @@
       <section class="panel vystupyPanel">
         <div class="vystupyHead">
           <div>
-            <p class="hint vystupyIntro">Evidence výzkumných výstupů UHK — publikace (Jimp, JSC, B, C) a aplikované výsledky. Podklady pro analýzy, DKRVO a PPK.</p>
+            <p class="hint vystupyIntro">Evidence publikačních výstupů UHK — Jimp, JSC, B a C v samostatných tabulkách. Podklady pro analýzy, DKRVO a PPK. Aplikované výsledky přibudou později.</p>
             <div class="vystupySummaryChips">
               <span class="vystupyChip">Jimp: ${counts.Jimp}</span>
               <span class="vystupyChip">JSC: ${counts.JSC}</span>
               <span class="vystupyChip">B: ${counts.B}</span>
               <span class="vystupyChip">C: ${counts.C}</span>
-              <span class="vystupyChip vystupyChipApl">Aplik.: ${counts.aplikovany}</span>
             </div>
           </div>
           <div class="vystupyHeadActions">
@@ -303,7 +272,6 @@
               <option value="Jimp" ${filterTyp === "Jimp" ? "selected" : ""}>Jimp</option>
               <option value="JSC" ${filterTyp === "JSC" ? "selected" : ""}>JSC</option>
               <option value="B+C" ${filterTyp === "B+C" ? "selected" : ""}>B + C</option>
-              <option value="aplikovany" ${filterTyp === "aplikovany" ? "selected" : ""}>Aplikované výsledky</option>
             </select>
           </label>
           <label>Rok
@@ -317,7 +285,7 @@
           </label>
           <button type="button" class="button secondary" id="vystupyReloadBtn">Obnovit</button>
         </div>
-        <div id="vystupyContent">${loading ? `<p class="hint">Načítám…</p>` : (activeView === "analysis" ? renderAnalysisView(items) : renderTable(items))}</div>
+        <div id="vystupyContent">${loading ? `<p class="hint">Načítám…</p>` : (activeView === "analysis" ? `<div id="vystupyAnalysisMount"></div>` : renderTable(items))}</div>
       </section>`;
   }
 
@@ -339,28 +307,25 @@
     return "";
   }
 
-  function rowToVystup(raw) {
-    const typ = normalizeTyp(getFieldFromRow(raw, "typ_vystupu"));
-    const kategorie = inferKategorie(typ);
+  function rowToVystup(raw, defaultTyp = "") {
+    const typ = normalizeTyp(getFieldFromRow(raw, "typ_vystupu") || raw.typ_vystupu || defaultTyp);
+    if (!typ) return null;
     const fakulta = getFieldFromRow(raw, "fakulta");
     const item = {
       id: uuid(),
       typ_vystupu: typ,
-      kategorie,
       rok: Number(getFieldFromRow(raw, "rok")) || null,
       nazev: getFieldFromRow(raw, "nazev") || "Bez názvu",
-      autor: kategorie === "publikacni" ? getFieldFromRow(raw, "autor") : "",
-      resitel: kategorie === "aplikovany" ? (getFieldFromRow(raw, "resitel") || getFieldFromRow(raw, "autor")) : "",
+      autor: getFieldFromRow(raw, "autor"),
       fakulta,
       zkr_fak: getFieldFromRow(raw, "zkr_fak") || inferZkrFak(fakulta),
       katedra: getFieldFromRow(raw, "katedra"),
-      doi: getFieldFromRow(raw, "doi"),
-      issn: getFieldFromRow(raw, "issn"),
-      casopis: getFieldFromRow(raw, "casopis"),
-      isbn: getFieldFromRow(raw, "isbn"),
+      doi: isArticleType(typ) ? getFieldFromRow(raw, "doi") : "",
+      issn: isArticleType(typ) ? getFieldFromRow(raw, "issn") : "",
+      casopis: isArticleType(typ) ? getFieldFromRow(raw, "casopis") : "",
+      isbn: BOOK_TYPES.includes(typ) ? getFieldFromRow(raw, "isbn") : "",
       riv_id: getFieldFromRow(raw, "riv_id"),
       cislo_na_riv: getFieldFromRow(raw, "cislo_na_riv"),
-      druh_vysledku: getFieldFromRow(raw, "druh_vysledku"),
       poznamka: getFieldFromRow(raw, "poznamka"),
       imported_at: new Date().toISOString()
     };
@@ -404,7 +369,7 @@
     return counts[0][1] > 0 ? counts[0][0] : "\t";
   }
 
-  function parseImportText(text) {
+  function parseImportText(text, defaultTyp = "") {
     const sample = text.split(/\r?\n/).find((ln) => n(ln)) || "";
     const delimiter = detectDelimiter(sample);
     const records = parseCsvRecords(text, delimiter);
@@ -413,11 +378,11 @@
     return records.slice(1).map((cells) => {
       const row = {};
       headers.forEach((h, idx) => { row[h] = cells[idx] ?? ""; });
-      return rowToVystup(row);
-    }).filter((item) => n(item.nazev));
+      return rowToVystup(row, defaultTyp);
+    }).filter((item) => item && n(item.nazev));
   }
 
-  async function handleImportFile(file) {
+  async function handleImportFile(file, defaultTyp = "") {
     if (!file) return;
     setStatus(`Importuji ${file.name}…`);
     try {
@@ -425,31 +390,31 @@
       if (/\.json$/i.test(file.name)) {
         const data = JSON.parse(await file.text());
         const rows = Array.isArray(data) ? data : (data.vystupy || data.items || []);
-        parsed = rows.map((row) => rowToVystup(row));
+        parsed = rows.map((row) => rowToVystup(row, defaultTyp)).filter(Boolean);
       } else if (/\.xlsx?$/i.test(file.name) && window.XLSX) {
         const wb = window.XLSX.read(await file.arrayBuffer(), { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const rows = window.XLSX.utils.sheet_to_json(sheet, { defval: "" });
-        parsed = rows.map((row) => rowToVystup(row));
+        parsed = rows.map((row) => rowToVystup(row, defaultTyp)).filter(Boolean);
       } else {
-        parsed = parseImportText(await file.text());
+        parsed = parseImportText(await file.text(), defaultTyp);
       }
       if (!parsed.length) {
-        setStatus("Import neobsahuje platné řádky.", true);
+        setStatus("Import neobsahuje platné řádky (podporované typy: Jimp, JSC, B, C).", true);
         return;
       }
       if (useSupabase && await ensureAuth()) {
         const saved = await window.kbSupabaseVystupy.upsertVystupyBatch(parsed, (done, total) => {
           setStatus(`Importuji… ${done}/${total}`);
         });
-        const map = new Map(vystupy.map((v) => [v.source_key, v]));
-        saved.forEach((s) => map.set(s.source_key, s));
+        const map = new Map(vystupy.map((v) => [`${v.typ_vystupu}|${v.source_key}`, v]));
+        saved.forEach((s) => map.set(`${s.typ_vystupu}|${s.source_key}`, s));
         vystupy = [...map.values()];
         persistLocal();
-        setStatus(`Import dokončen: ${saved.length} výstupů (upsert).`);
+        setStatus(`Import dokončen: ${saved.length} výstupů (upsert do příslušných tabulek).`);
       } else {
-        const map = new Map(vystupy.map((v) => [v.source_key, v]));
-        parsed.forEach((p) => map.set(p.source_key, p));
+        const map = new Map(vystupy.map((v) => [`${v.typ_vystupu}|${v.source_key}`, v]));
+        parsed.forEach((p) => map.set(`${p.typ_vystupu}|${p.source_key}`, p));
         vystupy = [...map.values()];
         persistLocal();
         setStatus(`Import lokálně: ${parsed.length} výstupů.`);
@@ -471,19 +436,14 @@
       <form method="dialog" class="vystupyDialogForm">
         <h3 id="vystupyDialogTitle">Výstup</h3>
         <div class="vystupyDialogGrid">
-          <label>Kategorie
-            <select id="vystupKategorie" required>
-              <option value="publikacni">Publikační výstup</option>
-              <option value="aplikovany">Aplikovaný výsledek</option>
-            </select>
-          </label>
           <label>Typ výstupu
-            <select id="vystupTyp" required></select>
+            <select id="vystupTyp" required>
+              ${PUBL_TYPES.map((t) => `<option value="${t}">${t}</option>`).join("")}
+            </select>
           </label>
           <label>Rok<input type="number" id="vystupRok" min="1990" max="2100" /></label>
           <label class="vystupyDialogWide">Název<input id="vystupNazev" required /></label>
-          <label id="vystupAutorWrap">Autor<input id="vystupAutor" /></label>
-          <label id="vystupResitelWrap" hidden>Řešitel<input id="vystupResitel" /></label>
+          <label>Autor<input id="vystupAutor" /></label>
           <label>Osoba (modul Osoby)<select id="vystupPersonSelect"><option value="">— nepropojeno —</option></select></label>
           <label>Fakulta<input id="vystupFakulta" /></label>
           <label>Zkr. fak.<input id="vystupZkrFak" /></label>
@@ -506,13 +466,6 @@
     document.body.appendChild(dialog);
   }
 
-  function fillTypSelect(kategorie, selected) {
-    const sel = el("vystupTyp");
-    if (!sel) return;
-    const types = kategorie === "aplikovany" ? APPLIED_TYPES : PUBL_TYPES;
-    sel.innerHTML = types.map((t) => `<option value="${t}" ${t === selected ? "selected" : ""}>${t}</option>`).join("");
-  }
-
   function fillPersonSelect(selectedId) {
     const sel = el("vystupPersonSelect");
     if (!sel) return;
@@ -523,31 +476,29 @@
     ).join("")}`;
   }
 
-  function toggleDialogFields(kategorie) {
-    const isAppl = kategorie === "aplikovany";
-    if (el("vystupAutorWrap")) el("vystupAutorWrap").hidden = isAppl;
-    if (el("vystupResitelWrap")) el("vystupResitelWrap").hidden = !isAppl;
+  function toggleDialogFields(typ) {
+    const article = isArticleType(typ);
     ["vystupDoiWrap", "vystupIssnWrap", "vystupCasopisWrap"].forEach((id) => {
-      if (el(id)) el(id).hidden = isAppl;
+      if (el(id)) el(id).hidden = !article;
     });
-    if (el("vystupIsbnWrap")) el("vystupIsbnWrap").hidden = false;
+    if (el("vystupIsbnWrap")) el("vystupIsbnWrap").hidden = article;
   }
 
-  function openDialog(item) {
+  function openDialog(item, defaultTyp = "JSC") {
     injectDialog();
     const dialog = el("vystupyDialog");
     editingId = item?.id || null;
+    editingTyp = item?.typ_vystupu || defaultTyp;
     const isEdit = !!item;
-    el("vystupyDialogTitle").textContent = isEdit ? "Upravit výstup" : "Nový výstup";
+    el("vystupyDialogTitle").textContent = isEdit ? `Upravit výstup (${editingTyp})` : "Nový výstup";
     el("vystupDeleteBtn").hidden = !isEdit;
-    const kat = item?.kategorie || "publikacni";
-    el("vystupKategorie").value = kat;
-    fillTypSelect(kat, item?.typ_vystupu || "JSC");
-    toggleDialogFields(kat);
+    el("vystupTyp").value = editingTyp;
+    if (isEdit) el("vystupTyp").disabled = true;
+    else el("vystupTyp").disabled = false;
+    toggleDialogFields(editingTyp);
     el("vystupRok").value = item?.rok ?? "";
     el("vystupNazev").value = item?.nazev || "";
     el("vystupAutor").value = item?.autor || "";
-    el("vystupResitel").value = item?.resitel || "";
     el("vystupFakulta").value = item?.fakulta || "";
     el("vystupZkrFak").value = item?.zkr_fak || "";
     el("vystupKatedra").value = item?.katedra || "";
@@ -558,50 +509,50 @@
     el("vystupRivId").value = item?.riv_id || "";
     el("vystupCisloRiv").value = item?.cislo_na_riv || "";
     el("vystupPoznamka").value = item?.poznamka || "";
-    const role = kat === "aplikovany" ? "resitel" : "autor";
-    fillPersonSelect(item ? window.kbPersonLinks?.personSelectId?.(item, role) : "");
+    fillPersonSelect(item ? window.kbPersonLinks?.personSelectId?.(item, "autor") : "");
     dialog.showModal();
   }
 
   function readDialogForm() {
-    const kat = el("vystupKategorie").value;
-    const isAppl = kat === "aplikovany";
-    const role = isAppl ? "resitel" : "autor";
+    const typ = el("vystupTyp").value;
     let item = {
       id: editingId || uuid(),
-      kategorie: kat,
-      typ_vystupu: el("vystupTyp").value,
+      typ_vystupu: typ,
       rok: el("vystupRok").value ? Number(el("vystupRok").value) : null,
       nazev: el("vystupNazev").value,
-      autor: isAppl ? "" : el("vystupAutor").value,
-      resitel: isAppl ? el("vystupResitel").value : "",
+      autor: el("vystupAutor").value,
       fakulta: el("vystupFakulta").value,
       zkr_fak: el("vystupZkrFak").value || inferZkrFak(el("vystupFakulta").value),
       katedra: el("vystupKatedra").value,
-      doi: el("vystupDoi").value,
-      issn: el("vystupIssn").value,
-      casopis: el("vystupCasopis").value,
-      isbn: el("vystupIsbn").value,
+      doi: isArticleType(typ) ? el("vystupDoi").value : "",
+      issn: isArticleType(typ) ? el("vystupIssn").value : "",
+      casopis: isArticleType(typ) ? el("vystupCasopis").value : "",
+      isbn: BOOK_TYPES.includes(typ) ? el("vystupIsbn").value : "",
       riv_id: el("vystupRivId").value,
       cislo_na_riv: el("vystupCisloRiv").value,
       poznamka: el("vystupPoznamka").value
     };
     const personId = el("vystupPersonSelect").value;
     const person = personId ? window.kbPersons?.getPerson?.(personId) : null;
-    if (person) item = window.kbPersonLinks?.applyPersonLink?.(item, person, role) || item;
-    else item = window.kbPersonLinks?.clearPersonLink?.(item, role) || item;
+    if (person) item = window.kbPersonLinks?.applyPersonLink?.(item, person, "autor") || item;
+    else item = window.kbPersonLinks?.clearPersonLink?.(item, "autor") || item;
     item.source_key = buildSourceKey(item);
     return item;
   }
 
   async function saveItem(item) {
+    const oldTyp = editingTyp;
     if (useSupabase && await ensureAuth()) {
-      const saved = await window.kbSupabaseVystupy.upsertVystup({ ...item, __existing: !!editingId });
-      const idx = vystupy.findIndex((v) => v.id === saved.id || v.source_key === saved.source_key);
+      if (editingId && oldTyp && oldTyp !== item.typ_vystupu) {
+        await window.kbSupabaseVystupy.deleteVystup(editingId, oldTyp);
+        vystupy = vystupy.filter((v) => !(v.id === editingId && v.typ_vystupu === oldTyp));
+      }
+      const saved = await window.kbSupabaseVystupy.upsertVystup({ ...item, __existing: !!editingId && oldTyp === item.typ_vystupu });
+      const idx = vystupy.findIndex((v) => v.id === saved.id && v.typ_vystupu === saved.typ_vystupu);
       if (idx >= 0) vystupy[idx] = saved;
       else vystupy.push(saved);
     } else {
-      const idx = vystupy.findIndex((v) => v.id === item.id);
+      const idx = vystupy.findIndex((v) => v.id === item.id && v.typ_vystupu === (editingTyp || item.typ_vystupu));
       if (idx >= 0) vystupy[idx] = item;
       else vystupy.push(item);
     }
@@ -609,11 +560,11 @@
     document.dispatchEvent(new CustomEvent("kb:vystupy-loaded"));
   }
 
-  async function deleteItem(id) {
+  async function deleteItem(id, typ) {
     if (useSupabase && await ensureAuth()) {
-      await window.kbSupabaseVystupy.deleteVystup(id);
+      await window.kbSupabaseVystupy.deleteVystup(id, typ);
     }
-    vystupy = vystupy.filter((v) => v.id !== id);
+    vystupy = vystupy.filter((v) => !(v.id === id && v.typ_vystupu === typ));
     persistLocal();
     document.dispatchEvent(new CustomEvent("kb:vystupy-loaded"));
   }
@@ -631,13 +582,10 @@
       }
       if (e.target.id === "vystupyAddBtn") { openDialog(null); return; }
       if (e.target.id === "vystupyReloadBtn") { loadVystupy(); return; }
-      if (e.target.id === "vystupyImportBtn") {
-        el("vystupyImportFile")?.click();
-        return;
-      }
+      if (e.target.id === "vystupyImportBtn") { el("vystupyImportFile")?.click(); return; }
       const editBtn = e.target.closest?.("[data-edit-vystup]");
       if (editBtn) {
-        const item = vystupy.find((v) => v.id === editBtn.dataset.editVystup);
+        const item = vystupy.find((v) => v.id === editBtn.dataset.editVystup && v.typ_vystupu === editBtn.dataset.editTyp);
         if (item) openDialog(item);
       }
     });
@@ -669,9 +617,9 @@
     });
 
     el("vystupDeleteBtn")?.addEventListener("click", async () => {
-      if (!editingId || !confirm("Opravdu smazat tento výstup?")) return;
+      if (!editingId || !editingTyp || !confirm("Opravdu smazat tento výstup?")) return;
       try {
-        await deleteItem(editingId);
+        await deleteItem(editingId, editingTyp);
         el("vystupyDialog")?.close();
         setStatus("Výstup smazán.");
         render();
@@ -680,10 +628,7 @@
       }
     });
 
-    el("vystupKategorie")?.addEventListener("change", (e) => {
-      fillTypSelect(e.target.value);
-      toggleDialogFields(e.target.value);
-    });
+    el("vystupTyp")?.addEventListener("change", (e) => toggleDialogFields(e.target.value));
 
     root.__bound = true;
   }
@@ -726,7 +671,6 @@
       .vystupyIntro { margin: 0 0 .5rem; }
       .vystupySummaryChips { display: flex; flex-wrap: wrap; gap: .35rem; }
       .vystupyChip { font-size: .78rem; font-weight: 700; background: #f2f4f7; padding: .2rem .5rem; border-radius: 999px; }
-      .vystupyChipApl { background: #fef3f2; color: #b42318; }
       .vystupyHeadActions { display: flex; gap: .5rem; flex-wrap: wrap; }
       .vystupyStatusError { color: #b42318; font-weight: 650; }
       .vystupyViewTabs { display: flex; gap: .4rem; }
@@ -750,7 +694,6 @@
       .vystupyTypJSC { background: #f0f9ff; color: #026aa2; }
       .vystupyTypB { background: #f4f3ff; color: #5925dc; }
       .vystupyTypC { background: #fdf4ff; color: #9f1ab1; }
-      .vystupyTypApl { background: #fef3f2; color: #b42318; }
       .vystupyDialog { border: none; border-radius: 14px; padding: 0; max-width: 640px; width: calc(100% - 2rem); }
       .vystupyDialog::backdrop { background: rgba(15, 23, 42, .45); }
       .vystupyDialogForm { padding: 1.1rem; }
@@ -764,8 +707,7 @@
   }
 
   function injectPage() {
-    const host = el("vystupyPageRoot");
-    if (!host) return;
+    if (!el("vystupyPageRoot")) return;
     injectStyles();
     injectDialog();
     bindImportInput();
@@ -786,7 +728,8 @@
     getVystupy: () => vystupy,
     loadVystupy,
     PUBL_TYPES,
-    APPLIED_TYPES
+    ARTICLE_TYPES,
+    BOOK_TYPES
   };
 
   document.addEventListener("DOMContentLoaded", init);

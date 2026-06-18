@@ -134,7 +134,8 @@ comment on column public.kb_deadlines.odpovedna_osoba_osobni_cislo is 'FK na kb_
 
 -- =============================================================================
 -- Budoucí moduly (šablona – zatím nespouštět):
--- kb_vystupy (autor_osobni_cislo, resitel_osobni_cislo → kb_persons) — viz vystupy-schema.sql
+-- kb_vystupy_jimp, kb_vystupy_jsc, kb_vystupy_b, kb_vystupy_c (autor_osobni_cislo → kb_persons) — viz vystupy-schema.sql
+-- Aplikované výsledky budou v samostatném modulu později.
 -- =============================================================================
 
 select table_name, column_name

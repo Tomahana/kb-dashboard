@@ -15,7 +15,7 @@
     { id: "emaily", label: "E-maily / znalostní báze", page: "emaily", status: "active" },
     { id: "eiz-tokeny", label: "EIZ tokeny / publikace", page: "eiz-tokeny", status: "active" },
     { id: "casopisy", label: "Databáze časopisů / JCR", page: "casopisy", status: "active" },
-    { id: "vystupy", label: "Výstupy (Jimp, JSC, B, C, aplikované)", page: "vystupy", status: "active" }
+    { id: "vystupy", label: "Výstupy (Jimp, JSC, B, C)", page: "vystupy", status: "active" }
   ];
 
   const n = (s) => (s || "").toString().trim();
@@ -246,14 +246,14 @@
   function buildVystupyChunks() {
     const items = window.kbVystupy?.getVystupy?.() || [];
     return items.map((v) => chunk(
-      `vystup:${v.id}`,
+      `vystup:${v.typ_vystupu}:${v.id}`,
       "vystupy",
-      v.kategorie === "aplikovany" ? "Výstupy · aplikované" : "Výstupy · publikace",
+      `Výstupy · ${v.typ_vystupu}`,
       v.nazev,
       [
         v.typ_vystupu,
         v.rok ? `rok ${v.rok}` : "",
-        v.autor || v.resitel,
+        v.autor,
         v.zkr_fak || v.fakulta,
         v.katedra,
         v.doi,

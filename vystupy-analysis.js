@@ -1,4 +1,4 @@
-// Podmodul analýz výstupů — DKRVO, PPK a přehledy podle typu (Jimp, JSC, B, C, aplikované).
+// Podmodul analýz výstupů — DKRVO, PPK a přehledy podle typu (Jimp, JSC, B, C).
 
 (function () {
   const VIEWS = [
@@ -43,7 +43,6 @@
   }
 
   function typLabel(item) {
-    if (item.kategorie === "aplikovany") return `Aplikovaný (${n(item.typ_vystupu) || "?"})`;
     return PUBL_TYP_LABELS[item.typ_vystupu] || n(item.typ_vystupu) || "—";
   }
 
@@ -57,14 +56,12 @@
     const byTypSorted = [...byTyp.entries()].sort((a, b) => b[1] - a[1]);
     const byFak = groupCount(items, "zkr_fak");
     const byRok = groupCount(items, "rok");
-    const publ = items.filter((i) => i.kategorie === "publikacni");
-    const apl = items.filter((i) => i.kategorie === "aplikovany");
 
     return `
       <div class="vystupyAnalysisGrid">
         <section class="vystupyAnalysisCard">
           <h3>Podle typu výstupu</h3>
-          <p class="hint vystupyAnalysisHint">Jimp, JSC, B, C a aplikované výsledky${filterRok ? ` — rok ${html(filterRok)}` : ""}.</p>
+          <p class="hint vystupyAnalysisHint">Jimp, JSC, B a C${filterRok ? ` — rok ${html(filterRok)}` : ""}.</p>
           ${renderBarChart(byTypSorted)}
         </section>
         <section class="vystupyAnalysisCard">
@@ -79,8 +76,10 @@
           <h3>Shrnutí</h3>
           <ul class="vystupyBulletList">
             <li>Celkem výstupů: <strong>${items.length}</strong></li>
-            <li>Publikační: <strong>${publ.length}</strong> (Jimp ${publ.filter((i) => i.typ_vystupu === "Jimp").length}, JSC ${publ.filter((i) => i.typ_vystupu === "JSC").length}, B ${publ.filter((i) => i.typ_vystupu === "B").length}, C ${publ.filter((i) => i.typ_vystupu === "C").length})</li>
-            <li>Aplikované výsledky: <strong>${apl.length}</strong></li>
+            <li>Jimp: <strong>${items.filter((i) => i.typ_vystupu === "Jimp").length}</strong></li>
+            <li>JSC: <strong>${items.filter((i) => i.typ_vystupu === "JSC").length}</strong></li>
+            <li>B: <strong>${items.filter((i) => i.typ_vystupu === "B").length}</strong></li>
+            <li>C: <strong>${items.filter((i) => i.typ_vystupu === "C").length}</strong></li>
             <li>Propojeno na Osoby: <strong>${items.filter(ctx.isLinked).length}</strong> / ${items.length}</li>
           </ul>
         </section>
@@ -94,22 +93,19 @@
     const types = ["Jimp", "JSC", "B", "C"];
     const faculties = [...new Set(filtered.map((i) => n(i.zkr_fak) || n(i.fakulta) || "—"))].sort((a, b) => a.localeCompare(b, "cs"));
 
-    const header = `<tr><th class="vystupyMatrixCorner">Fakulta</th>${types.map((t) => `<th>${html(t)}</th>`).join("")}<th>Aplik.</th><th>Σ</th></tr>`;
+    const header = `<tr><th class="vystupyMatrixCorner">Fakulta</th>${types.map((t) => `<th>${html(t)}</th>`).join("")}<th>Σ</th></tr>`;
     const rows = faculties.map((fac) => {
       const facItems = filtered.filter((i) => (n(i.zkr_fak) || n(i.fakulta) || "—") === fac);
-      const counts = types.map((t) => facItems.filter((i) => i.kategorie === "publikacni" && i.typ_vystupu === t).length);
-      const apl = facItems.filter((i) => i.kategorie === "aplikovany").length;
-      const sum = counts.reduce((a, b) => a + b, 0) + apl;
+      const counts = types.map((t) => facItems.filter((i) => i.typ_vystupu === t).length);
+      const sum = counts.reduce((a, b) => a + b, 0);
       return `<tr>
         <th class="vystupyMatrixRowHead">${html(fac)}</th>
         ${counts.map((c) => `<td class="vystupyMatrixCell${c ? " vystupyMatrixCellHot" : ""}">${c || "·"}</td>`).join("")}
-        <td class="vystupyMatrixCell${apl ? " vystupyMatrixCellHot" : ""}">${apl || "·"}</td>
         <td class="vystupyMatrixSum">${sum}</td>
       </tr>`;
     }).join("");
 
-    const colSums = types.map((t) => filtered.filter((i) => i.kategorie === "publikacni" && i.typ_vystupu === t).length);
-    const aplSum = filtered.filter((i) => i.kategorie === "aplikovany").length;
+    const colSums = types.map((t) => filtered.filter((i) => i.typ_vystupu === t).length);
 
     return `
       <section class="vystupyAnalysisCard vystupyAnalysisWide">
@@ -123,7 +119,6 @@
                 <tr class="vystupyMatrixFoot">
                   <th>Σ</th>
                   ${colSums.map((s) => `<td class="vystupyMatrixSum">${s}</td>`).join("")}
-                  <td class="vystupyMatrixSum">${aplSum}</td>
                   <td class="vystupyMatrixSum">${filtered.length}</td>
                 </tr>
               </tbody>
@@ -135,8 +130,8 @@
   function buildPersonProfiles(items, personDisplay, isLinked) {
     const map = new Map();
     for (const item of items) {
-      const label = personDisplay(item) || n(item.autor) || n(item.resitel) || "—";
-      const key = l(item.autor_osobni_cislo || item.resitel_osobni_cislo) || l(label);
+      const label = personDisplay(item) || n(item.autor) || "—";
+      const key = l(item.autor_osobni_cislo) || l(label);
       if (!map.has(key)) {
         map.set(key, { label, linked: isLinked(item), items: [], byTyp: new Map() });
       }
@@ -157,7 +152,7 @@
       <div class="vystupyAnalysisGrid">
         <section class="vystupyAnalysisCard vystupyAnalysisWide">
           <h3>Výstupy podle osob (PPK)</h3>
-          <p class="hint vystupyAnalysisHint">Přehled výstupů na řešitele/autory — užitečné pro programy podpory kariéry a hodnocení výzkumníků.</p>
+          <p class="hint vystupyAnalysisHint">Přehled výstupů na autory — užitečné pro programy podpory kariéry a hodnocení výzkumníků.</p>
           <div class="vystupyPersonGrid">
             ${linked.slice(0, 24).map((p) => `
               <article class="vystupyPersonCard">
@@ -174,7 +169,7 @@
         </section>
         ${unlinked.length ? `
           <section class="vystupyAnalysisCard vystupyAnalysisWide">
-            <h3>Nepropojení autoři / řešitelé (${unlinked.length})</h3>
+            <h3>Nepropojení autoři (${unlinked.length})</h3>
             <ul class="vystupyBulletList">
               ${unlinked.slice(0, 20).map((p) => `<li><strong>${html(p.label)}</strong> — ${p.items.length} výstupů</li>`).join("")}
               ${unlinked.length > 20 ? `<li class="hint">… a dalších ${unlinked.length - 20}</li>` : ""}
@@ -195,8 +190,8 @@
         <section class="vystupyAnalysisCard">
           <h3>Bez propojení na Osoby (${noPerson.length})</h3>
           ${noPerson.length ? `<ul class="vystupyBulletList">${noPerson.slice(0, 15).map((i) =>
-            `<li>${html(typLabel(i))}: <strong>${html(i.nazev)}</strong> — ${html(i.autor || i.resitel || "?")}</li>`
-          ).join("")}</ul>` : `<p class="hint">Všechny výstupy mají autora/řešitele propojeného na modul Osoby.</p>`}
+            `<li>${html(typLabel(i))}: <strong>${html(i.nazev)}</strong> — ${html(i.autor || "?")}</li>`
+          ).join("")}</ul>` : `<p class="hint">Všechny výstupy mají autora propojeného na modul Osoby.</p>`}
         </section>
         <section class="vystupyAnalysisCard">
           <h3>Bez RIV ID (${noRiv.length})</h3>
@@ -225,22 +220,21 @@
       ""
     ];
     const types = ["Jimp", "JSC", "B", "C"];
-    lines.push("## Publikační výstupy podle typu");
+    lines.push("## Výstupy podle typu");
     for (const t of types) {
-      const cnt = items.filter((i) => i.kategorie === "publikacni" && i.typ_vystupu === t).length;
+      const cnt = items.filter((i) => i.typ_vystupu === t).length;
       lines.push(`- ${PUBL_TYP_LABELS[t] || t}: ${cnt}`);
     }
-    lines.push(`- Aplikované výsledky: ${items.filter((i) => i.kategorie === "aplikovany").length}`);
     lines.push("");
     lines.push("## Podle fakulty");
     for (const [fac, cnt] of groupCount(items, "zkr_fak")) {
       lines.push(`- ${fac}: ${cnt}`);
     }
     lines.push("");
-    lines.push("## Nepropojení autoři/řešitelé");
+    lines.push("## Nepropojení autoři");
     const unlinked = items.filter((i) => !ctx.isLinked(i));
     if (!unlinked.length) lines.push("- (žádní)");
-    else unlinked.slice(0, 30).forEach((i) => lines.push(`- ${typLabel(i)}: ${i.nazev} — ${i.autor || i.resitel || "?"}`));
+    else unlinked.slice(0, 30).forEach((i) => lines.push(`- ${typLabel(i)}: ${i.nazev} — ${i.autor || "?"}`));
     return lines.join("\n");
   }
 
