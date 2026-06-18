@@ -127,6 +127,142 @@
     });
   }
 
+  async function readFileArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error(`Soubor ${file.name} se nepodařilo přečíst.`));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  let msgReaderPromise = null;
+
+  function loadMsgReader() {
+    if (!msgReaderPromise) {
+      msgReaderPromise = import("https://esm.sh/@kenjiuno/msgreader-web-ng@0.2.0-alpha1")
+        .then((mod) => mod.MsgReader || mod.default)
+        .catch((err) => {
+          msgReaderPromise = null;
+          throw new Error(`Knihovna pro .msg se nepodařila načíst: ${err.message || err}`);
+        });
+    }
+    return msgReaderPromise;
+  }
+
+  function formatMsgSender(data) {
+    const name = n(data?.senderName);
+    const email = n(data?.senderEmail);
+    if (name && email) return `${name} <${email}>`;
+    return email || name || "";
+  }
+
+  function formatMsgDate(data) {
+    const raw = data?.messageDeliveryTime || data?.creationTime || data?.lastModificationTime;
+    if (!raw) return "";
+    const d = raw instanceof Date ? raw : new Date(raw);
+    return Number.isNaN(d.getTime()) ? String(raw) : d.toISOString();
+  }
+
+  async function parseMsgBuffer(arrayBuffer) {
+    const MsgReader = await loadMsgReader();
+    const reader = new MsgReader(arrayBuffer);
+    const data = reader.getFileData();
+    const body = n(data?.body) || n(data?.bodyHTML)?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() || "";
+    return {
+      title: n(data?.subject) || "Bez názvu",
+      odesilatel: formatMsgSender(data),
+      datum_emailu: formatMsgDate(data),
+      message_id: n(data?.messageId) || n(data?.internetMessageId) || "",
+      body: body || n(data?.subject) || "Prázdná zpráva (.msg)"
+    };
+  }
+
+  function looksLikeEmailBlock(text) {
+    const sample = text.slice(0, 1200);
+    return /(?:^|\n)(?:From|Od|Subject|Předmět|Sent|Date|Datum|Odesláno)\s*:/im.test(sample);
+  }
+
+  function splitBulkEmailText(text) {
+    const normalized = n(text).replace(/\r\n/g, "\n");
+    if (!normalized) return [];
+
+    const headerBlockRe = /(?=^(?:From|Od)\s*:\s*.+(?:\n(?:Sent|Date|Datum|Odesláno|To|Komu)\s*:|\n(?:Subject|Předmět)\s*:))/im;
+    let parts = normalized.split(headerBlockRe).map(p => p.trim()).filter(Boolean);
+
+    if (parts.length <= 1) {
+      const alt = normalized.split(/\n_{10,}\n+/).map(p => p.trim()).filter(Boolean);
+      if (alt.length > 1) parts = alt;
+    }
+    if (parts.length <= 1) {
+      const alt = normalized.split(/\n-{5,}\s*(?:Přeposlaná zpráva|Forwarded message|Original Message|Původní zpráva)\s*-{5,}\n/i)
+        .map(p => p.trim()).filter(Boolean);
+      if (alt.length > 1) parts = alt;
+    }
+
+    if (!parts.length) return [];
+    if (parts.length === 1) return [parts[0]];
+    const filtered = parts.filter(looksLikeEmailBlock);
+    return filtered.length ? filtered : parts;
+  }
+
+  function fileExt(name) {
+    const m = n(name).match(/\.([^.]+)$/);
+    return m ? m[1].toLowerCase() : "";
+  }
+
+  async function parseMessagesFromFile(file) {
+    const ext = fileExt(file.name);
+    if (ext === "msg") {
+      const buffer = await readFileArrayBuffer(file);
+      const parsed = await parseMsgBuffer(buffer);
+      return [{ parsed, file, source: "msg" }];
+    }
+    if (ext === "eml") {
+      const text = await readFileText(file);
+      return [{ parsed: parsePastedEmail(text), file, source: "eml" }];
+    }
+    const text = await readFileText(file);
+    const chunks = splitBulkEmailText(text);
+    if (!chunks.length) return [{ parsed: parsePastedEmail(text), file, source: "paste" }];
+    return chunks.map((chunk, index) => ({
+      parsed: parsePastedEmail(chunk),
+      file: chunks.length === 1 ? file : null,
+      source: "paste",
+      partLabel: chunks.length > 1 ? `${file.name} #${index + 1}` : file.name
+    }));
+  }
+
+  function buildCaptureRecord(parsed, options = {}) {
+    const {
+      mode = "email",
+      source = "paste",
+      link = "",
+      datumFallback = new Date().toISOString()
+    } = options;
+    const kbId = uuid();
+    const now = new Date().toISOString();
+    return {
+      id: kbId,
+      kb_id: kbId,
+      title: parsed.title || "Bez názvu",
+      odesilatel: parsed.odesilatel || "",
+      datum_emailu: parsed.datum_emailu || datumFallback,
+      datum_pridani: now,
+      agenda: "Nezařazeno",
+      stav: "K roztřídění",
+      typ: mode === "note" ? "Strategická poznámka" : "Informace",
+      kam_patri: "Nezařazeno",
+      priorita: "Běžná",
+      odkaz_na_email: n(link) || null,
+      source,
+      message_id: parsed.message_id || null,
+      received_at: now,
+      text: parsed.body || "",
+      __source: "supabase"
+    };
+  }
+
   function setStatus(text, isError) {
     const node = el("captureStatus");
     if (!node) return;
@@ -160,7 +296,10 @@
     if (el("captureSender")) el("captureSender").value = "";
     if (el("captureDate")) el("captureDate").value = new Date().toISOString().slice(0, 16);
     if (el("captureBody")) el("captureBody").value = "";
+    if (el("captureBulkBody")) el("captureBulkBody").value = "";
     if (el("captureLink")) el("captureLink").value = "";
+    if (el("captureBulkLink")) el("captureBulkLink").value = "";
+    if (el("captureBulkFileInput")) el("captureBulkFileInput").value = "";
     if (el("captureAutoAi")) el("captureAutoAi").checked = true;
     if (el("captureAutoTopics")) el("captureAutoTopics").checked = true;
     setStatus("");
@@ -172,12 +311,22 @@
   function updateCaptureModeUi() {
     const mode = el("captureMode")?.value || "email";
     const emailFields = el("captureEmailFields");
-    if (emailFields) emailFields.hidden = mode === "note";
+    const singleFields = el("captureSingleFields");
+    const bulkFields = el("captureBulkFields");
+    const saveBtn = el("captureSaveBtn");
+    const bulkBtn = el("captureBulkSaveBtn");
+    if (emailFields) emailFields.hidden = mode !== "email";
+    if (singleFields) singleFields.hidden = mode === "bulk";
+    if (bulkFields) bulkFields.hidden = mode !== "bulk";
+    if (saveBtn) saveBtn.hidden = mode === "bulk";
+    if (bulkBtn) bulkBtn.hidden = mode !== "bulk";
     const hint = el("captureBodyHint");
     if (hint) {
-      hint.textContent = mode === "email"
-        ? "Vložte celý e-mail (včetně hlaviček Od/Předmět) nebo tělo přeposlané zprávy."
-        : "Vložte text poznámky, zápisu z jednání nebo jiný podklad.";
+      hint.textContent = mode === "bulk"
+        ? "Volitelně vložte více zpráv z Outlooku (oddělené Od:/From:). Nebo použijte tlačítko pro výběr souborů .msg / .eml / .txt."
+        : mode === "email"
+          ? "Vložte celý e-mail (včetně hlaviček Od/Předmět) nebo tělo přeposlané zprávy."
+          : "Vložte text poznámky, zápisu z jednání nebo jiný podklad.";
     }
   }
 
@@ -190,6 +339,24 @@
     pendingFiles.push(file);
     renderAttachmentList();
     setStatus("Soubor .eml načten — zkontrolujte předmět a text.");
+  }
+
+  async function handleMsgImport(file) {
+    const buffer = await readFileArrayBuffer(file);
+    const parsed = await parseMsgBuffer(buffer);
+    if (el("captureSubject") && parsed.title) el("captureSubject").value = parsed.title;
+    if (el("captureSender") && parsed.odesilatel) el("captureSender").value = parsed.odesilatel;
+    if (el("captureBody")) el("captureBody").value = parsed.body || "";
+    pendingFiles.push(file);
+    renderAttachmentList();
+    setStatus("Soubor .msg načten — zkontrolujte předmět a text.");
+  }
+
+  async function handleMailFileImport(file) {
+    const ext = fileExt(file.name);
+    if (ext === "msg") return handleMsgImport(file);
+    if (ext === "eml") return handleEmlImport(file);
+    throw new Error(`Nepodporovaný formát: ${file.name}`);
   }
 
   async function suggestTopics(record) {
@@ -246,9 +413,162 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
     };
   }
 
+  function finalizeCapturedRecord(record) {
+    if (typeof finalizeClassificationPayload === "function") {
+      return finalizeClassificationPayload({ ...record });
+    }
+    return record;
+  }
+
+  async function persistCapturedRecord(record, { files = [], autoAi = false, autoTopics = false, statusPrefix = "" } = {}) {
+    const kbId = getRecordId(record);
+    if (window.kbSupabaseCapture?.createRecord) {
+      try {
+        await window.kbSupabaseCapture.createRecord(record, record.text);
+        record.__source = "supabase";
+      } catch (supaErr) {
+        console.warn("Supabase insert selhal, ukládám lokálně:", supaErr);
+        record.__source = "local";
+      }
+    } else {
+      record.__source = "local";
+    }
+
+    const uploadedNames = [];
+    if (files.length && window.kbSupabaseCapture?.uploadAttachment && record.__source === "supabase") {
+      for (const file of files) {
+        await window.kbSupabaseCapture.uploadAttachment(kbId, file);
+        uploadedNames.push(file.name);
+      }
+    }
+    if (uploadedNames.length) record = appendAttachmentNote(record, uploadedNames);
+
+    records.unshift(record);
+    if (typeof persist === "function") persist();
+
+    if (autoAi && window.kbAiClassify?.classifyRecord) {
+      setStatus(`${statusPrefix}AI klasifikace: ${record.title?.slice(0, 60) || kbId}…`);
+      try {
+        const proposal = await window.kbAiClassify.classifyRecord(record, { applyToForm: false });
+        if (proposal) {
+          record = {
+            ...record,
+            ...proposal,
+            _aiProposal: proposal,
+            stav: proposal.stav || record.stav,
+            agenda: proposal.agenda || record.agenda
+          };
+          const idx = records.findIndex(r => getRecordId(r) === kbId);
+          if (idx >= 0) records[idx] = record;
+          if (typeof persist === "function") persist();
+          if (window.kbSupabase?.saveRecordToSupabase && record.__source === "supabase") {
+            await window.kbSupabase.saveRecordToSupabase(finalizeCapturedRecord(record));
+          }
+        }
+      } catch (aiErr) {
+        console.warn(aiErr);
+      }
+    }
+
+    if (autoTopics) {
+      const topicIds = await suggestTopics(record);
+      if (topicIds.length) await linkTopics(kbId, topicIds);
+    }
+
+    return record;
+  }
+
+  async function collectBulkImportItems() {
+    const items = [];
+    const pasted = n(el("captureBulkBody")?.value);
+    if (pasted) {
+      const chunks = splitBulkEmailText(pasted);
+      const texts = chunks.length ? chunks : [pasted];
+      texts.forEach((chunk, index) => {
+        items.push({
+          parsed: parsePastedEmail(chunk),
+          file: null,
+          source: "paste",
+          partLabel: texts.length > 1 ? `Vložený text #${index + 1}` : "Vložený text"
+        });
+      });
+    }
+
+    const bulkFiles = [...(el("captureBulkFileInput")?.files || [])];
+    for (const file of bulkFiles) {
+      const parsedItems = await parseMessagesFromFile(file);
+      items.push(...parsedItems);
+    }
+    return items;
+  }
+
+  async function saveBulkCapture(e) {
+    e?.preventDefault?.();
+    const btn = el("captureBulkSaveBtn");
+    const prevText = btn?.textContent;
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = "Importuji…"; }
+      setStatus("Připravuji hromadný import…");
+
+      const items = await collectBulkImportItems();
+      if (!items.length) {
+        setStatus("Vyberte soubory (.msg, .eml, .txt) nebo vložte text se zprávami.", true);
+        return;
+      }
+
+      const autoAi = el("captureAutoAi")?.checked !== false;
+      const autoTopics = el("captureAutoTopics")?.checked !== false;
+      const link = n(el("captureBulkLink")?.value);
+      let saved = 0;
+      let failed = 0;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const prefix = `[${i + 1}/${items.length}] `;
+        setStatus(`${prefix}Ukládám ${item.partLabel || item.file?.name || item.parsed.title || "zprávu"}…`);
+        try {
+          const record = buildCaptureRecord(item.parsed, {
+            mode: "email",
+            source: item.source,
+            link
+          });
+          await persistCapturedRecord(record, {
+            files: item.file ? [item.file] : [],
+            autoAi,
+            autoTopics,
+            statusPrefix: prefix
+          });
+          saved += 1;
+        } catch (err) {
+          failed += 1;
+          console.warn("Bulk import selhal pro položku:", item, err);
+        }
+      }
+
+      if (typeof populateFilters === "function") populateFilters();
+      if (typeof render === "function") render();
+      el("captureDialog")?.close();
+      if (el("captureBulkFileInput")) el("captureBulkFileInput").value = "";
+      document.dispatchEvent(new CustomEvent("kb:records-loaded"));
+
+      const summary = `Import dokončen: ${saved} záznamů uloženo${failed ? `, ${failed} selhalo` : ""}.`;
+      setStatus(summary, failed > 0);
+      alert(summary);
+    } catch (err) {
+      console.error(err);
+      setStatus(err.message || String(err), true);
+      alert("Hromadný import selhal: " + (err.message || err));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = prevText || "Importovat vše"; }
+    }
+  }
+
   async function saveCapture(e) {
     e.preventDefault();
     const mode = el("captureMode")?.value || "email";
+    if (mode === "bulk") {
+      return saveBulkCapture(e);
+    }
     const rawBody = n(el("captureBody")?.value);
     if (!rawBody) {
       setStatus("Vyplňte text záznamu.", true);
@@ -265,30 +585,16 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
       parsed.odesilatel = n(el("captureSender")?.value) || "";
     }
 
-    const kbId = uuid();
-    const now = new Date().toISOString();
     const dateInput = el("captureDate")?.value;
-    const datumEmailu = dateInput ? new Date(dateInput).toISOString() : now;
-
-    let record = {
-      id: kbId,
-      kb_id: kbId,
-      title: parsed.title || "Bez názvu",
-      odesilatel: parsed.odesilatel,
-      datum_emailu: parsed.datum_emailu || datumEmailu,
-      datum_pridani: now,
-      agenda: "Nezařazeno",
-      stav: "K roztřídění",
-      typ: mode === "note" ? "Strategická poznámka" : "Informace",
-      kam_patri: "Nezařazeno",
-      priorita: "Běžná",
-      odkaz_na_email: n(el("captureLink")?.value) || null,
-      source: mode === "email" ? "paste" : "manual",
-      message_id: parsed.message_id || null,
-      received_at: now,
-      text: parsed.body || rawBody,
-      __source: "supabase"
-    };
+    const datumFallback = dateInput ? new Date(dateInput).toISOString() : new Date().toISOString();
+    const source = mode === "email" ? "paste" : "manual";
+    let record = buildCaptureRecord(parsed, {
+      mode,
+      source,
+      link: n(el("captureLink")?.value),
+      datumFallback
+    });
+    const kbId = getRecordId(record);
 
     const btn = el("captureSaveBtn");
     const prevText = btn?.textContent;
@@ -296,79 +602,23 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
       if (btn) { btn.disabled = true; btn.textContent = "Ukládám…"; }
       setStatus("Ukládám záznam…");
 
-      if (window.kbSupabaseCapture?.createRecord) {
-        try {
-          await window.kbSupabaseCapture.createRecord(record, record.text);
-          record.__source = "supabase";
-        } catch (supaErr) {
-          console.warn("Supabase insert selhal, ukládám lokálně:", supaErr);
-          record.__source = "local";
-        }
-      } else {
-        record.__source = "local";
-      }
-
-      const uploadedNames = [];
-      if (pendingFiles.length && window.kbSupabaseCapture?.uploadAttachment && record.__source === "supabase") {
-        setStatus("Nahrávám přílohy…");
-        for (const file of pendingFiles) {
-          await window.kbSupabaseCapture.uploadAttachment(kbId, file);
-          uploadedNames.push(file.name);
-        }
-      }
-      record = appendAttachmentNote(record, uploadedNames);
-
-      records.unshift(record);
-      if (typeof persist === "function") persist();
-      if (typeof populateFilters === "function") populateFilters();
-      if (typeof render === "function") render();
-
       const autoAi = el("captureAutoAi")?.checked !== false;
       const autoTopics = el("captureAutoTopics")?.checked !== false;
+      record = await persistCapturedRecord(record, {
+        files: pendingFiles,
+        autoAi,
+        autoTopics
+      });
 
-      if (autoAi && window.kbAiClassify?.classifyRecord) {
-        setStatus("Spouštím AI klasifikaci…");
-        try {
-          const proposal = await window.kbAiClassify.classifyRecord(record, { applyToForm: false });
-          if (proposal) {
-            record = {
-              ...record,
-              ...proposal,
-              _aiProposal: proposal,
-              stav: proposal.stav || record.stav,
-              agenda: proposal.agenda || record.agenda
-            };
-            const idx = records.findIndex(r => getRecordId(r) === kbId);
-            if (idx >= 0) records[idx] = record;
-            if (typeof persist === "function") persist();
-            if (typeof render === "function") render();
-            if (window.kbSupabase?.saveRecordToSupabase && record.__source === "supabase") {
-              await window.kbSupabase.saveRecordToSupabase(finalizeCapturedRecord(record));
-            }
-          }
-        } catch (aiErr) {
-          console.warn(aiErr);
-          setStatus(`Uloženo. AI klasifikace selhala: ${aiErr.message || aiErr}`, true);
-        }
-      }
-
-      let topicNote = "";
-      if (autoTopics) {
-        setStatus("Navrhuji témata…");
-        const topicIds = await suggestTopics(record);
-        if (topicIds.length) {
-          await linkTopics(kbId, topicIds);
-          const names = topicIds.map(id => window.kbTopics?.getTopic?.(id)?.name).filter(Boolean);
-          topicNote = names.length ? ` · témata: ${names.join(", ")}` : "";
-        }
-      }
+      if (typeof populateFilters === "function") populateFilters();
+      if (typeof render === "function") render();
 
       el("captureDialog")?.close();
       document.dispatchEvent(new CustomEvent("kb:records-loaded"));
       if (typeof window.openRecord === "function") window.openRecord(kbId);
 
       if (!el("captureStatus")?.classList.contains("captureStatusError")) {
-        alert(`Záznam uložen${autoAi ? " a klasifikován AI" : ""}${topicNote}.`);
+        alert(`Záznam uložen${autoAi ? " a klasifikován AI" : ""}${autoTopics ? " (témata navržena)" : ""}.`);
       }
     } catch (err) {
       console.error(err);
@@ -377,13 +627,6 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = prevText || "Uložit a klasifikovat"; }
     }
-  }
-
-  function finalizeCapturedRecord(record) {
-    if (typeof finalizeClassificationPayload === "function") {
-      return finalizeClassificationPayload({ ...record });
-    }
-    return record;
   }
 
   function injectCaptureUi() {
@@ -414,8 +657,10 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
         <select id="captureMode">
           <option value="email">E-mail / přeposlaná zpráva</option>
           <option value="note">Poznámka / text / podklad</option>
+          <option value="bulk">Hromadný import (Outlook .msg / .txt)</option>
         </select>
       </label>
+      <div id="captureSingleFields">
       <div id="captureEmailFields" class="grid2">
         <label>Předmět / název
           <input id="captureSubject" type="text" placeholder="Automaticky z textu e-mailu" />
@@ -432,18 +677,32 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
       </label>
       <label>Text
         <span id="captureBodyHint" class="hint">Vložte celý e-mail nebo tělo zprávy.</span>
-        <textarea id="captureBody" rows="12" required placeholder="Vložte text e-mailu, přeposlanou zprávu nebo poznámku…"></textarea>
+        <textarea id="captureBody" rows="12" placeholder="Vložte text e-mailu, přeposlanou zprávu nebo poznámku…"></textarea>
       </label>
       <div class="captureAttachmentBlock">
         <label class="button secondary">
-          + Příloha / soubor .eml
-          <input id="captureFileInput" type="file" multiple hidden accept=".eml,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,message/rfc822,application/pdf" />
+          + Příloha / soubor .eml / .msg
+          <input id="captureFileInput" type="file" multiple hidden accept=".eml,.msg,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,message/rfc822,application/pdf,application/vnd.ms-outlook" />
         </label>
         <label class="button secondary">
-          Načíst .eml do textu
-          <input id="captureEmlInput" type="file" hidden accept=".eml,message/rfc822" />
+          Načíst .eml / .msg do textu
+          <input id="captureEmlInput" type="file" hidden accept=".eml,.msg,message/rfc822,application/vnd.ms-outlook" />
         </label>
         <div id="captureAttachmentList"></div>
+      </div>
+      </div>
+      <div id="captureBulkFields" class="captureBulkFields" hidden>
+        <p class="hint">Vyberte více souborů najednou — každý <strong>.msg</strong> nebo <strong>.eml</strong> = jedna zpráva. Soubor <strong>.txt</strong> z exportu Outlooku může obsahovat více zpráv (oddělené řádky Od:/From:).</p>
+        <label class="button secondary">
+          Vybrat soubory (.msg, .eml, .txt)
+          <input id="captureBulkFileInput" type="file" multiple hidden accept=".msg,.eml,.txt,message/rfc822,application/vnd.ms-outlook,text/plain" />
+        </label>
+        <label>Odkaz (volitelně, společný pro všechny)
+          <input id="captureBulkLink" type="url" placeholder="https://…" />
+        </label>
+        <label>Nebo vložte text více zpráv
+          <textarea id="captureBulkBody" rows="10" placeholder="Od: …&#10;Odesláno: …&#10;Předmět: …&#10;&#10;Od: …"></textarea>
+        </label>
       </div>
       <div class="captureOptions">
         <label class="checkboxLine"><input id="captureAutoAi" type="checkbox" checked /> Automaticky klasifikovat AI (OpenAI)</label>
@@ -453,6 +712,7 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
       <div class="dialogActions">
         <button type="button" class="button secondary" id="captureCancelBtn">Zrušit</button>
         <button type="submit" class="button accent" id="captureSaveBtn">Uložit a klasifikovat</button>
+        <button type="button" class="button accent" id="captureBulkSaveBtn" hidden>Importovat vše</button>
       </div>
     </form>
   </dialog>`);
@@ -473,8 +733,18 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
     el("captureEmlInput")?.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       e.target.value = "";
-      if (file) await handleEmlImport(file);
+      if (file) {
+        try {
+          await handleMailFileImport(file);
+        } catch (err) {
+          setStatus(err.message || String(err), true);
+        }
+      }
     });
+
+    el("captureBulkSaveBtn")?.addEventListener("click", saveBulkCapture);
+
+    el("captureMode")?.addEventListener("change", updateCaptureModeUi);
 
     window.kbLayout?.mountTopbarActions?.();
     document.dispatchEvent(new CustomEvent("kb:ui-ready"));
@@ -490,6 +760,7 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
       .captureAttachmentItems { list-style: none; padding: 0; margin: .5rem 0 0; width: 100%; }
       .captureAttachmentItems li { display: flex; gap: .5rem; align-items: center; padding: .25rem 0; }
       .captureOptions { display: flex; flex-direction: column; gap: .35rem; margin: .5rem 0; }
+      .captureBulkFields { margin: .5rem 0; display: flex; flex-direction: column; gap: .65rem; }
       .captureStatusError { color: #b42318; }
     `;
     document.head.appendChild(style);
@@ -500,7 +771,13 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
     injectCaptureUi();
   }
 
-  window.kbCapture = { openCaptureDialog, parsePastedEmail };
+  window.kbCapture = {
+    openCaptureDialog,
+    parsePastedEmail,
+    splitBulkEmailText,
+    parseMsgBuffer,
+    parseMessagesFromFile
+  };
 
   document.addEventListener("DOMContentLoaded", init);
 })();
