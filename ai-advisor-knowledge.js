@@ -15,7 +15,8 @@
     { id: "emaily", label: "E-maily / znalostní báze", page: "emaily", status: "active" },
     { id: "eiz-tokeny", label: "EIZ tokeny / publikace", page: "eiz-tokeny", status: "active" },
     { id: "casopisy", label: "Databáze časopisů / JCR", page: "casopisy", status: "active" },
-    { id: "vystupy", label: "Výstupy (Jimp, JSC, B, C)", page: "vystupy", status: "active" }
+    { id: "vystupy", label: "Výstupy (Jimp, JSC, B, C)", page: "vystupy", status: "active" },
+    { id: "rady-organy", label: "Rady a orgány UHK", page: "rady-organy", status: "active" }
   ];
 
   const n = (s) => (s || "").toString().trim();
@@ -268,6 +269,34 @@
     ));
   }
 
+  function buildOrganChunks() {
+    const items = window.kbRadyOrgany?.getOrgans?.() || [];
+    const out = [];
+    for (const o of items) {
+      out.push(chunk(
+        `organ:${o.id}`,
+        "rady-organy",
+        "Rady a orgány",
+        o.nazev,
+        [o.ucel_summary, o.poznamka, o.url].filter(Boolean).join(" · "),
+        "#rady-organy",
+        { slug: o.slug }
+      ));
+      for (const m of o.members || []) {
+        out.push(chunk(
+          `organ-member:${m.id}`,
+          "rady-organy",
+          `Rady a orgány · ${o.nazev}`,
+          [m.tituly, m.jmeno].filter(Boolean).join(" "),
+          [m.funkce, m.email, m.poznamka, o.nazev].filter(Boolean).join(" · "),
+          "#rady-organy",
+          { organ: o.slug, funkce: m.funkce }
+        ));
+      }
+    }
+    return out;
+  }
+
   function buildEmailChunks(limit = 400) {
     let data = [];
     try {
@@ -298,7 +327,8 @@
     emaily: buildEmailChunks,
     "eiz-tokeny": buildEizChunks,
     casopisy: buildJournalChunks,
-    vystupy: buildVystupyChunks
+    vystupy: buildVystupyChunks,
+    "rady-organy": buildOrganChunks
   };
 
   function buildIndex() {

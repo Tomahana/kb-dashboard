@@ -32,6 +32,10 @@
       <a href="#eiz-tokeny" class="navItem" data-page="eiz-tokeny">EIZ tokeny</a>
       <a href="#casopisy" class="navItem" data-page="casopisy">Databáze časopisů</a>
       <a href="#vystupy" class="navItem" data-page="vystupy">Výstupy</a>
+      <a href="#rady-organy" class="navItem" data-page="rady-organy">
+        Rady a orgány
+        <span id="navBadgeOrgans" class="navBadge navBadgeOrgan" hidden></span>
+      </a>
       <a href="#nastaveni" class="navItem" data-page="nastaveni">Nastavení</a>
     </nav>
     <div class="sidebarFoot">
@@ -254,6 +258,11 @@
     <!-- VÝSTUPY -->
     <section id="page-vystupy" class="page">
       <div id="vystupyPageRoot"></div>
+    </section>
+
+    <!-- RADY A ORGÁNY -->
+    <section id="page-rady-organy" class="page">
+      <div id="radyOrganyPageRoot"></div>
     </section>
 
     <!-- NASTAVENÍ -->
@@ -641,6 +650,56 @@
     </form>
   </dialog>
 
+  <dialog id="radyMemberDialog">
+    <form id="radyMemberForm" method="dialog">
+      <div class="dialogHead">
+        <div>
+          <h2 id="radyMemberDialogTitle">Člen orgánu</h2>
+          <p class="hint">Evidence člena s poznámkou a volitelným propojením na modul Osoby.</p>
+        </div>
+        <button class="iconButton" value="cancel">×</button>
+      </div>
+      <input type="hidden" id="radyMemberEditId" />
+      <input type="hidden" id="radyMemberOrganId" />
+      <div class="grid2">
+        <label>Tituly
+          <input id="radyMemberTituly" type="text" placeholder="prof., doc., …" />
+        </label>
+        <label>Jméno a příjmení *
+          <input id="radyMemberJmeno" type="text" required placeholder="Jan Novák" />
+        </label>
+      </div>
+      <label>Funkce v orgánu
+        <input id="radyMemberFunkce" type="text" placeholder="předseda, člen, …" />
+      </label>
+      <label>E-mail
+        <input id="radyMemberEmail" type="email" placeholder="jan.novak@uhk.cz" />
+      </label>
+      <label>Osoba z evidence (volitelné)
+        <div class="personSelectRow">
+          <select id="radyMemberPersonId"></select>
+          <button type="button" id="radyMemberNewPersonBtn" class="button small secondary">+ Osoba</button>
+        </div>
+      </label>
+      <label>Poznámka
+        <textarea id="radyMemberPoznamka" rows="4" placeholder="Vaše poznámky k této osobě…"></textarea>
+      </label>
+      <div class="grid2">
+        <label>Pořadí
+          <input id="radyMemberPoradi" type="number" min="0" value="1" />
+        </label>
+        <label class="checkboxLabel">
+          <input id="radyMemberAktivni" type="checkbox" checked /> Aktivní člen
+        </label>
+      </div>
+      <div class="dialogActions">
+        <button type="button" id="radyMemberDeleteBtn" class="button danger" hidden>Smazat</button>
+        <button value="cancel" class="button secondary">Zavřít</button>
+        <button type="submit" class="button accent">Uložit</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="aiDialog">
     <form method="dialog">
       <div class="dialogHeader">
@@ -726,5 +785,7 @@
   <script src="supabase-vystupy.js?v=3.80"></script>
   <script src="vystupy-analysis.js?v=3.80"></script>
   <script src="vystupy.js?v=3.80"></script>
+  <script src="supabase-rady-organy.js?v=3.80"></script>
+  <script src="rady-organy.js?v=3.80"></script>
 </body>
 </html>

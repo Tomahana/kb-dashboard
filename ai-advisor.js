@@ -183,7 +183,7 @@
     if (!messages.length) {
       return `<div class="advisorEmpty">
         <p><strong>Zeptejte se na data v aplikaci</strong></p>
-        <p class="hint">Poradce prohledá Osoby, Termíny, PČR témata, soutěže, témata a e-maily. Odpověď vychází jen z nalezených záznamů.</p>
+        <p class="hint">Poradce prohledá Osoby, Termíny, PČR témata, soutěže, témata, rady a orgány a e-maily. Odpověď vychází jen z nalezených záznamů.</p>
       </div>`;
     }
     return `<div class="advisorChat">${messages.map((m) => {
