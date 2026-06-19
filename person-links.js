@@ -24,6 +24,11 @@
     autor: {
       cisloField: "autor_osobni_cislo",
       labelField: "autor"
+    },
+    clen: {
+      cisloField: "osobni_cislo",
+      labelField: "jmeno",
+      emailField: "email"
     }
   };
 
@@ -38,7 +43,8 @@
     { module: "vystupy", table: "kb_vystupy_b", role: "autor" },
     { module: "vystupy", table: "kb_vystupy_c", role: "autor" },
     { module: "emaily", table: "kb_records", role: "odesilatel" },
-    { module: "emaily", table: "kb_records", role: "odpovedna_osoba" }
+    { module: "emaily", table: "kb_records", role: "odpovedna_osoba" },
+    { module: "rady-organy", table: "kb_organ_members", role: "clen" }
   ];
 
   function n(s) {

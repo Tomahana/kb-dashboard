@@ -1,0 +1,52 @@
+{
+  "organs": [
+    {
+      "slug": "vedecka-rada",
+      "nazev": "Vědecká rada UHK",
+      "url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/vedecka-rada",
+      "ucel_summary": "Statutární akademický orgán univerzity v oblasti vědy, výzkumu, vývoje a inovací, tvorby umění a další tvůrčí činnosti. Schvaluje koncepci vědy a výzkumu, habilitační a jmenovací řízení, hodnotí výsledky vědecké činnosti a podílí se na strategickém řízení výzkumu na UHK.",
+      "jednaci_rad_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/vedecka-rada",
+      "aktuality_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/vedecka-rada"
+    },
+    {
+      "slug": "spravni-rada",
+      "nazev": "Správní rada UHK",
+      "url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/uhk/uredni-deska/organy/spravni-rada",
+      "ucel_summary": "Kontrolní a dozorčí orgán univerzity. Dohlíží na hospodaření, plnění rozpočtu a činnost statutárních orgánů. Schvaluje výroční zprávu, účetní závěrku a další klíčové dokumenty; jmenuje členy kontrolní komise.",
+      "jednaci_rad_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/uhk/uredni-deska/organy/spravni-rada",
+      "aktuality_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/uhk/uredni-deska/organy/spravni-rada"
+    },
+    {
+      "slug": "akademicky-senat",
+      "nazev": "Akademický senát UHK",
+      "url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/uhk/uredni-deska/organy/akademicky-senat",
+      "ucel_summary": "Nejvyšší akademický samosprávný orgán univerzity. Rozhoduje o studijních programech, vnitřním řádu, volbách akademických funkcionářů a dalších akademických záležitostech. Propojuje fakulty a celouniverzitní řízení.",
+      "jednaci_rad_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/uhk/uredni-deska/organy/akademicky-senat",
+      "aktuality_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/uhk/uredni-deska/organy/akademicky-senat"
+    },
+    {
+      "slug": "mpk",
+      "nazev": "Mezinárodní poradní komise (MPK)",
+      "url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/mezinarodni-poradni-komise",
+      "ucel_summary": "Poradní orgán rektora v oblasti mezinárodní spolupráce, mobility a internacionalizace univerzity. Poskytuje odborné stanovisko k rozvoji zahraničních partnerství, programů mobility a mezinárodní viditelnosti UHK.",
+      "jednaci_rad_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/mezinarodni-poradni-komise",
+      "aktuality_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/mezinarodni-poradni-komise"
+    },
+    {
+      "slug": "eticka-komise",
+      "nazev": "Etická komise pro výzkum",
+      "url": "http://uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/eticka-komise-pro-vyzkum",
+      "ucel_summary": "Posuzuje etické aspekty výzkumných projektů na UHK — zejména studie na lidech, citlivá data a biologický materiál. Vydává stanoviska a doporučení pro řešitele a garanty výzkumu v souladu s etickými standardy.",
+      "jednaci_rad_url": "http://uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/eticka-komise-pro-vyzkum",
+      "aktuality_url": "http://uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/eticka-komise-pro-vyzkum"
+    },
+    {
+      "slug": "rada-komercializace",
+      "nazev": "Rada pro komercializaci",
+      "url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/uhk/celouniverzitni-pracoviste/oddeleni-vedy-a-transferu-znalosti/ktt-kancelar-transferu-technologii/rada-pro-komercializaci",
+      "ucel_summary": "Poradní orgán Kanceláře transferu technologií (KTT) v oblasti komercializace výsledků výzkumu a transferu znalostí do praxe. Hodnotí potenciál výsledků, doporučuje strategii ochrany duševního vlastnictví a spolupráci s průmyslem.",
+      "jednaci_rad_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/uhk/celouniverzitni-pracoviste/oddeleni-vedy-a-transferu-znalosti/ktt-kancelar-transferu-technologii/rada-pro-komercializaci",
+      "aktuality_url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/uhk/celouniverzitni-pracoviste/oddeleni-vedy-a-transferu-znalosti/ktt-kancelar-transferu-technologii/rada-pro-komercializaci"
+    }
+  ]
+}

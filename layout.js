@@ -14,6 +14,7 @@
     "eiz-tokeny": { title: "EIZ tokeny", subtitle: "Transformační smlouvy, roční tokeny a publikace z APC" },
     casopisy: { title: "Databáze časopisů", subtitle: "JCR exporty, AIS pořadí v oborech, decily a nejlepší výsledky" },
     vystupy: { title: "Výstupy", subtitle: "Publikační výstupy Jimp, JSC, B a C — samostatné tabulky pro DKRVO, PPK a analýzy" },
+    "rady-organy": { title: "Rady a orgány", subtitle: "Vědecká rada, Správní rada, AS, MPK, Etická komise, Rada pro komercializaci — členové a AI kontrola změn" },
     nastaveni: { title: "Nastavení", subtitle: "Supabase, AI, import a export" },
     modul: { title: "Modul", subtitle: "Oblast v přípravě" }
   };
@@ -98,6 +99,9 @@
     setBadge("navBadgeNew", newCount);
     setBadge("navBadgeAi", pendingAi);
 
+    const organPending = window.kbRadyOrgany?.pendingChecksCount?.() || 0;
+    setBadge("navBadgeOrgans", organPending);
+
     if (window.kbModules?.renderModulesGrid) {
       setTimeout(() => window.kbModules.renderModulesGrid(), 0);
     }
@@ -179,6 +183,7 @@
     }, 80);
     document.addEventListener("input", () => setTimeout(updateBadges, 60));
     document.addEventListener("kb:records-loaded", () => setTimeout(updateBadges, 60));
+    document.addEventListener("kb:rady-organy-loaded", () => setTimeout(updateBadges, 60));
     document.addEventListener("kb:page-changed", () => {
       if (window.kbPickers?.closeOpenMenu) window.kbPickers.closeOpenMenu();
     });

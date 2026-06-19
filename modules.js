@@ -105,6 +105,14 @@
       stats: ["vystupyTotal", "vystupyJimp", "vystupyJsc"]
     },
     {
+      slug: "rady-organy",
+      title: "Rady a orgány",
+      description: "Vědecká rada, Správní rada, AS, MPK, Etická komise a Rada pro komercializaci — členové, poznámky, jednací řády, aktuality a AI kontrola personálních změn.",
+      status: "active",
+      icon: "🏛️",
+      stats: ["organsTotal", "organsPendingAi"]
+    },
+    {
       slug: "modul-dkrvo",
       title: "DKRVO",
       description: "Roční výkaz výzkumu, sběr dat a odeslání na MŠMT.",
@@ -172,6 +180,7 @@
     const journalRecords = window.kbJournalDb?.getRecords?.() || [];
     const journalCategories = window.kbJournalDb?.getCategories?.() || [];
     const vystupyItems = window.kbVystupy?.getVystupy?.() || [];
+    const organList = window.kbRadyOrgany?.getOrgans?.() || [];
 
     return {
       emailsTotal: data.length,
@@ -191,7 +200,9 @@
       journalCategoriesTotal: journalCategories.length,
       vystupyTotal: vystupyItems.length,
       vystupyJimp: vystupyItems.filter((v) => v.typ_vystupu === "Jimp").length,
-      vystupyJsc: vystupyItems.filter((v) => v.typ_vystupu === "JSC").length
+      vystupyJsc: vystupyItems.filter((v) => v.typ_vystupu === "JSC").length,
+      organsTotal: organList.length,
+      organsPendingAi: window.kbRadyOrgany?.pendingChecksCount?.() || 0
     };
   }
 
@@ -214,7 +225,9 @@
       journalCategoriesTotal: `${value} oborů JCR`,
       vystupyTotal: `${value} výstupů`,
       vystupyJimp: `${value} Jimp`,
-      vystupyJsc: `${value} JSC`
+      vystupyJsc: `${value} JSC`,
+      organsTotal: `${value} orgánů`,
+      organsPendingAi: `${value} AI ke kontrole`
     };
     return labels[key] || String(value);
   }
@@ -380,6 +393,7 @@
     document.addEventListener("kb:eiz-tokens-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:journal-db-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:vystupy-loaded", () => setTimeout(renderModulesGrid, 60));
+    document.addEventListener("kb:rady-organy-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("input", () => setTimeout(renderModulesGrid, 120));
   }
 
