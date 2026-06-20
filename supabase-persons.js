@@ -7,7 +7,7 @@
   let tablesAvailable = null;
 
   const PERSON_FIELDS = [
-    "prijmeni", "jmeno", "tituly", "osobni_cislo", "stav_osoby", "pracoviste", "kodorg",
+    "prijmeni", "jmeno", "tituly", "osobni_cislo", "stav_osoby", "pracoviste",
     "rodne_cislo", "email", "telefon", "datum_narozeni", "obcanstvi", "pohlavi",
     "orcid", "researcher_id", "scopus_id"
   ];
@@ -36,7 +36,6 @@
       osobni_cislo: n(person.osobni_cislo),
       stav_osoby: n(person.stav_osoby),
       pracoviste,
-      kodorg: n(person.kodorg) || "",
       rodne_cislo: n(person.rodne_cislo),
       email: n(person.email),
       telefon: n(person.telefon),
