@@ -47,6 +47,68 @@
 
   let topicsUseSupabase = false;
   let topicsLoading = false;
+  let activeTopicsTab = "evidence";
+
+  function refreshTopicsAnalysis() {
+    if (typeof renderAgendaAnalytics === "function") renderAgendaAnalytics();
+    if (typeof renderAdvancedPanels === "function") renderAdvancedPanels();
+  }
+
+  function setActiveTab(tab) {
+    activeTopicsTab = tab === "analysis" ? "analysis" : "evidence";
+    const evidencePanel = el("topicsTabEvidence");
+    const analysisPanel = el("topicsTabAnalysis");
+    const btnEvidence = el("topicsTabBtnEvidence");
+    const btnAnalysis = el("topicsTabBtnAnalysis");
+    if (!evidencePanel || !analysisPanel) return;
+    const isAnalysis = activeTopicsTab === "analysis";
+    evidencePanel.hidden = isAnalysis;
+    analysisPanel.hidden = !isAnalysis;
+    evidencePanel.classList.toggle("active", !isAnalysis);
+    analysisPanel.classList.toggle("active", isAnalysis);
+    btnEvidence?.classList.toggle("active", !isAnalysis);
+    btnAnalysis?.classList.toggle("active", isAnalysis);
+    btnEvidence?.setAttribute("aria-selected", !isAnalysis ? "true" : "false");
+    btnAnalysis?.setAttribute("aria-selected", isAnalysis ? "true" : "false");
+    if (el("pageSubtitle")) {
+      el("pageSubtitle").textContent = isAnalysis
+        ? "Přehled agend, rizika, vývoj v čase a mind mapa"
+        : "Seskupení e-mailů, AI shrnutí a analýza agend";
+    }
+    if (isAnalysis) {
+      window.kbLayout?.mountTopbarActions?.();
+      setTimeout(refreshTopicsAnalysis, 80);
+    }
+    document.dispatchEvent(new CustomEvent("kb:topics-tab-changed", { detail: { tab: activeTopicsTab } }));
+  }
+
+  function bindTopicsTabs() {
+    document.querySelectorAll("[data-topics-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => setActiveTab(btn.dataset.topicsTab));
+    });
+  }
+
+  function injectTopicsTabStyles() {
+    if (el("topicsTabStyles")) return;
+    const style = document.createElement("style");
+    style.id = "topicsTabStyles";
+    style.textContent = `
+      .topicsPageShell { display: grid; gap: .85rem; max-width: 1200px; }
+      .topicsTabs { display: flex; gap: .35rem; flex-wrap: wrap; }
+      .topicsTab {
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 999px;
+        padding: .45rem .85rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .topicsTab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+      .topicsTabPanel { display: block; }
+      .topicsTabPanel[hidden] { display: none !important; }
+    `;
+    document.head.appendChild(style);
+  }
 
   function loadTopicsLocal() {
     try {
@@ -418,7 +480,7 @@
       <div class="topicsHeader">
         <div>
           <h2>Témata</h2>
-          <p id="topicsStorageHint" class="hint">Seskupujte e-maily do témat, generujte AI shrnutí a ukládejte je k tématu.</p>
+          <p id="topicsStorageHint" class="hint">Seskupujte e-maily do témat, generujte AI shrnutí a ukládejte je k tématu. Analýza agend a mind mapa jsou na záložce <button type="button" class="linkish" data-open-topics-analysis>Analýza témat</button>.</p>
         </div>
         <div class="topicsHeaderActions">
           <button id="reloadTopicsBtn" type="button" class="button small secondary">Obnovit témata</button>
@@ -431,6 +493,9 @@
     root.appendChild(section);
     section.querySelector('[data-goto="emaily"]')?.addEventListener("click", () => {
       if (window.kbLayout?.setActivePage) window.kbLayout.setActivePage("emaily");
+    });
+    section.querySelector("[data-open-topics-analysis]")?.addEventListener("click", () => {
+      window.kbLayout?.setActivePage?.("temata", { topicsTab: "analysis" });
     });
     el("newTopicBtn").addEventListener("click", () => openTopicDialog());
     el("reloadTopicsBtn").addEventListener("click", () => loadTopics());
@@ -809,12 +874,18 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
   function updateTopicsStorageHint() {
     const hint = el("topicsStorageHint");
     if (!hint) return;
-    hint.textContent = topicsUseSupabase
+    const base = topicsUseSupabase
       ? "Témata se ukládají trvale do Supabase."
       : "Témata jsou zatím jen v prohlížeči. Pro trvalé uložení spusťte supabase/topics-schema.sql.";
+    hint.innerHTML = `${base} Analýza agend a mind mapa jsou na záložce <button type="button" class="linkish" data-open-topics-analysis>Analýza témat</button>.`;
+    hint.querySelector("[data-open-topics-analysis]")?.addEventListener("click", () => {
+      window.kbLayout?.setActivePage?.("temata", { topicsTab: "analysis" });
+    });
   }
 
   async function init() {
+    injectTopicsTabStyles();
+    bindTopicsTabs();
     injectTopicStyles();
     injectTopicsPanel();
     injectTopicDialog();
@@ -853,7 +924,9 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
     loadTopics,
     openTopicDialog,
     buildTopicPrompt,
-    showTopicAiPrompt
+    showTopicAiPrompt,
+    setActiveTab,
+    refreshTopicsAnalysis
   };
 
   document.addEventListener("DOMContentLoaded", init);
@@ -864,6 +937,9 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
     if (typeof render === "function") render();
   });
   document.addEventListener("kb:page-changed", (e) => {
+    if (e.detail?.page === "temata" && e.detail?.topicsTab === "analysis") {
+      setActiveTab("analysis");
+    }
     if (e.detail?.page === "temata" && el("topicDialog")?.open) {
       const topicId = el("topicEditId")?.value;
       populateTopicDeadlineSelect(topicId);

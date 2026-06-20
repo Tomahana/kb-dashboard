@@ -21,17 +21,9 @@
     {
       slug: "temata",
       title: "Témata",
-      description: "Seskupení e-mailů do témat, AI shrnutí a práce s kontextem.",
+      description: "Seskupení e-mailů do témat, AI shrnutí, analýza agend, rizika a mind mapa.",
       status: "active",
       icon: "🏷️",
-      stats: []
-    },
-    {
-      slug: "analyza",
-      title: "Analýza agend",
-      description: "Přehled podle agend, rizika, vývoj v čase a mind mapa.",
-      status: "active",
-      icon: "📊",
       stats: ["emailsRisks"]
     },
     {

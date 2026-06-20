@@ -4,8 +4,7 @@
   const PAGES = {
     prehled: { title: "Přehled", subtitle: "Moduly a oblasti práce OVV" },
     emaily: { title: "Znalostní báze z e-mailů", subtitle: "Zachytávání, třídění, klasifikace a práce se záznamy" },
-    temata: { title: "Témata", subtitle: "Seskupení e-mailů a AI shrnutí" },
-    analyza: { title: "Analýza", subtitle: "Přehled agend, rizik a vývoje v čase" },
+    temata: { title: "Témata", subtitle: "Seskupení e-mailů, AI shrnutí a analýza agend" },
     terminy: { title: "Termíny", subtitle: "Termíny sběrů dat a odesílání na úřady" },
     osoby: { title: "Osoby", subtitle: "Centrální evidence osob pro všechny moduly" },
     "interni-souteze": { title: "Interní soutěže", subtitle: "UHK programy, běhy, přihlášky, hodnocení a finance" },
@@ -27,6 +26,7 @@
 
   function resolveRoute(hash) {
     const raw = (hash || "").replace(/^#\/?/, "").trim().toLowerCase();
+    if (raw === "analyza") return { page: "temata", moduleSlug: null, topicsTab: "analysis" };
     if (PAGES[raw]) return { page: raw, moduleSlug: null };
     if (/^modul-/.test(raw)) return { page: "modul", moduleSlug: raw };
     return { page: DEFAULT_PAGE, moduleSlug: null };
@@ -71,8 +71,13 @@
       history.replaceState(null, "", `#${hashTarget}`);
     }
 
+    const topicsTab = options.topicsTab || route.topicsTab;
+    if (route.page === "temata" && topicsTab) {
+      window.kbTopics?.setActiveTab?.(topicsTab);
+    }
+
     document.dispatchEvent(new CustomEvent("kb:page-changed", {
-      detail: { page: route.page, moduleSlug: route.moduleSlug }
+      detail: { page: route.page, moduleSlug: route.moduleSlug, topicsTab }
     }));
   }
 
@@ -111,13 +116,17 @@
     document.querySelectorAll(".navItem").forEach(link => {
       link.addEventListener("click", (e) => {
         e.preventDefault();
+        if (link.dataset.page === "temata") {
+          window.kbTopics?.setActiveTab?.("evidence");
+        }
         setActivePage(link.dataset.page);
       });
     });
     window.addEventListener("hashchange", () => {
       const route = resolveRoute(location.hash);
       setActivePage(route.page === "modul" ? route.moduleSlug : route.page, {
-        isModule: route.page === "modul"
+        isModule: route.page === "modul",
+        topicsTab: route.topicsTab
       });
     });
   }
@@ -175,7 +184,7 @@
     const route = resolveRoute(location.hash);
     setActivePage(
       route.page === "modul" ? route.moduleSlug : (route.page || DEFAULT_PAGE),
-      { isModule: route.page === "modul" }
+      { isModule: route.page === "modul", topicsTab: route.topicsTab }
     );
     setTimeout(() => {
       mountTopbarActions();
