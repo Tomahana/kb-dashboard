@@ -19,6 +19,7 @@
         <span id="navBadgeNew" class="navBadge" hidden></span>
         <span id="navBadgeAi" class="navBadge navBadgeAi" hidden></span>
       </a>
+      <a href="#kb-items" class="navItem" data-page="kb-items">KB záznamy</a>
       <a href="#temata" class="navItem" data-page="temata">Témata</a>
       <a href="#terminy" class="navItem" data-page="terminy">
         Termíny
@@ -152,6 +153,43 @@
           <div id="analyticsAdvancedRoot"></div>
         </div>
       </div>
+    </section>
+
+    <!-- KB ZÁZNAMY -->
+    <section id="page-kb-items" class="page">
+      <section class="panel">
+        <div class="sectionHeader">
+          <h2>KB záznamy (AI agent)</h2>
+        </div>
+        <div class="kbItemsFilters">
+          <label>Typ záznamu
+            <select id="kbItemsFilterType">
+              <option value="">vše</option>
+              <option value="TASK">TASK</option>
+              <option value="KNOWLEDGE">KNOWLEDGE</option>
+              <option value="DECISION">DECISION</option>
+              <option value="QUESTION">QUESTION</option>
+              <option value="IDEA">IDEA</option>
+              <option value="RISK_OR_WARNING">RISK_OR_WARNING</option>
+              <option value="REFERENCE">REFERENCE</option>
+            </select>
+          </label>
+          <label>Stav
+            <select id="kbItemsFilterStatus">
+              <option value="">vše</option>
+              <option value="open">open</option>
+              <option value="in_progress">in_progress</option>
+              <option value="done">done</option>
+              <option value="archived">archived</option>
+            </select>
+          </label>
+          <label>Hledat v názvu
+            <input id="kbItemsFilterSearch" type="search" placeholder="Fulltext v title…" />
+          </label>
+          <button id="btnLoadKbItems" type="button" class="button accent">Načíst záznamy</button>
+        </div>
+        <div id="kbItemsList" class="kbItemsList"></div>
+      </section>
     </section>
 
     <!-- TERMÍNY -->
@@ -796,5 +834,6 @@
   <script src="vystupy.js?v=3.89"></script>
   <script src="supabase-rady-organy.js?v=3.89"></script>
   <script src="rady-organy.js?v=3.89"></script>
+  <script type="module" src="js/kb-items.js"></script>
 </body>
 </html>

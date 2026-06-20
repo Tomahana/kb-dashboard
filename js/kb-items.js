@@ -90,3 +90,46 @@ export function renderKbItems(items) {
   }
   list.innerHTML = rows.map(renderKbItem).join('');
 }
+
+function readKbItemsFilters() {
+  const item_type = n(document.getElementById('kbItemsFilterType')?.value);
+  const status = n(document.getElementById('kbItemsFilterStatus')?.value);
+  const search = n(document.getElementById('kbItemsFilterSearch')?.value);
+  const filters = {};
+  if (item_type) filters.item_type = item_type;
+  if (status) filters.status = status;
+  if (search) filters.search = search;
+  return filters;
+}
+
+async function handleLoadKbItems() {
+  const btn = document.getElementById('btnLoadKbItems');
+  const list = document.getElementById('kbItemsList');
+  if (!list) return;
+  const prev = btn?.textContent;
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Načítám…';
+    }
+    list.innerHTML = '<p class="hint">Načítám záznamy…</p>';
+    const items = await loadKbItems(readKbItemsFilters());
+    renderKbItems(items);
+  } catch (err) {
+    list.innerHTML = `<p class="hint">Chyba načtení: ${html(err.message || err)}</p>`;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prev || 'Načíst záznamy';
+    }
+  }
+}
+
+function bindKbItemsPage() {
+  document.getElementById('btnLoadKbItems')?.addEventListener('click', handleLoadKbItems);
+  document.getElementById('kbItemsFilterSearch')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleLoadKbItems();
+  });
+}
+
+document.addEventListener('DOMContentLoaded', bindKbItemsPage);
