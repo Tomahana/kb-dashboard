@@ -10,7 +10,6 @@
     osobni_cislo: ["Osobní číslo", "osobni_cislo", "Osobni cislo", "ID"],
     stav_osoby: ["Stav osoby", "stav_osoby"],
     pracoviste: ["Pracoviště", "pracoviste", "Pracoviste"],
-    kodorg: ["kodorg", "Kodorg", "Kód org", "kod org"],
     rodne_cislo: ["Rodné číslo", "rodne_cislo", "Rodne cislo"],
     email: ["E-mail", "email", "Email"],
     telefon: ["Telefon", "telefon"],
@@ -67,41 +66,29 @@
   const uuid = () => crypto.randomUUID?.() || `person-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   function normalizePerson(person) {
-    let base;
-    if (window.kbSupabasePersons?.normalizePerson) base = window.kbSupabasePersons.normalizePerson(person);
-    else {
-      const tituly = n(person.tituly) || [person.titul_pred, person.titul_za].map(n).filter(Boolean).join(", ");
-      const pracoviste = n(person.pracoviste) || [person.fakulta, person.katedra, person.soucast].map(n).filter(Boolean).join(" · ");
-      base = {
-        id: person.id,
-        prijmeni: n(person.prijmeni),
-        jmeno: n(person.jmeno),
-        tituly,
-        osobni_cislo: n(person.osobni_cislo),
-        stav_osoby: n(person.stav_osoby),
-        pracoviste,
-        kodorg: n(person.kodorg),
-        rodne_cislo: n(person.rodne_cislo),
-        email: n(person.email),
-        telefon: n(person.telefon),
-        datum_narozeni: person.datum_narozeni || "",
-        obcanstvi: n(person.obcanstvi),
-        pohlavi: n(person.pohlavi),
-        orcid: n(person.orcid),
-        researcher_id: n(person.researcher_id),
-        scopus_id: n(person.scopus_id),
-        created_at: person.created_at,
-        updated_at: person.updated_at
-      };
-    }
-    if (!base.kodorg && base.pracoviste && window.kbPracoviste?.matchFromText) {
-      const match = window.kbPracoviste.matchFromText(base.pracoviste);
-      if (match) base.kodorg = match.kodorg;
-    }
-    if (base.kodorg && window.kbPracoviste?.applyToPerson) {
-      return window.kbPracoviste.applyToPerson(base);
-    }
-    return base;
+    if (window.kbSupabasePersons?.normalizePerson) return window.kbSupabasePersons.normalizePerson(person);
+    const tituly = n(person.tituly) || [person.titul_pred, person.titul_za].map(n).filter(Boolean).join(", ");
+    const pracoviste = n(person.pracoviste) || [person.fakulta, person.katedra, person.soucast].map(n).filter(Boolean).join(" · ");
+    return {
+      id: person.id,
+      prijmeni: n(person.prijmeni),
+      jmeno: n(person.jmeno),
+      tituly,
+      osobni_cislo: n(person.osobni_cislo),
+      stav_osoby: n(person.stav_osoby),
+      pracoviste,
+      rodne_cislo: n(person.rodne_cislo),
+      email: n(person.email),
+      telefon: n(person.telefon),
+      datum_narozeni: person.datum_narozeni || "",
+      obcanstvi: n(person.obcanstvi),
+      pohlavi: n(person.pohlavi),
+      orcid: n(person.orcid),
+      researcher_id: n(person.researcher_id),
+      scopus_id: n(person.scopus_id),
+      created_at: person.created_at,
+      updated_at: person.updated_at
+    };
   }
 
   function personLabel(p) {
@@ -251,7 +238,6 @@
       window.kbSupabasePersons?.migrateLegacyLocal?.();
       if (!window.kbSupabasePersons) {
         useSupabase = false;
-        await window.kbPracoviste?.ensureLoaded?.().catch(() => {});
         persons = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
         if (!Array.isArray(persons)) persons = [];
         persons = persons.map(normalizePerson);
@@ -261,14 +247,12 @@
       const available = await window.kbSupabasePersons.probeTables();
       if (!available) {
         useSupabase = false;
-        await window.kbPracoviste?.ensureLoaded?.().catch(() => {});
-        persons = window.kbSupabasePersons.loadLocal().map(normalizePerson);
+        persons = window.kbSupabasePersons.loadLocal();
         setStatus("Tabulka kb_persons zatím neexistuje. Spusťte supabase/persons-schema.sql.");
         return persons;
       }
       useSupabase = true;
-      await window.kbPracoviste?.ensureLoaded?.().catch(() => {});
-      persons = (await window.kbSupabasePersons.loadAll()).map(normalizePerson);
+      persons = await window.kbSupabasePersons.loadAll();
       setStatus(`${persons.length} osob načteno ze Supabase.`);
     } catch (e) {
       console.error(e);
@@ -299,17 +283,9 @@
     return loadPersons();
   }
 
-  function pracovisteDisplay(person) {
-    if (!person) return "";
-    if (person.kodorg && window.kbPracoviste?.displayLabel) {
-      return window.kbPracoviste.displayLabel(person.kodorg, person.pracoviste) || person.pracoviste;
-    }
-    return n(person.pracoviste);
-  }
-
   function personOptionLabel(p) {
     if (!p) return "";
-    return `${personLabel(p)}${p.osobni_cislo ? ` · ${p.osobni_cislo}` : ""}${pracovisteDisplay(p) ? ` · ${pracovisteDisplay(p)}` : ""}`;
+    return `${personLabel(p)}${p.osobni_cislo ? ` · ${p.osobni_cislo}` : ""}${p.pracoviste ? ` · ${p.pracoviste}` : ""}`;
   }
 
   function setSelectPersonValue(selectEl, personId) {
@@ -467,12 +443,8 @@
   function cellValue(person, key) {
     if (key === "datum_narozeni") return formatDate(person.datum_narozeni);
     if (key === "osobni_cislo") return `<code class="personId">${html(person.osobni_cislo)}</code>`;
-    if (key === "pracoviste") {
-      const label = pracovisteDisplay(person);
-      const kod = person.kodorg ? `<span class="hint"> (${html(person.kodorg)})</span>` : "";
-      return `${html(label)}${kod}`;
-    }
-    return html(person[key] || "");
+    if (key === "prijmeni") return `<strong>${html(person.prijmeni)}</strong>`;
+    return html(person[key]);
   }
 
   function renderList() {
@@ -507,19 +479,12 @@
     const existing = personId ? getPerson(personId) : null;
     el("personEditId").value = existing?.id || "";
     for (const col of TABLE_COLUMNS) {
-      if (col.key === "pracoviste") continue;
       const input = el(`person_${col.key}`);
       if (!input) continue;
       input.value = col.key === "datum_narozeni"
         ? (existing?.datum_narozeni || "").slice(0, 10)
         : (existing?.[col.key] || "");
     }
-    const freePrac = el("person_pracoviste_free");
-    if (freePrac) freePrac.value = existing?.kodorg ? "" : (existing?.pracoviste || "");
-    void window.kbPracovistePicker?.setupPicker?.(
-      el("personDialog")?.querySelector("[data-pracoviste-picker]"),
-      existing?.kodorg || ""
-    );
     el("personDialogTitle").textContent = existing ? "Upravit osobu" : "Nová osoba";
     el("personDialog").showModal();
   }
@@ -527,14 +492,9 @@
   function readDialogPerson(existing) {
     const person = { id: el("personEditId").value || uuid(), created_at: existing?.created_at || new Date().toISOString(), __existing: !!existing };
     for (const col of TABLE_COLUMNS) {
-      if (col.key === "pracoviste") continue;
       const input = el(`person_${col.key}`);
       person[col.key] = n(input?.value);
     }
-    person.kodorg = n(el("person_kodorg")?.value);
-    person.pracoviste = person.kodorg
-      ? n(el("person_pracoviste")?.value)
-      : n(el("person_pracoviste_free")?.value);
     return normalizePerson(person);
   }
 
@@ -736,7 +696,6 @@
       osobni_cislo: getFieldFromRow(row, "osobni_cislo"),
       stav_osoby: getFieldFromRow(row, "stav_osoby"),
       pracoviste: getFieldFromRow(row, "pracoviste"),
-      kodorg: getFieldFromRow(row, "kodorg"),
       rodne_cislo: getFieldFromRow(row, "rodne_cislo"),
       email: getFieldFromRow(row, "email"),
       telefon: getFieldFromRow(row, "telefon"),
@@ -918,16 +877,10 @@
 
   function injectDialog() {
     if (el("personDialog")) return;
-    window.kbPracovistePicker?.injectStyles?.();
-    const formFields = TABLE_COLUMNS.filter((col) => col.key !== "pracoviste").map((col) => {
+    const formFields = TABLE_COLUMNS.map(col => {
       const type = col.key === "email" ? "email" : col.key === "datum_narozeni" ? "date" : "text";
       return `<label>${html(col.label)}<input id="person_${col.key}" type="${type}" ${col.key === "jmeno" || col.key === "prijmeni" || col.key === "osobni_cislo" ? "required" : ""} /></label>`;
     }).join("");
-    const pickerHtml = window.kbPracovistePicker?.createPickerHtml?.({
-      kodInputId: "person_kodorg",
-      labelInputId: "person_pracoviste",
-      labelFieldName: "Kmenové pracoviště (číselník UHK)"
-    }) || `<label>Pracoviště<input id="person_pracoviste_free" type="text" /></label>`;
     const wrap = document.createElement("div");
     wrap.innerHTML = `
       <dialog id="personDialog">
@@ -935,10 +888,6 @@
           <div class="dialogHeader"><h2 id="personDialogTitle">Nová osoba</h2><button class="iconButton" value="cancel">×</button></div>
           <input type="hidden" id="personEditId" />
           <div class="grid2">${formFields}</div>
-          ${pickerHtml}
-          <label>Pracoviště (volný text, pokud není v číselníku)
-            <input id="person_pracoviste_free" type="text" placeholder="Ruční popis pracoviště bez kodorg" />
-          </label>
           <div class="dialogActions">
             <button value="cancel" class="button secondary">Zavřít</button>
             <button id="savePersonBtn" type="button" class="button accent">Uložit</button>
@@ -947,10 +896,6 @@
       </dialog>`;
     document.body.appendChild(wrap);
     el("savePersonBtn").addEventListener("click", saveDialog);
-    wrap.querySelector("[data-pracoviste-picker]")?.addEventListener("kb:pracoviste-selected", () => {
-      const free = el("person_pracoviste_free");
-      if (free) free.value = "";
-    });
   }
 
   function injectStyles() {
@@ -995,12 +940,6 @@
     setTimeout(loadPersons, 120);
     document.addEventListener("kb:page-changed", (e) => {
       if (e.detail?.page === "osoby" && !persons.length && !loading) loadPersons();
-    });
-    document.addEventListener("kb:pracoviste-loaded", () => {
-      if (!persons.length) return;
-      persons = persons.map(normalizePerson);
-      populateFilters();
-      renderList();
     });
   }
 

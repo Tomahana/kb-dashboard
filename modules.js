@@ -107,7 +107,7 @@
     {
       slug: "rady-organy",
       title: "Rady a orgány",
-      description: "Vědecká rada, Správní rada, AS, MPK, Etická komise a Rada pro komercializaci — členové, analýza podle fakult/kateder (AS), působiště, AI kontrola změn a síťový export.",
+      description: "Vědecká rada, Správní rada, AS, MPK, Etická komise a Rada pro komercializaci — členové, poznámky, jednací řády, aktuality a AI kontrola personálních změn.",
       status: "active",
       icon: "🏛️",
       stats: ["organsTotal", "organsPendingAi"]
