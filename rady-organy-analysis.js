@@ -74,9 +74,21 @@
       || null;
   }
 
+  function hierarchyFromKodorg(kodorg) {
+    const h = window.kbPracoviste?.resolveHierarchy?.(kodorg);
+    if (!h) return null;
+    return {
+      fakulta: h.faculty?.nazev || "",
+      zkr_fak: h.zkr_fak || inferZkrFak(h.faculty?.nazev || ""),
+      katedra: h.katedra?.nazev || "",
+      kmenove_pracoviste: h.cesta || h.leaf?.nazev || ""
+    };
+  }
+
   function resolveMemberProfile(member, organ) {
     const person = resolveLinkedPerson(member);
-    const fromPerson = parsePracoviste(person?.pracoviste || "");
+    const fromKodorg = hierarchyFromKodorg(member.kodorg) || hierarchyFromKodorg(person?.kodorg);
+    const fromPerson = fromKodorg || parsePracoviste(person?.pracoviste || "");
     const explicit = {
       fakulta: n(member.fakulta),
       zkr_fak: n(member.zkr_fak),
@@ -93,8 +105,9 @@
     const pusobiste = explicit.pusobiste || n(member.funkce) || "";
 
     const sources = [];
+    if (member.kodorg || person?.kodorg) sources.push("ciselnik");
     if (explicit.fakulta || explicit.katedra || explicit.pusobiste || explicit.kmenove_pracoviste) sources.push("evidence");
-    if (person?.pracoviste) sources.push("osoby");
+    if (person?.pracoviste && !fromKodorg) sources.push("osoby");
     if (!sources.length) sources.push("chybi");
 
     const asMode = isAcademicSenate(organ);
@@ -123,7 +136,8 @@
       missing,
       complete: missing.length === 0,
       linkedPerson: !!person,
-      personHasPracoviste: !!n(person?.pracoviste)
+      personHasPracoviste: !!n(person?.pracoviste),
+      hasKodorg: !!(n(member.kodorg) || n(person?.kodorg))
     };
   }
 

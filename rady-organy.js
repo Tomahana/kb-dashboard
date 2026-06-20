@@ -601,9 +601,13 @@
   function enrichMemberFromPerson(member) {
     const person = window.kbPersonLinks?.resolvePerson?.(member, "clen")
       || window.kbPersons?.matchPersonFromRegistry?.({ jmeno: member.jmeno, email: member.email, osobni_cislo: member.osobni_cislo });
-    if (!person?.pracoviste || !window.kbRadyOrganyAnalysis) return member;
+    let next = { ...member };
+    if (!n(next.kodorg) && person?.kodorg) next.kodorg = person.kodorg;
+    if (next.kodorg && window.kbPracoviste?.applyToMember) {
+      return window.kbPracoviste.applyToMember(next);
+    }
+    if (!person?.pracoviste || !window.kbRadyOrganyAnalysis) return next;
     const parsed = window.kbRadyOrganyAnalysis.parsePracoviste(person.pracoviste);
-    const next = { ...member };
     if (!n(next.fakulta) && parsed.fakulta) next.fakulta = parsed.fakulta;
     if (!n(next.zkr_fak) && parsed.zkr_fak) next.zkr_fak = parsed.zkr_fak;
     if (!n(next.katedra) && parsed.katedra) next.katedra = parsed.katedra;
@@ -611,7 +615,7 @@
     return next;
   }
 
-  function openMemberDialog(member, organ) {
+  async function openMemberDialog(member, organ) {
     const dlg = el("radyMemberDialog");
     if (!dlg) return;
     el("radyMemberEditId").value = member?.id || "";
@@ -634,6 +638,7 @@
       : "";
     window.kbPersons?.fillSelect?.(el("radyMemberPersonId"), personId);
     window.kbPersons?.setupSearchPicker?.(el("radyMemberPersonId"), personId);
+    await window.kbPracovistePicker?.setupPicker?.(el("radyMemberPracovistePicker"), member?.kodorg || "");
     el("radyMemberDeleteBtn").hidden = !member?.id;
     el("radyMemberDialogTitle").textContent = member ? "Upravit člena" : "Přidat člena";
     dlg.showModal();
@@ -659,6 +664,7 @@
       pusobiste: n(el("radyMemberPusobiste").value),
       kmenove_pracoviste: n(el("radyMemberKmen").value),
       sitove_info: n(el("radyMemberSitove").value),
+      kodorg: n(el("radyMemberKodorg")?.value),
       poradi: Number(el("radyMemberPoradi").value) || 0,
       aktivni: el("radyMemberAktivni").checked
     };
@@ -669,6 +675,14 @@
       member = window.kbPersonLinks.applyPersonLink(member, person, "clen");
     } else {
       member.osobni_cislo = "";
+    }
+    if (!member.kodorg && person?.kodorg) member.kodorg = person.kodorg;
+    if (member.kodorg && window.kbPracoviste?.applyToMember) {
+      const auto = window.kbPracoviste.applyToMember({ kodorg: member.kodorg });
+      if (!n(member.kmenove_pracoviste)) member.kmenove_pracoviste = auto.kmenove_pracoviste;
+      if (!n(member.fakulta)) member.fakulta = auto.fakulta;
+      if (!n(member.zkr_fak)) member.zkr_fak = auto.zkr_fak;
+      if (!n(member.katedra)) member.katedra = auto.katedra;
     }
     member = enrichMemberFromPerson(member);
 
@@ -700,10 +714,14 @@
       }
       if (!n(el("radyMemberTituly").value) && person.tituly) el("radyMemberTituly").value = person.tituly;
       if (!n(el("radyMemberEmail").value) && person.email) el("radyMemberEmail").value = person.email;
+      if (person.kodorg) {
+        void window.kbPracovistePicker?.setupPicker?.(el("radyMemberPracovistePicker"), person.kodorg);
+      }
       const enriched = enrichMemberFromPerson({
         jmeno: el("radyMemberJmeno").value,
         email: person.email,
         osobni_cislo: person.osobni_cislo,
+        kodorg: person.kodorg,
         fakulta: el("radyMemberFakulta").value,
         zkr_fak: el("radyMemberZkrFak").value,
         katedra: el("radyMemberKatedra").value,
@@ -721,6 +739,15 @@
         el("radyMemberPersonId")?.dispatchEvent(new Event("change", { bubbles: true }));
         window.kbPersons.setupSearchPicker?.(el("radyMemberPersonId"), p.id);
       });
+    });
+    el("radyMemberPracovistePicker")?.addEventListener("kb:pracoviste-selected", (e) => {
+      const kodorg = e.detail?.kodorg;
+      if (!kodorg || !window.kbPracoviste?.applyToMember) return;
+      const auto = window.kbPracoviste.applyToMember({ kodorg });
+      if (auto.fakulta) el("radyMemberFakulta").value = auto.fakulta;
+      if (auto.zkr_fak) el("radyMemberZkrFak").value = auto.zkr_fak;
+      if (auto.katedra) el("radyMemberKatedra").value = auto.katedra;
+      if (auto.kmenove_pracoviste) el("radyMemberKmen").value = auto.kmenove_pracoviste;
     });
   }
 
