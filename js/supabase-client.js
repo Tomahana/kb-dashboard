@@ -1,5 +1,5 @@
 const SUPABASE_URL = 'https://xrgdfghiwjyrdckpjzdj.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_0kk-1GHtUKwuGdWGlDBUHQ_VPlhBmh2';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhyZ2RmZ2hpd2p5cmRja3BqemRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3MjczMTcsImV4cCI6MjA5NjMwMzMxN30.nhNWO6macl4SuH-b9NA3KpWAVermc2nRTEdLp2i2gqA';
 
 async function supabaseFetch(path, params = {}) {
   const url = new URL(`/rest/v1/${path}`, SUPABASE_URL);
