@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>KB Dashboard – Znalostní báze</title>
-  <link rel="stylesheet" href="styles.css?v=3.86" />
+  <link rel="stylesheet" href="styles.css?v=3.87" />
 </head>
 <body class="app-shell">
   <aside class="sidebar">
@@ -305,11 +305,11 @@
       </section>
       <section class="panel">
         <h2>Osoby v Supabase</h2>
-        <p class="hint">Centrální evidence osob: <code>supabase/persons-schema.sql</code>. Propojení s projekty, termíny a e-maily: <code>supabase/persons-links-migrate.sql</code>. Kód pracoviště (<code>kodorg</code>): <code>supabase/pracoviste-links-migrate.sql</code> (po importu číselníku).</p>
+        <p class="hint">Centrální evidence osob: <code>supabase/persons-schema.sql</code>. Propojení s projekty, termíny a e-maily: <code>supabase/persons-links-migrate.sql</code>. Kód pracoviště (<code>kodorg</code>): <code>supabase/persons-pracoviste-migrate-all.sql</code> — při chybě „kodorg column“ nebo obojí najednou <code>pracoviste-db-migrate-all.sql</code>.</p>
       </section>
       <section class="panel">
         <h2>Číselník pracovišť</h2>
-        <p class="hint">Organizační struktura UHK: <code>supabase/pracoviste-schema.sql</code>, staging <code>pracoviste-import-staging.sql</code>, import TSV → <code>pracoviste-import-from-staging.sql</code> (2× INSERT). Propojení s Osobami a orgány: <code>supabase/pracoviste-links-migrate.sql</code>.</p>
+        <p class="hint">Organizační struktura UHK: <code>supabase/pracoviste-schema.sql</code>, staging <code>pracoviste-import-staging.sql</code>, import TSV → <code>pracoviste-import-from-staging.sql</code> (2× INSERT). Propojení s Osobami a orgány: <code>supabase/pracoviste-db-migrate-all.sql</code>.</p>
       </section>
       <section class="panel">
         <h2>Interní soutěže v Supabase</h2>
@@ -790,47 +790,47 @@
   </datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=3.86"></script>
-  <script src="auth.js?v=3.86"></script>
-  <script src="form-pickers.js?v=3.86"></script>
-  <script src="layout.js?v=3.86"></script>
-  <script src="modules.js?v=3.86"></script>
-  <script src="app.js?v=3.86"></script>
-  <script src="enhancements.js?v=3.86"></script>
-  <script src="supabase-loader.js?v=3.86"></script>
-  <script src="supabase-kb-capture.js?v=3.86"></script>
-  <script src="kb-capture.js?v=3.86"></script>
-  <script src="ai-classify.js?v=3.86"></script>
-  <script src="task-export.js?v=3.86"></script>
-  <script src="notion.js?v=3.86"></script>
-  <script src="supabase-topics.js?v=3.86"></script>
-  <script src="topics.js?v=3.86"></script>
-  <script src="record-click-fix.js?v=3.86"></script>
-  <script src="supabase-persons.js?v=3.86"></script>
-  <script src="supabase-pracoviste.js?v=3.86"></script>
-  <script src="pracoviste-picker.js?v=3.86"></script>
-  <script src="persons.js?v=3.86"></script>
-  <script src="person-links.js?v=3.86"></script>
-  <script src="supabase-competitions.js?v=3.86"></script>
-  <script src="interni-souteze.js?v=3.86"></script>
-  <script src="supabase-deadlines.js?v=3.86"></script>
-  <script src="deadlines.js?v=3.86"></script>
-  <script src="supabase-pcr-research.js?v=3.86"></script>
-  <script src="pcr-research-analysis.js?v=3.86"></script>
-  <script src="pcr-research.js?v=3.86"></script>
-  <script src="ai-advisor-knowledge.js?v=3.86"></script>
-  <script src="ai-advisor.js?v=3.86"></script>
-  <script src="supabase-eiz-tokens.js?v=3.86"></script>
-  <script src="eiz-tokens.js?v=3.86"></script>
+  <script src="supabase-config.js?v=3.87"></script>
+  <script src="auth.js?v=3.87"></script>
+  <script src="form-pickers.js?v=3.87"></script>
+  <script src="layout.js?v=3.87"></script>
+  <script src="modules.js?v=3.87"></script>
+  <script src="app.js?v=3.87"></script>
+  <script src="enhancements.js?v=3.87"></script>
+  <script src="supabase-loader.js?v=3.87"></script>
+  <script src="supabase-kb-capture.js?v=3.87"></script>
+  <script src="kb-capture.js?v=3.87"></script>
+  <script src="ai-classify.js?v=3.87"></script>
+  <script src="task-export.js?v=3.87"></script>
+  <script src="notion.js?v=3.87"></script>
+  <script src="supabase-topics.js?v=3.87"></script>
+  <script src="topics.js?v=3.87"></script>
+  <script src="record-click-fix.js?v=3.87"></script>
+  <script src="supabase-persons.js?v=3.87"></script>
+  <script src="supabase-pracoviste.js?v=3.87"></script>
+  <script src="pracoviste-picker.js?v=3.87"></script>
+  <script src="persons.js?v=3.87"></script>
+  <script src="person-links.js?v=3.87"></script>
+  <script src="supabase-competitions.js?v=3.87"></script>
+  <script src="interni-souteze.js?v=3.87"></script>
+  <script src="supabase-deadlines.js?v=3.87"></script>
+  <script src="deadlines.js?v=3.87"></script>
+  <script src="supabase-pcr-research.js?v=3.87"></script>
+  <script src="pcr-research-analysis.js?v=3.87"></script>
+  <script src="pcr-research.js?v=3.87"></script>
+  <script src="ai-advisor-knowledge.js?v=3.87"></script>
+  <script src="ai-advisor.js?v=3.87"></script>
+  <script src="supabase-eiz-tokens.js?v=3.87"></script>
+  <script src="eiz-tokens.js?v=3.87"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="supabase-journal-db.js?v=3.86"></script>
-  <script src="journal-db-analysis.js?v=3.86"></script>
-  <script src="journal-db.js?v=3.86"></script>
-  <script src="supabase-vystupy.js?v=3.86"></script>
-  <script src="vystupy-analysis.js?v=3.86"></script>
-  <script src="vystupy.js?v=3.86"></script>
-  <script src="supabase-rady-organy.js?v=3.86"></script>
-  <script src="rady-organy-analysis.js?v=3.86"></script>
-  <script src="rady-organy.js?v=3.86"></script>
+  <script src="supabase-journal-db.js?v=3.87"></script>
+  <script src="journal-db-analysis.js?v=3.87"></script>
+  <script src="journal-db.js?v=3.87"></script>
+  <script src="supabase-vystupy.js?v=3.87"></script>
+  <script src="vystupy-analysis.js?v=3.87"></script>
+  <script src="vystupy.js?v=3.87"></script>
+  <script src="supabase-rady-organy.js?v=3.87"></script>
+  <script src="rady-organy-analysis.js?v=3.87"></script>
+  <script src="rady-organy.js?v=3.87"></script>
 </body>
 </html>

@@ -9,6 +9,7 @@ create table if not exists public.kb_persons (
   osobni_cislo text not null,
   stav_osoby text,
   pracoviste text,
+  kodorg text,
   rodne_cislo text,
   email text,
   telefon text,

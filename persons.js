@@ -182,6 +182,20 @@
     updateListSummary();
   }
 
+  function formatPersonSaveError(err) {
+    const msg = (err?.message || err || "").toString();
+    if (/schema cache|could not find the .* column/i.test(msg) && /kodorg|kb_persons/i.test(msg)) {
+      return `${msg}\n\nV Supabase chybí sloupec kodorg u tabulky kb_persons.\n\nV SQL Editoru spusťte:\nsupabase/persons-pracoviste-migrate-all.sql\n\n(nebo obojí najednou: supabase/pracoviste-db-migrate-all.sql)\n\nPoté obnovte stránku (Ctrl+F5) a uložte znovu.`;
+    }
+    if (/schema cache|could not find the .* column/i.test(msg)) {
+      return `${msg}\n\nV Supabase chybí sloupce tabulky kb_persons.\nSpusťte supabase/persons-pracoviste-migrate-all.sql nebo pracoviste-db-migrate-all.sql.\n\nPoté Ctrl+F5.`;
+    }
+    if (/kb_persons_kodorg_fk|violates foreign key.*kodorg/i.test(msg)) {
+      return `${msg}\n\nVybrané pracoviště (kodorg) není v číselníku kb_pracoviste.\nImportujte organizační strukturu nebo vymažte výběr pracoviště a uložte znovu.`;
+    }
+    return msg;
+  }
+
   function uniqueValues(field) {
     return [...new Set(persons.map(p => n(p[field])).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b, "cs"));
@@ -573,7 +587,7 @@
       if (onSavedCallback) onSavedCallback(saved);
       onSavedCallback = null;
     } catch (err) {
-      alert("Uložení selhalo: " + (err.message || err));
+      alert("Uložení selhalo: " + formatPersonSaveError(err));
     }
   }
 

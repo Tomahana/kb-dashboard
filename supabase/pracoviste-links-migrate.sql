@@ -11,18 +11,23 @@ update public.kb_persons set kodorg = null where trim(coalesce(kodorg, '')) = ''
 update public.kb_organ_members set kodorg = null where trim(coalesce(kodorg, '')) = '';
 
 alter table public.kb_persons drop constraint if exists kb_persons_kodorg_fk;
-alter table public.kb_persons
-  add constraint kb_persons_kodorg_fk
-  foreign key (kodorg) references public.kb_pracoviste (kodorg)
-  on delete set null
-  deferrable initially deferred;
-
 alter table public.kb_organ_members drop constraint if exists kb_organ_members_kodorg_fk;
-alter table public.kb_organ_members
-  add constraint kb_organ_members_kodorg_fk
-  foreign key (kodorg) references public.kb_pracoviste (kodorg)
-  on delete set null
-  deferrable initially deferred;
+
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'kb_pracoviste') then
+    alter table public.kb_persons
+      add constraint kb_persons_kodorg_fk
+      foreign key (kodorg) references public.kb_pracoviste (kodorg)
+      on delete set null
+      deferrable initially deferred;
+    alter table public.kb_organ_members
+      add constraint kb_organ_members_kodorg_fk
+      foreign key (kodorg) references public.kb_pracoviste (kodorg)
+      on delete set null
+      deferrable initially deferred;
+  end if;
+end $$;
 
 create index if not exists kb_persons_kodorg_idx on public.kb_persons (kodorg);
 create index if not exists kb_organ_members_kodorg_idx on public.kb_organ_members (kodorg);
