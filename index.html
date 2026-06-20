@@ -317,6 +317,10 @@
         <p class="hint">Spusťte <code>supabase/pcr-research-schema.sql</code> (po <code>persons-schema.sql</code>), poté <code>supabase/security-rls.sql</code> nebo jen <code>supabase/pcr-research-rls.sql</code>. Sync z Google Sheets: edge funkce <code>google-sheets-fetch</code> nebo Import CSV.</p>
       </section>
       <section class="panel">
+        <h2>Rady a orgány</h2>
+        <p class="hint">Spusťte <code>supabase/rady-organy-schema.sql</code> a migraci <code>supabase/rady-organy-migrate-v2.sql</code> (pracoviště členů). Edge funkce <code>uhk-page-fetch</code> pro stažení stránek uhk.cz.</p>
+      </section>
+      <section class="panel">
         <h2>AI poradce</h2>
         <p class="hint">Modul v1 prohledává stávající data (Osoby, Termíny, PČR, soutěže, témata, e-maily). Pro AI shrnutí použijte stejný API klíč jako u klasifikace e-mailů výše. Uložené dotazy a spojení jsou zatím v prohlížeči; trvalé ukládání: <code>supabase/ai-advisor-schema.sql</code> + <code>security-rls.sql</code>.</p>
         <p class="hint">Fáze 2 (publikace, aplikované výsledky, hodnotící kritéria, tématizace) rozšíří index znalostí po doplnění tabulek.</p>
@@ -682,8 +686,31 @@
         </div>
       </label>
       <label>Poznámka
-        <textarea id="radyMemberPoznamka" rows="4" placeholder="Vaše poznámky k této osobě…"></textarea>
+        <textarea id="radyMemberPoznamka" rows="3" placeholder="Vaše poznámky k této osobě…"></textarea>
       </label>
+      <details class="radyMemberWorkplaceDetails">
+        <summary>Pracoviště a síťování</summary>
+        <div class="grid2">
+          <label>Fakulta
+            <input id="radyMemberFakulta" type="text" placeholder="např. Fakulta informatiky" />
+          </label>
+          <label>Zkr. fakulty
+            <input id="radyMemberZkrFak" type="text" placeholder="FIM, FF, PdF…" />
+          </label>
+        </div>
+        <label>Katedra / ústav
+          <input id="radyMemberKatedra" type="text" placeholder="Katedra informatiky" />
+        </label>
+        <label>Působiště v orgánu
+          <input id="radyMemberPusobiste" type="text" placeholder="zastoupení, role mimo kmen (AS: studenti FIM…)" />
+        </label>
+        <label>Kmenové pracoviště
+          <input id="radyMemberKmen" type="text" placeholder="doplní se z modulu Osoby nebo ručně" />
+        </label>
+        <label>Síťové info
+          <textarea id="radyMemberSitove" rows="2" placeholder="Kontakty, společné projekty, eventy — pro budoucí networking"></textarea>
+        </label>
+      </details>
       <div class="grid2">
         <label>Pořadí
           <input id="radyMemberPoradi" type="number" min="0" value="1" />
@@ -786,6 +813,7 @@
   <script src="vystupy-analysis.js?v=3.80"></script>
   <script src="vystupy.js?v=3.80"></script>
   <script src="supabase-rady-organy.js?v=3.80"></script>
+  <script src="rady-organy-analysis.js?v=3.80"></script>
   <script src="rady-organy.js?v=3.80"></script>
 </body>
 </html>
