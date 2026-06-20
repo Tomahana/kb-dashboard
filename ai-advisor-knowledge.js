@@ -288,7 +288,7 @@
           "rady-organy",
           `Rady a orgány · ${o.nazev}`,
           [m.tituly, m.jmeno].filter(Boolean).join(" "),
-          [m.funkce, m.email, m.poznamka, o.nazev].filter(Boolean).join(" · "),
+          [m.funkce, m.email, m.poznamka, m.fakulta, m.zkr_fak, m.katedra, m.pusobiste, m.kmenove_pracoviste, m.sitove_info, o.nazev].filter(Boolean).join(" · "),
           "#rady-organy",
           { organ: o.slug, funkce: m.funkce }
         ));

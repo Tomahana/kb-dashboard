@@ -252,6 +252,7 @@
 
   function renderMembersTable(organ) {
     const rows = (organ.members || []).slice().sort((a, b) => a.poradi - b.poradi || memberLabel(a).localeCompare(memberLabel(b), "cs"));
+    const asMode = window.kbRadyOrganyAnalysis?.isAcademicSenate?.(organ);
     if (!rows.length) {
       return `<p class="hint radyEmpty">Zatím žádní členové. Přidejte je ručně nebo použijte AI kontrolu personálních změn.</p>`;
     }
@@ -261,22 +262,29 @@
           <tr>
             <th>Jméno</th>
             <th>Funkce</th>
+            ${asMode ? "<th>Fakulta / katedra</th>" : "<th>Pracoviště</th>"}
             <th>Poznámka</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          ${rows.map((m) => `
-            <tr data-member-id="${html(m.id)}" class="${m.aktivni === false ? "radyMemberInactive" : ""}">
+          ${rows.map((m) => {
+            const profile = window.kbRadyOrganyAnalysis?.resolveMemberProfile?.(m, organ);
+            const workCol = asMode
+              ? `${profile?.zkr_fak || profile?.fakulta || "—"}${profile?.katedra ? ` · ${profile.katedra}` : ""}`
+              : [profile?.pusobiste, profile?.kmenove_pracoviste].filter(Boolean).join(" · ") || "—";
+            return `
+            <tr data-member-id="${html(m.id)}" class="${m.aktivni === false ? "radyMemberInactive" : ""}${profile && !profile.complete ? " radyRowIncomplete" : ""}">
               <td>
                 <strong>${html(memberDisplay(m))}</strong>
                 ${m.email ? `<br><span class="hint">${html(m.email)}</span>` : ""}
               </td>
               <td>${html(m.funkce || "—")}</td>
+              <td class="${profile && !profile.complete ? "radyCellMissing" : ""}">${html(workCol)}</td>
               <td class="radyNoteCell">${m.poznamka ? html(m.poznamka) : `<span class="hint">—</span>`}</td>
               <td><button type="button" class="button secondary radySmallBtn" data-edit-member="${html(m.id)}">Upravit</button></td>
-            </tr>
-          `).join("")}
+            </tr>`;
+          }).join("")}
         </tbody>
       </table>
     `;
@@ -339,6 +347,7 @@
     const tabs = [
       { id: "prehled", label: "Přehled" },
       { id: "clenove", label: `Členové (${(organ.members || []).length})` },
+      { id: "analyza", label: "Analýza" },
       { id: "ai", label: "AI kontrola změn" }
     ];
 
@@ -378,8 +387,14 @@
               <h3>Členové a poznámky</h3>
               <button type="button" class="button" id="radyAddMemberBtn">+ Přidat člena</button>
             </div>
-            <p class="hint">U každé osoby můžete evidovat poznámku (kontakt, historie, vazby). Volitelně propojte s modulem Osoby.</p>
+            <p class="hint">U každé osoby můžete evidovat poznámku, pracoviště a síťové info. Propojte s modulem Osoby pro automatické kmenové pracoviště.</p>
             ${renderMembersTable(organ)}
+          </section>
+        ` : ""}
+
+        ${activeTab === "analyza" ? `
+          <section class="radyPanel">
+            <div id="radyAnalysisMount"></div>
           </section>
         ` : ""}
 
@@ -426,6 +441,23 @@
     `;
 
     bindEvents();
+    if (activeTab === "analyza") mountAnalysis();
+  }
+
+  function mountAnalysis() {
+    const organ = getOrgan(selectedSlug);
+    const mount = el("radyAnalysisMount");
+    if (!organ || !mount || !window.kbRadyOrganyAnalysis?.mount) return;
+    window.kbRadyOrganyAnalysis.mount(mount, {
+      organ,
+      onEditMember: (memberId) => {
+        const m = organ.members.find((x) => x.id === memberId);
+        if (m) openMemberDialog(m, organ);
+      },
+      onSaveMember: (org, member) => saveMember(org, member),
+      onRefresh: () => render(),
+      onStatus: (text, isError) => setStatus(text, isError)
+    });
   }
 
   async function runAiPersonnelCheck(organ, sourceText) {
@@ -451,7 +483,8 @@
       "pridano (pole objektů {jmeno, funkce, email}),",
       "odebrano (pole objektů {jmeno, funkce}),",
       "zmeneno (pole objektů {jmeno, stara_funkce, nova_funkce}),",
-      "navrzeni_clenove (kompletní aktuální seznam z webu jako pole {jmeno, tituly, funkce, email}).",
+      "navrzeni_clenove (kompletní aktuální seznam z webu jako pole {jmeno, tituly, funkce, email, fakulta, zkr_fak, katedra, pusobiste, kmenove_pracoviste}).",
+      "U Akademického senátu vždy vyplň fakultu a katedru, pokud jsou na stránce uvedeny.",
       "Při porovnávání ignoruj drobné rozdíly v titulech a diakritice."
     ].join(" ");
 
@@ -508,10 +541,12 @@
 
     const noteByName = new Map((organ.members || []).map((m) => [l(memberLabel(m)), m.poznamka]));
     const cisloByName = new Map((organ.members || []).map((m) => [l(memberLabel(m)), m.osobni_cislo]));
+    const workplaceByName = new Map((organ.members || []).map((m) => [l(memberLabel(m)), m]));
 
     organ.members = proposed.map((p, i) => {
       const jmeno = n(p.jmeno) || n(p.name) || "";
       const key = l([p.tituly, jmeno].filter(Boolean).join(" ") || jmeno);
+      const prev = workplaceByName.get(key) || {};
       let member = {
         id: uuid(),
         organ_id: organ.id,
@@ -520,11 +555,18 @@
         funkce: n(p.funkce || p.role),
         email: n(p.email),
         poznamka: noteByName.get(key) || "",
+        fakulta: n(p.fakulta) || n(prev.fakulta),
+        zkr_fak: n(p.zkr_fak) || n(prev.zkr_fak),
+        katedra: n(p.katedra) || n(prev.katedra),
+        pusobiste: n(p.pusobiste) || n(prev.pusobiste),
+        kmenove_pracoviste: n(p.kmenove_pracoviste) || n(prev.kmenove_pracoviste),
+        sitove_info: n(prev.sitove_info),
         osobni_cislo: cisloByName.get(key) || "",
         poradi: i + 1,
         aktivni: true
       };
       member = linkMemberPerson(member);
+      member = enrichMemberFromPerson(member);
       return member;
     });
 
@@ -556,6 +598,19 @@
     render();
   }
 
+  function enrichMemberFromPerson(member) {
+    const person = window.kbPersonLinks?.resolvePerson?.(member, "clen")
+      || window.kbPersons?.matchPersonFromRegistry?.({ jmeno: member.jmeno, email: member.email, osobni_cislo: member.osobni_cislo });
+    if (!person?.pracoviste || !window.kbRadyOrganyAnalysis) return member;
+    const parsed = window.kbRadyOrganyAnalysis.parsePracoviste(person.pracoviste);
+    const next = { ...member };
+    if (!n(next.fakulta) && parsed.fakulta) next.fakulta = parsed.fakulta;
+    if (!n(next.zkr_fak) && parsed.zkr_fak) next.zkr_fak = parsed.zkr_fak;
+    if (!n(next.katedra) && parsed.katedra) next.katedra = parsed.katedra;
+    if (!n(next.kmenove_pracoviste)) next.kmenove_pracoviste = parsed.kmenove_pracoviste;
+    return next;
+  }
+
   function openMemberDialog(member, organ) {
     const dlg = el("radyMemberDialog");
     if (!dlg) return;
@@ -566,6 +621,12 @@
     el("radyMemberFunkce").value = member?.funkce || "";
     el("radyMemberEmail").value = member?.email || "";
     el("radyMemberPoznamka").value = member?.poznamka || "";
+    el("radyMemberFakulta").value = member?.fakulta || "";
+    el("radyMemberZkrFak").value = member?.zkr_fak || "";
+    el("radyMemberKatedra").value = member?.katedra || "";
+    el("radyMemberPusobiste").value = member?.pusobiste || "";
+    el("radyMemberKmen").value = member?.kmenove_pracoviste || "";
+    el("radyMemberSitove").value = member?.sitove_info || "";
     el("radyMemberPoradi").value = member?.poradi ?? (organ.members.length + 1);
     el("radyMemberAktivni").checked = member?.aktivni !== false;
     const personId = member?.osobni_cislo
@@ -592,6 +653,12 @@
       funkce: n(el("radyMemberFunkce").value),
       email: n(el("radyMemberEmail").value),
       poznamka: n(el("radyMemberPoznamka").value),
+      fakulta: n(el("radyMemberFakulta").value),
+      zkr_fak: n(el("radyMemberZkrFak").value),
+      katedra: n(el("radyMemberKatedra").value),
+      pusobiste: n(el("radyMemberPusobiste").value),
+      kmenove_pracoviste: n(el("radyMemberKmen").value),
+      sitove_info: n(el("radyMemberSitove").value),
       poradi: Number(el("radyMemberPoradi").value) || 0,
       aktivni: el("radyMemberAktivni").checked
     };
@@ -603,6 +670,7 @@
     } else {
       member.osobni_cislo = "";
     }
+    member = enrichMemberFromPerson(member);
 
     try {
       await saveMember(organ, member);
@@ -632,6 +700,19 @@
       }
       if (!n(el("radyMemberTituly").value) && person.tituly) el("radyMemberTituly").value = person.tituly;
       if (!n(el("radyMemberEmail").value) && person.email) el("radyMemberEmail").value = person.email;
+      const enriched = enrichMemberFromPerson({
+        jmeno: el("radyMemberJmeno").value,
+        email: person.email,
+        osobni_cislo: person.osobni_cislo,
+        fakulta: el("radyMemberFakulta").value,
+        zkr_fak: el("radyMemberZkrFak").value,
+        katedra: el("radyMemberKatedra").value,
+        kmenove_pracoviste: el("radyMemberKmen").value
+      });
+      if (!n(el("radyMemberFakulta").value) && enriched.fakulta) el("radyMemberFakulta").value = enriched.fakulta;
+      if (!n(el("radyMemberZkrFak").value) && enriched.zkr_fak) el("radyMemberZkrFak").value = enriched.zkr_fak;
+      if (!n(el("radyMemberKatedra").value) && enriched.katedra) el("radyMemberKatedra").value = enriched.katedra;
+      if (!n(el("radyMemberKmen").value) && enriched.kmenove_pracoviste) el("radyMemberKmen").value = enriched.kmenove_pracoviste;
     });
     el("radyMemberNewPersonBtn")?.addEventListener("click", () => {
       window.kbPersons?.openNewPersonDialog?.((p) => {
@@ -880,6 +961,37 @@
       .radyStatus { margin-top: .75rem; }
       .radyOrganyStatusError { color: #b91c1c; }
       .radyEmpty { padding: 1rem 0; }
+      .radyRowIncomplete { background: #fffbeb; }
+      .radyCellMissing { color: #b45309; font-style: italic; }
+      .radyAnalysisWrap { display: grid; gap: .85rem; }
+      .radyAnalysisTabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .5rem; }
+      .radyAnalysisTab { border: 1px solid var(--line); background: white; border-radius: 999px; padding: .35rem .75rem; cursor: pointer; font-size: .82rem; }
+      .radyAnalysisTab.active { background: #eef2ff; border-color: var(--accent); font-weight: 700; }
+      .radyAnalysisGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .85rem; }
+      .radyAnalysisCard { border: 1px solid var(--line); border-radius: 12px; padding: 1rem; background: #f8fafc; }
+      .radyAnalysisWide { grid-column: 1 / -1; }
+      .radyAnalysisTable { font-size: .82rem; }
+      .radyBarChart { display: grid; gap: .35rem; }
+      .radyBarRow { display: grid; grid-template-columns: minmax(80px, 1fr) 1fr auto; gap: .45rem; align-items: center; font-size: .82rem; }
+      .radyBarLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .radyBarTrack { height: 8px; background: #e4e7ec; border-radius: 999px; overflow: hidden; }
+      .radyBarFill { height: 100%; background: var(--accent); border-radius: 999px; }
+      .radyBarCount { font-weight: 700; min-width: 1.5rem; text-align: right; }
+      .radyFacBlock { margin-bottom: 1rem; }
+      .radyKatGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .65rem; margin-top: .5rem; }
+      .radyKatBlock { border: 1px solid var(--line); border-radius: 8px; padding: .55rem .65rem; background: white; }
+      .radyMemberMiniList { margin: .35rem 0 0; padding-left: 1rem; font-size: .82rem; }
+      .radyGapList { list-style: none; padding: 0; margin: 0; display: grid; gap: .65rem; }
+      .radyGapItem { border: 1px solid #fde68a; background: #fffbeb; border-radius: 10px; padding: .65rem .75rem; }
+      .radyGapTip { margin: .35rem 0 .5rem; }
+      .radySrcBadge { font-size: .72rem; font-weight: 700; padding: .1rem .35rem; border-radius: 999px; background: #f2f4f7; }
+      .radySrcPerson { background: #dbeafe; color: #1e40af; }
+      .radySrcLocal { background: #dcfce7; color: #166534; }
+      .radySrcBoth { background: #ede9fe; color: #5b21b6; }
+      .radySrcMissing { background: #fee2e2; color: #991b1b; }
+      .radyBulletList { margin: .5rem 0; padding-left: 1.2rem; font-size: .88rem; }
+      .radyEnrichList { font-size: .85rem; padding-left: 1.1rem; }
+      .radyExportArea { font-family: ui-monospace, monospace; font-size: .78rem; }
     `;
     document.head.appendChild(style);
   }
