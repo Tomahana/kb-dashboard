@@ -13,6 +13,7 @@
     { id: "interni-souteze", label: "Interní soutěže", page: "interni-souteze", status: "active" },
     { id: "temata", label: "Témata", page: "temata", status: "active" },
     { id: "emaily", label: "E-maily / znalostní báze", page: "emaily", status: "active" },
+    { id: "kb-items", label: "KB záznamy (AI agent)", page: "kb-items", status: "active" },
     { id: "eiz-tokeny", label: "EIZ tokeny / publikace", page: "eiz-tokeny", status: "active" },
     { id: "casopisy", label: "Databáze časopisů / JCR", page: "casopisy", status: "active" },
     { id: "vystupy", label: "Výstupy (Jimp, JSC, B, C)", page: "vystupy", status: "active" },
@@ -297,6 +298,28 @@
     return out;
   }
 
+  function buildKbItemChunks() {
+    const items = window.kbItems?.getItems?.() || [];
+    return items.map((item) => chunk(
+      `kb-item:${item.id}`,
+      "kb-items",
+      "KB záznamy",
+      item.title || "(bez názvu)",
+      [
+        item.item_type,
+        item.status,
+        item.priority,
+        item.content,
+        item.evidence,
+        Array.isArray(item.topics) ? item.topics.join(", ") : item.topics,
+        item.owner,
+        item.deadline
+      ].filter(Boolean).join(" · "),
+      "#kb-items",
+      { item_type: item.item_type, status: item.status, priority: item.priority }
+    ));
+  }
+
   function buildEmailChunks(limit = 400) {
     let data = [];
     try {
@@ -325,6 +348,7 @@
     "interni-souteze": buildCompetitionChunks,
     temata: buildTopicChunks,
     emaily: buildEmailChunks,
+    "kb-items": buildKbItemChunks,
     "eiz-tokeny": buildEizChunks,
     casopisy: buildJournalChunks,
     vystupy: buildVystupyChunks,

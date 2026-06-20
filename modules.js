@@ -11,6 +11,14 @@
       stats: ["emailsTotal", "emailsNew", "emailsAi"]
     },
     {
+      slug: "kb-items",
+      title: "KB záznamy",
+      description: "Záznamy z AI agenta — úkoly, znalosti, rozhodnutí, otázky, rizika a reference v Supabase.",
+      status: "active",
+      icon: "🧠",
+      stats: ["kbItemsTotal", "kbItemsOpen"]
+    },
+    {
       slug: "terminy",
       title: "Termíny sběrů dat",
       description: "Harmonogram sběrů, interní a externí termíny, import tabulky od kolegů.",
@@ -173,6 +181,7 @@
     const journalCategories = window.kbJournalDb?.getCategories?.() || [];
     const vystupyItems = window.kbVystupy?.getVystupy?.() || [];
     const organList = window.kbRadyOrgany?.getOrgans?.() || [];
+    const kbItems = window.kbItems?.getItems?.() || [];
 
     return {
       emailsTotal: data.length,
@@ -194,7 +203,9 @@
       vystupyJimp: vystupyItems.filter((v) => v.typ_vystupu === "Jimp").length,
       vystupyJsc: vystupyItems.filter((v) => v.typ_vystupu === "JSC").length,
       organsTotal: organList.length,
-      organsPendingAi: window.kbRadyOrgany?.pendingChecksCount?.() || 0
+      organsPendingAi: window.kbRadyOrgany?.pendingChecksCount?.() || 0,
+      kbItemsTotal: kbItems.length,
+      kbItemsOpen: window.kbItems?.getOpenCount?.() ?? kbItems.filter((i) => !["done", "archived", "closed"].includes((i.status || "").toLowerCase())).length
     };
   }
 
@@ -219,7 +230,9 @@
       vystupyJimp: `${value} Jimp`,
       vystupyJsc: `${value} JSC`,
       organsTotal: `${value} orgánů`,
-      organsPendingAi: `${value} AI ke kontrole`
+      organsPendingAi: `${value} AI ke kontrole`,
+      kbItemsTotal: `${value} KB záznamů`,
+      kbItemsOpen: `${value} otevřených záznamů`
     };
     return labels[key] || String(value);
   }
@@ -386,6 +399,7 @@
     document.addEventListener("kb:journal-db-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:vystupy-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:rady-organy-loaded", () => setTimeout(renderModulesGrid, 60));
+    document.addEventListener("kb:kb-items-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("input", () => setTimeout(renderModulesGrid, 120));
   }
 

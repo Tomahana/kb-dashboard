@@ -4,6 +4,7 @@
   const PAGES = {
     prehled: { title: "Přehled", subtitle: "Moduly a oblasti práce OVV" },
     emaily: { title: "Znalostní báze z e-mailů", subtitle: "Zachytávání, třídění, klasifikace a práce se záznamy" },
+    "kb-items": { title: "KB záznamy", subtitle: "Záznamy z AI agenta — úkoly, znalosti, rozhodnutí a reference" },
     temata: { title: "Témata", subtitle: "Seskupení e-mailů, AI shrnutí a analýza agend" },
     terminy: { title: "Termíny", subtitle: "Termíny sběrů dat a odesílání na úřady" },
     osoby: { title: "Osoby", subtitle: "Centrální evidence osob pro všechny moduly" },
