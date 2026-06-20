@@ -385,6 +385,7 @@ where schemaname = 'public'
     'kb_competition_horizon', 'kb_competition_horizon_applications', 'kb_competition_horizon_supported',
     'kb_pcr_research_topics', 'kb_ai_advisor_saved',
     'kb_eiz_contracts', 'kb_eiz_contract_years', 'kb_eiz_publications',
-    'kb_journal_records', 'kb_record_attachments'
+    'kb_journal_records', 'kb_record_attachments',
+    'kb_pracoviste', 'kb_pracoviste_import'
   )
 order by tablename, policyname;
