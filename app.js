@@ -674,3 +674,46 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => byId("copyPromptBtn").textContent = "Kopírovat", 1200);
   });
 });
+
+let kbItemsModulePromise = null;
+
+function getKbItemsModule() {
+  if (!kbItemsModulePromise) kbItemsModulePromise = import("./js/kb-items.js");
+  return kbItemsModulePromise;
+}
+
+function readKbItemsFilterValues() {
+  const item_type = normalize(byId("kbItemsFilterType")?.value);
+  const status = normalize(byId("kbItemsFilterStatus")?.value);
+  const search = normalize(byId("kbItemsFilterSearch")?.value);
+  const filters = {};
+  if (item_type) filters.item_type = item_type;
+  if (status) filters.status = status;
+  if (search) filters.search = search;
+  return filters;
+}
+
+async function refreshKbItemsList(useFilters = true) {
+  const { loadKbItems, renderKbItems } = await getKbItemsModule();
+  const items = await loadKbItems(useFilters ? readKbItemsFilterValues() : {});
+  renderKbItems(items);
+}
+
+function bindKbItemsEvents() {
+  byId("btnLoadKbItems")?.addEventListener("click", () => {
+    refreshKbItemsList(true).catch((err) => {
+      const list = byId("kbItemsList");
+      if (list) list.innerHTML = `<p class="hint">Chyba načtení: ${escapeHtml(err.message || err)}</p>`;
+    });
+  });
+
+  document.addEventListener("kb:page-changed", (e) => {
+    if (e.detail?.page !== "kb-items") return;
+    refreshKbItemsList(false).catch((err) => {
+      const list = byId("kbItemsList");
+      if (list) list.innerHTML = `<p class="hint">Chyba načtení: ${escapeHtml(err.message || err)}</p>`;
+    });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", bindKbItemsEvents);
