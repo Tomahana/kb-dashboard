@@ -182,6 +182,17 @@
     render();
   }
 
+  function formatMemberSaveError(err) {
+    const msg = (err?.message || err || "").toString();
+    if (/schema cache|could not find the .* column/i.test(msg)) {
+      return `${msg}\n\nV Supabase chybí sloupce tabulky kb_organ_members (fakulta, katedra, kodorg…).\n\nV SQL Editoru spusťte:\nsupabase/rady-organy-members-migrate-all.sql\n\n(alternativně rady-organy-migrate-v2.sql + pracoviste-links-migrate.sql)\n\nPoté obnovte stránku (Ctrl+F5) a uložte znovu.`;
+    }
+    if (/kb_organ_members_kodorg_fk|violates foreign key.*kodorg/i.test(msg)) {
+      return `${msg}\n\nVybrané pracoviště (kodorg) není v číselníku kb_pracoviste.\nImportujte organizační strukturu nebo vymažte výběr pracoviště a uložte znovu.`;
+    }
+    return msg;
+  }
+
   async function removeMember(organ, memberId) {
     if (useSupabase && window.kbSupabaseRadyOrgany && await ensureAuth()) {
       await window.kbSupabaseRadyOrgany.deleteMember(memberId);
@@ -692,7 +703,7 @@
       setStatus("Člen uložen.");
       render();
     } catch (error) {
-      alert("Uložení se nepodařilo: " + (error.message || error));
+      alert("Uložení se nepodařilo: " + formatMemberSaveError(error));
     }
   }
 

@@ -29,3 +29,5 @@ create index if not exists kb_organ_members_kodorg_idx on public.kb_organ_member
 
 comment on column public.kb_persons.kodorg is 'Kód pracoviště z kb_pracoviste — kmenové pracoviště osoby';
 comment on column public.kb_organ_members.kodorg is 'Kód pracoviště z kb_pracoviste — kmenové pracoviště člena orgánu';
+
+notify pgrst, 'reload schema';
