@@ -677,8 +677,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
 let kbItemsModulePromise = null;
 
+function getAppAssetVersion() {
+  const src = document.querySelector('script[src*="app.js"]')?.src || "";
+  const match = src.match(/[?&]v=([^&]+)/);
+  return match ? match[1] : "";
+}
+
 function getKbItemsModule() {
-  if (!kbItemsModulePromise) kbItemsModulePromise = import("./js/kb-items.js");
+  if (!kbItemsModulePromise) {
+    const v = getAppAssetVersion();
+    kbItemsModulePromise = import(`./js/kb-items.js${v ? `?v=${v}` : ""}`);
+  }
   return kbItemsModulePromise;
 }
 

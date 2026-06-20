@@ -4,7 +4,7 @@
 import { supabaseFetch } from "./supabase-client.js";
 
 const KB_ITEMS_PATH = "kb_items";
-const KB_ITEMS_SELECT = "id,item_type,title,content,status,priority,created_at,updated_at";
+const KB_ITEMS_SELECT = "id,item_type,title,content,status,priority,created_at";
 
 let cachedItems = [];
 
@@ -40,7 +40,7 @@ function truncate(text, max = 200) {
 export async function loadKbItems(filters = {}) {
   const params = new URLSearchParams();
   params.set("select", KB_ITEMS_SELECT);
-  params.set("order", "updated_at.desc.nullslast,created_at.desc");
+  params.set("order", "created_at.desc");
 
   if (filters.item_type) params.set("item_type", `eq.${filters.item_type}`);
   if (filters.status) params.set("status", `eq.${filters.status}`);
@@ -61,7 +61,7 @@ export function renderKbItem(item) {
   const status = escapeHtml(item.status || "—");
   const priority = escapeHtml(item.priority || "—");
   const preview = escapeHtml(truncate(item.content, 180));
-  const updated = formatDate(item.updated_at || item.created_at);
+  const created = formatDate(item.created_at);
 
   return `
     <article class="kbItemCard" data-id="${escapeHtml(item.id)}">
@@ -73,7 +73,7 @@ export function renderKbItem(item) {
       ${preview ? `<p class="kbItemPreview">${preview}</p>` : ""}
       <div class="kbItemMeta">
         <span>Priorita: ${priority}</span>
-        <span>Aktualizováno: ${updated}</span>
+        <span>Vytvořeno: ${created}</span>
       </div>
     </article>
   `;
