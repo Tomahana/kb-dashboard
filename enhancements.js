@@ -255,6 +255,8 @@
     renderMindMap();
   }
 
+  window.renderAdvancedPanels = renderAdvancedPanels;
+
   function init() {
     injectStyles();
     injectPanels();
@@ -263,6 +265,14 @@
     setTimeout(renderAdvancedPanels, 300);
     document.addEventListener("click", () => setTimeout(renderAdvancedPanels, 80));
     document.addEventListener("input", () => setTimeout(renderAdvancedPanels, 80));
+    document.addEventListener("kb:topics-tab-changed", (e) => {
+      if (e.detail?.tab === "analysis") setTimeout(renderAdvancedPanels, 60);
+    });
+    document.addEventListener("kb:page-changed", (e) => {
+      if (e.detail?.page === "temata" && (e.detail?.topicsTab === "analysis" || el("topicsTabAnalysis") && !el("topicsTabAnalysis").hidden)) {
+        setTimeout(renderAdvancedPanels, 60);
+      }
+    });
   }
 
   document.addEventListener("DOMContentLoaded", init);
