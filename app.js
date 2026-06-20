@@ -714,6 +714,13 @@ function bindKbItemsEvents() {
       if (list) list.innerHTML = `<p class="hint">Chyba načtení: ${escapeHtml(err.message || err)}</p>`;
     });
   });
+
+  if (window.kbLayout?.getPage?.() === "kb-items") {
+    refreshKbItemsList(false).catch((err) => {
+      const list = byId("kbItemsList");
+      if (list) list.innerHTML = `<p class="hint">Chyba načtení: ${escapeHtml(err.message || err)}</p>`;
+    });
+  }
 }
 
 document.addEventListener("DOMContentLoaded", bindKbItemsEvents);
