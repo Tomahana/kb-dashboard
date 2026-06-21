@@ -6,6 +6,8 @@
  *      SUPABASE_URL, SUPABASE_SERVICE_KEY
  */
 
+globalThis.WebSocket = require("ws");
+
 const NOTION_VERSION = "2022-06-28";
 const ANTHROPIC_VERSION = "2023-06-01";
 const CLAUDE_MODEL = "claude-sonnet-4-6";

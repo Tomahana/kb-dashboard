@@ -20,6 +20,9 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install dependencies
+        run: npm install @notionhq/client @anthropic-ai/sdk @supabase/supabase-js ws
+
       - name: Run kb-agent script
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
