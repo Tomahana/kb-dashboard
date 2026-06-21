@@ -50,7 +50,9 @@ Pravidla:
 - confidence je 0.0–1.0 (jistota klasifikace)
 - Pokud stránka neobsahuje nic užitečného, vrať {"items":[]}
 - Rozděl stránku na více záznamů, pokud obsahuje více témat
-- status výchozí "open", priority odhadni z kontextu`;
+- status výchozí "open", priority odhadni z kontextu
+
+DŮLEŽITÉ: Všechny string hodnoty v JSON musí být na jednom řádku. Nikdy nepoužívej skutečné zalomení řádku uvnitř JSON stringu — místo toho použij \\n jako escaped sekvenci.`;
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -276,10 +278,17 @@ function extractPageTitle(page) {
 }
 
 function cleanClaudeJson(text) {
-  return text
+  text = text
     .replace(/```json/g, "").replace(/```/g, "")
     .replace(/„/g, '"').replace(/"/g, '"').replace(/"/g, '"')
-    .replace(/‚/g, "'").replace(/'/g, "'")
+    .replace(/‚/g, "'").replace(/'/g, "'");
+
+  // Oprav newlines uvnitř JSON stringů
+  text = text.replace(/:\s*"([\s\S]*?)"/g, (match, p1) => {
+    return ': "' + p1.replace(/\n/g, "\\n").replace(/\r/g, "") + '"';
+  });
+
+  return text
     .replace(/[\u0000-\u001F\u007F]/g, " ")
     .trim();
 }
