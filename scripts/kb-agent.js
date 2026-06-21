@@ -256,8 +256,8 @@ function normalizeClassifiedItem(raw) {
     item_type: itemType,
     title,
     content: content || title,
-    status: String(raw.status || "open").trim() || "open",
-    priority: String(raw.priority || "medium").trim() || "medium",
+    status: (String(raw.status || "open").trim() || "open").toLowerCase(),
+    priority: (String(raw.priority || "UNSPECIFIED").trim() || "UNSPECIFIED").toUpperCase(),
     evidence: String(raw.evidence || "").trim() || null,
   };
 }
@@ -342,8 +342,8 @@ async function saveItemsToKbItems(page, items) {
       item_type: item.item_type,
       title: item.title,
       content: item.content,
-      status: item.status,
-      priority: item.priority,
+      status: (item.status || "open").toLowerCase(),
+      priority: (item.priority || "UNSPECIFIED").toUpperCase(),
       evidence: item.evidence,
       source_notion_page_url: pageUrl,
       notion_page_id: pageId,
@@ -387,12 +387,21 @@ async function main() {
         await sleep(CLAUDE_RATE_LIMIT_MS);
       }
 
-      const items = await classifyWithClaude(
-        config.anthropicApiKey,
-        pageTitle,
-        pageText,
-      );
-      claudeCalls += 1;
+      let items;
+      try {
+        items = await classifyWithClaude(
+          config.anthropicApiKey,
+          pageTitle,
+          pageText,
+        );
+        claudeCalls += 1;
+      } catch (err) {
+        const message = `[${pageId}] Claude: ${err.message || String(err)}`;
+        console.error(message);
+        stats.errors.push(message);
+        stats.skipped += 1;
+        continue;
+      }
 
       if (!items.length) {
         await markPageProcessed(page, 0);
