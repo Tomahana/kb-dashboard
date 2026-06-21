@@ -424,7 +424,13 @@ async function main() {
 
   console.log(JSON.stringify(stats, null, 2));
 
-  if (stats.errors.length) process.exitCode = 1;
+  if (stats.saved > 0) {
+    process.exit(0);
+  }
+  if (stats.errors.length > 0) {
+    process.exit(1);
+  }
+  process.exit(0);
 }
 
 main().catch((err) => {
