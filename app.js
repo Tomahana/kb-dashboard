@@ -709,11 +709,20 @@ async function refreshKbItemsList(useFilters = true) {
 }
 
 function bindKbItemsEvents() {
-  byId("btnLoadKbItems")?.addEventListener("click", () => {
+  const loadWithFilters = () => {
     refreshKbItemsList(true).catch((err) => {
       const list = byId("kbItemsList");
       if (list) list.innerHTML = `<p class="hint">Chyba načtení: ${escapeHtml(err.message || err)}</p>`;
     });
+  };
+
+  byId("btnLoadKbItems")?.addEventListener("click", loadWithFilters);
+
+  byId("kbItemsFilterSearch")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      loadWithFilters();
+    }
   });
 
   document.addEventListener("kb:page-changed", (e) => {

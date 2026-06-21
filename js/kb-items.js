@@ -46,8 +46,8 @@ export async function loadKbItems(filters = {}) {
   if (filters.status) params.set("status", `eq.${filters.status}`);
   if (filters.priority) params.set("priority", `eq.${filters.priority}`);
   if (filters.search && String(filters.search).trim()) {
-    const q = encodeURIComponent(`*${String(filters.search).trim()}*`);
-    params.set("or", `(title.ilike.${q},content.ilike.${q})`);
+    const term = String(filters.search).trim();
+    params.set("title", `ilike.*${term}*`);
   }
 
   const path = `${KB_ITEMS_PATH}?${params.toString()}`;
