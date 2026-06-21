@@ -695,10 +695,12 @@ function readKbItemsFilterValues() {
   const item_type = normalize(byId("kbItemsFilterType")?.value);
   const status = normalize(byId("kbItemsFilterStatus")?.value);
   const search = normalize(byId("kbItemsFilterSearch")?.value);
+  const owner = normalize(byId("kbItemsFilterOwner")?.value);
   const filters = {};
   if (item_type) filters.item_type = item_type;
   if (status) filters.status = status;
   if (search) filters.search = search;
+  if (owner) filters.owner = owner;
   return filters;
 }
 
@@ -719,6 +721,13 @@ function bindKbItemsEvents() {
   byId("btnLoadKbItems")?.addEventListener("click", loadWithFilters);
 
   byId("kbItemsFilterSearch")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      loadWithFilters();
+    }
+  });
+
+  byId("kbItemsFilterOwner")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       loadWithFilters();

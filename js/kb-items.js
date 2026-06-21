@@ -128,7 +128,7 @@ function bindKbItemListClicks() {
 
 /**
  * Načte záznamy z kb_items.
- * @param {{ item_type?: string, status?: string, priority?: string, search?: string }} filters
+ * @param {{ item_type?: string, status?: string, priority?: string, search?: string, owner?: string }} filters
  */
 export async function loadKbItems(filters = {}) {
   const params = new URLSearchParams();
@@ -141,6 +141,10 @@ export async function loadKbItems(filters = {}) {
   if (filters.search && String(filters.search).trim()) {
     const term = String(filters.search).trim();
     params.set("title", `ilike.*${term}*`);
+  }
+  if (filters.owner && String(filters.owner).trim()) {
+    const term = String(filters.owner).trim();
+    params.set("owner", `ilike.*${term}*`);
   }
 
   const path = `${KB_ITEMS_PATH}?${params.toString()}`;
@@ -155,6 +159,12 @@ export function renderKbItem(item) {
   const priority = escapeHtml(item.priority || "—");
   const preview = escapeHtml(truncate(item.content, 180));
   const created = formatDate(item.created_at);
+  const topics = formatTopics(item.topics);
+  const topicsHtml = topics.length
+    ? `<div class="kbItemTopics">${topics.map((t) => `<span class="topic">${escapeHtml(t)}</span>`).join("")}</div>`
+    : "";
+  const ownerRaw = String(item.owner || "").trim();
+  const ownerHtml = ownerRaw ? `<span class="kbItemOwner">👤 ${escapeHtml(ownerRaw)}</span>` : "";
 
   return `
     <article
@@ -170,8 +180,10 @@ export function renderKbItem(item) {
       </div>
       <h3 class="kbItemTitle">${title}</h3>
       ${preview ? `<p class="kbItemPreview">${preview}</p>` : ""}
+      ${topicsHtml}
       <div class="kbItemMeta">
         <span>Priorita: ${priority}</span>
+        ${ownerHtml}
         <span>Vytvořeno: ${created}</span>
       </div>
     </article>

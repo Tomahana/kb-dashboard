@@ -748,6 +748,9 @@ dialog form { padding: 1rem; }
 }
 .kbItemTitle { margin: 0 0 8px; font-size: 16px; font-weight: 800; }
 .kbItemPreview { margin: 0 0 8px; font-size: 13px; color: var(--muted); line-height: 1.45; }
+.kbItemTopics { margin: 0 0 8px; }
+.topic { background: #DEEAF1; border-radius: 4px; padding: 2px 8px; font-size: 11px; margin-right: 4px; }
+.kbItemOwner { font-size: 12px; color: var(--muted); }
 .kbItemMeta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); }
 .kbItemDialog { width: min(760px, 96vw); }
 .kbItemDialogHead { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
