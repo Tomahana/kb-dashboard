@@ -11,7 +11,7 @@ const ANTHROPIC_VERSION = "2023-06-01";
 const CLAUDE_MODEL = "claude-sonnet-4-6";
 const NOTION_PAGE_SIZE = 5;
 const CLAUDE_RATE_LIMIT_MS = 500;
-const CLAUDE_CHUNK_MAX_CHARS = 3000;
+const CLAUDE_CHUNK_MAX_CHARS = 1500;
 const MAX_PAGE_TEXT = 120_000;
 const MAX_CLAUDE_TOKENS = 8192;
 
@@ -312,6 +312,9 @@ function normalizeClassifiedItem(raw) {
 }
 
 async function classifyWithClaude(apiKey, pageTitle, pageText) {
+  const text = pageText || "";
+  console.log("Délka textu:", text.length, "znaků");
+
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -342,13 +345,13 @@ async function classifyWithClaude(apiKey, pageTitle, pageText) {
   }
 
   const payload = await res.json();
-  const text = (payload.content || [])
+  const responseText = (payload.content || [])
     .filter((part) => part.type === "text")
     .map((part) => part.text || "")
     .join("\n")
     .trim();
 
-  const parsed = parseClaudeJson(text);
+  const parsed = parseClaudeJson(responseText);
   const items = Array.isArray(parsed.items) ? parsed.items : [];
   return items.map(normalizeClassifiedItem).filter(Boolean);
 }
@@ -359,6 +362,10 @@ async function classifyPageWithClaude(apiKey, pageTitle, pageText, beforeChunkCa
 
   for (let i = 0; i < chunks.length; i++) {
     if (beforeChunkCall) await beforeChunkCall();
+
+    if (chunks.length > 1) {
+      console.log("Chunk:", i + 1, "/", chunks.length);
+    }
 
     const chunkText = chunks.length > 1
       ? `${chunks[i]}\n\n(Část ${i + 1}/${chunks.length} textu stránky)`
