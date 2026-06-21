@@ -1,22 +1,18 @@
 /**
- * KB Agent — Supabase Edge Function
+ * KB Agent — Deno Edge Function
  * Notion databáze → Claude klasifikace → Supabase kb_items / kb_pending
  *
  * Env: NOTION_TOKEN, NOTION_DATABASE_ID, ANTHROPIC_API_KEY,
  *      KB_SUPABASE_URL, KB_SUPABASE_SERVICE_ROLE_KEY
  *
- * Nasazení: supabase functions deploy kb-agent --project-ref <ref>
- *
- * Request body (volitelné): { "start_cursor": "..." } — stránkování Notion DB
- * Response: next_cursor pokud Notion vrátí has_more: true
+ * Nasazení (Supabase CLI): zkopírujte do supabase/functions/kb-agent/index.ts
+ *   supabase functions deploy kb-agent --project-ref <ref>
  */
 
 const NOTION_VERSION = "2022-06-28";
 const ANTHROPIC_VERSION = "2023-06-01";
 const CLAUDE_MODEL = "claude-sonnet-4-6";
 const CONFIDENCE_THRESHOLD = 0.7;
-const NOTION_PAGE_SIZE = 5;
-const CLAUDE_RATE_LIMIT_MS = 500;
 const MAX_PAGE_TEXT = 120_000;
 const MAX_CLAUDE_TOKENS = 8192;
 
@@ -78,20 +74,6 @@ type NotionPage = {
   last_edited_time?: string;
   properties?: Record<string, unknown>;
 };
-
-type NotionQueryResult = {
-  pages: NotionPage[];
-  has_more: boolean;
-  next_cursor: string | null;
-};
-
-type ProcessResult = Stats & {
-  next_cursor?: string;
-};
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -228,28 +210,31 @@ async function notionFetch(
 async function queryNotionDatabase(
   token: string,
   databaseId: string,
-  startCursor?: string,
-): Promise<NotionQueryResult> {
-  const body: Record<string, unknown> = { page_size: NOTION_PAGE_SIZE };
-  if (startCursor) body.start_cursor = startCursor;
+): Promise<NotionPage[]> {
+  const pages: NotionPage[] = [];
+  let cursor: string | undefined;
 
-  const res = await notionFetch(token, `/databases/${databaseId}/query`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  do {
+    const body: Record<string, unknown> = { page_size: 100 };
+    if (cursor) body.start_cursor = cursor;
 
-  if (!res.ok) {
-    throw new Error(
-      `Notion database query: ${res.status} ${await res.text()}`,
-    );
-  }
+    const res = await notionFetch(token, `/databases/${databaseId}/query`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
 
-  const payload = await res.json();
-  return {
-    pages: (payload.results || []) as NotionPage[],
-    has_more: !!payload.has_more,
-    next_cursor: payload.has_more ? (payload.next_cursor ?? null) : null,
-  };
+    if (!res.ok) {
+      throw new Error(
+        `Notion database query: ${res.status} ${await res.text()}`,
+      );
+    }
+
+    const payload = await res.json();
+    pages.push(...((payload.results || []) as NotionPage[]));
+    cursor = payload.has_more ? payload.next_cursor : undefined;
+  } while (cursor);
+
+  return pages;
 }
 
 function richTextToPlain(richText: unknown): string {
@@ -507,10 +492,7 @@ async function markPageProcessed(
   );
 }
 
-async function processNotionPages(
-  config: EnvConfig,
-  startCursor?: string,
-): Promise<ProcessResult> {
+async function processNotionPages(config: EnvConfig): Promise<Stats> {
   const stats: Stats = {
     saved: 0,
     pending: 0,
@@ -521,15 +503,11 @@ async function processNotionPages(
   };
 
   const processedIds = await loadProcessedPageIds(config);
-  const queryResult = await queryNotionDatabase(
+  const pages = await queryNotionDatabase(
     config.notionToken,
     config.notionDatabaseId,
-    startCursor,
   );
-  const pages = queryResult.pages;
   stats.pagesTotal = pages.length;
-
-  let claudeCalls = 0;
 
   for (const page of pages) {
     const pageId = normalizeNotionId(page.id);
@@ -550,16 +528,11 @@ async function processNotionPages(
         continue;
       }
 
-      if (claudeCalls > 0) {
-        await sleep(CLAUDE_RATE_LIMIT_MS);
-      }
-
       const items = await classifyWithClaude(
         config.anthropicApiKey,
         pageTitle,
         pageText,
       );
-      claudeCalls += 1;
 
       if (!items.length) {
         await markPageProcessed(config, page, 0, 0);
@@ -584,11 +557,7 @@ async function processNotionPages(
     }
   }
 
-  const result: ProcessResult = { ...stats };
-  if (queryResult.has_more && queryResult.next_cursor) {
-    result.next_cursor = queryResult.next_cursor;
-  }
-  return result;
+  return stats;
 }
 
 Deno.serve(async (req) => {
@@ -602,31 +571,17 @@ Deno.serve(async (req) => {
 
   try {
     const config = readEnv();
+    const stats = await processNotionPages(config);
 
-    let startCursor: string | undefined;
-    if (req.method === "POST") {
-      const body = await req.json().catch(() => ({}));
-      if (typeof body?.start_cursor === "string" && body.start_cursor.trim()) {
-        startCursor = body.start_cursor.trim();
-      }
-    }
-
-    const result = await processNotionPages(config, startCursor);
-
-    const response: Record<string, unknown> = {
+    return json({
       ok: true,
-      saved: result.saved,
-      pending: result.pending,
-      skipped: result.skipped,
-      errors: result.errors,
-      pagesProcessed: result.pagesProcessed,
-      pagesTotal: result.pagesTotal,
-    };
-    if (result.next_cursor) {
-      response.next_cursor = result.next_cursor;
-    }
-
-    return json(response);
+      saved: stats.saved,
+      pending: stats.pending,
+      skipped: stats.skipped,
+      errors: stats.errors,
+      pagesProcessed: stats.pagesProcessed,
+      pagesTotal: stats.pagesTotal,
+    });
   } catch (err) {
     return json(
       {
