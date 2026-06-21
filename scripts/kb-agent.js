@@ -40,10 +40,18 @@ Vrať POUZE validní JSON (bez markdown, bez komentářů) ve tvaru:
       "status": "open",
       "priority": "low|medium|high",
       "confidence": 0.0,
-      "evidence": "citace nebo odůvodnění z textu"
+      "evidence": "citace nebo odůvodnění z textu",
+      "topics": ["Věda a výzkum"],
+      "owner": "jméno nebo role, nebo null"
     }
   ]
 }
+
+topics: pole stringů — vyber relevantní témata z tohoto seznamu 17 oblastí:
+Věda a výzkum, DKRVO, Interní soutěže, Doktorské studium, Open Science / RDM, Bezpečnost výzkumu, Transfer znalostí, Knihovna, CARDS, IRIS / prověrky spoluprací, OBD / RIV / výsledky, Mezinárodní projekty, Legislativa / věcný záměr VŠ, AI automatizace, Výuka, Osobní organizace práce, Lidé / personální návaznosti.
+Můžeš přidat i vlastní téma, pokud žádné z výše uvedených nevyhovuje.
+
+owner: string nebo null — odhadni vlastníka z kontextu (jméno, role, zkratka). Pokud nelze určit, vrať null.
 
 Pravidla:
 - item_type musí být jedna z povolených hodnot
@@ -322,6 +330,8 @@ function normalizeClassifiedItem(raw) {
 
   if (!VALID_ITEM_TYPES.has(itemType) || !title) return null;
 
+  const ownerRaw = raw.owner == null ? null : String(raw.owner).trim();
+
   return {
     item_type: itemType,
     title,
@@ -329,6 +339,10 @@ function normalizeClassifiedItem(raw) {
     status: (String(raw.status || "open").trim() || "open").toLowerCase(),
     priority: (String(raw.priority || "UNSPECIFIED").trim() || "UNSPECIFIED").toUpperCase(),
     evidence: String(raw.evidence || "").trim() || null,
+    topics: Array.isArray(raw.topics)
+      ? raw.topics.map((t) => String(t || "").trim()).filter(Boolean)
+      : [],
+    owner: ownerRaw || null,
   };
 }
 
@@ -441,6 +455,8 @@ async function saveItemsToKbItems(page, items) {
       status: (item.status || "open").toLowerCase(),
       priority: (item.priority || "UNSPECIFIED").toUpperCase(),
       evidence: item.evidence,
+      topics: item.topics || [],
+      owner: item.owner || null,
       source_notion_page_url: pageUrl,
       notion_page_id: pageId,
       created_at: now,
