@@ -11,6 +11,7 @@ const ANTHROPIC_VERSION = "2023-06-01";
 const CLAUDE_MODEL = "claude-sonnet-4-6";
 const NOTION_PAGE_SIZE = 5;
 const CLAUDE_RATE_LIMIT_MS = 500;
+const CLAUDE_CHUNK_MAX_CHARS = 3000;
 const MAX_PAGE_TEXT = 120_000;
 const MAX_CLAUDE_TOKENS = 8192;
 
@@ -53,6 +54,54 @@ Pravidla:
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Rozdělí text na části max maxChars znaků.
+ * Preferuje konec odstavce, věty nebo slova — ne střed slova.
+ */
+function splitTextToChunks(text, maxChars = CLAUDE_CHUNK_MAX_CHARS) {
+  const input = String(text || "").trim();
+  if (!input) return [];
+  if (input.length <= maxChars) return [input];
+
+  const chunks = [];
+  let rest = input;
+  const minBreak = Math.max(200, Math.floor(maxChars * 0.35));
+
+  function findBreakIndex(slice) {
+    let idx = slice.lastIndexOf("\n\n");
+    if (idx >= minBreak) return idx + 2;
+
+    idx = slice.lastIndexOf("\n");
+    if (idx >= minBreak) return idx + 1;
+
+    for (let i = slice.length - 1; i >= minBreak; i--) {
+      const ch = slice[i];
+      if ((ch === "." || ch === "!" || ch === "?") && i + 1 < slice.length && /\s/.test(slice[i + 1])) {
+        let end = i + 1;
+        while (end < slice.length && /\s/.test(slice[end])) end += 1;
+        return end;
+      }
+    }
+
+    idx = slice.lastIndexOf(" ");
+    if (idx >= minBreak) return idx + 1;
+
+    return maxChars;
+  }
+
+  while (rest.length > maxChars) {
+    const slice = rest.slice(0, maxChars);
+    const breakAt = findBreakIndex(slice);
+    const chunk = rest.slice(0, breakAt).trim();
+    if (!chunk) break;
+    chunks.push(chunk);
+    rest = rest.slice(breakAt).trim();
+  }
+
+  if (rest) chunks.push(rest);
+  return chunks;
 }
 
 function normalizeNotionId(raw) {
@@ -304,6 +353,24 @@ async function classifyWithClaude(apiKey, pageTitle, pageText) {
   return items.map(normalizeClassifiedItem).filter(Boolean);
 }
 
+async function classifyPageWithClaude(apiKey, pageTitle, pageText, beforeChunkCall) {
+  const chunks = splitTextToChunks(pageText, CLAUDE_CHUNK_MAX_CHARS);
+  const allItems = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    if (beforeChunkCall) await beforeChunkCall();
+
+    const chunkText = chunks.length > 1
+      ? `${chunks[i]}\n\n(Část ${i + 1}/${chunks.length} textu stránky)`
+      : chunks[i];
+
+    const items = await classifyWithClaude(apiKey, pageTitle, chunkText);
+    allItems.push(...items);
+  }
+
+  return allItems;
+}
+
 async function loadProcessedPageIds() {
   try {
     const data = await supabaseGet("notion_pages_processed?select=page_id");
@@ -384,18 +451,17 @@ async function main() {
         continue;
       }
 
-      if (claudeCalls > 0) {
-        await sleep(CLAUDE_RATE_LIMIT_MS);
-      }
-
       let items;
       try {
-        items = await classifyWithClaude(
+        items = await classifyPageWithClaude(
           config.anthropicApiKey,
           pageTitle,
           pageText,
+          async () => {
+            if (claudeCalls > 0) await sleep(CLAUDE_RATE_LIMIT_MS);
+            claudeCalls += 1;
+          },
         );
-        claudeCalls += 1;
       } catch (err) {
         const message = `[${pageId}] Claude: ${err.message || String(err)}`;
         console.error(message);
