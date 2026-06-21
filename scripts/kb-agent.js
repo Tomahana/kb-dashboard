@@ -6,8 +6,6 @@
  *      SUPABASE_URL, SUPABASE_SERVICE_KEY
  */
 
-globalThis.WebSocket = require("ws");
-
 const NOTION_VERSION = "2022-06-28";
 const ANTHROPIC_VERSION = "2023-06-01";
 const CLAUDE_MODEL = "claude-sonnet-4-6";
@@ -107,18 +105,12 @@ function readEnv() {
   };
 }
 
-function supabaseHeaders(serviceKey, extra = {}) {
-  return {
-    apikey: serviceKey,
-    Authorization: `Bearer ${serviceKey}`,
-    "Content-Type": "application/json",
-    ...extra,
-  };
-}
-
-async function supabaseGet(config, path) {
-  const res = await fetch(`${config.supabaseUrl}/rest/v1/${path}`, {
-    headers: supabaseHeaders(config.supabaseServiceKey),
+async function supabaseGet(path) {
+  const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      apikey: process.env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+    },
   });
   if (!res.ok) {
     throw new Error(`Supabase GET ${path}: ${res.status} ${await res.text()}`);
@@ -126,11 +118,16 @@ async function supabaseGet(config, path) {
   return res.json();
 }
 
-async function supabasePost(config, table, rows, prefer = "return=minimal") {
-  const res = await fetch(`${config.supabaseUrl}/rest/v1/${table}`, {
+async function supabasePost(table, row, prefer = "return=minimal") {
+  const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${table}`, {
     method: "POST",
-    headers: supabaseHeaders(config.supabaseServiceKey, { Prefer: prefer }),
-    body: JSON.stringify(rows),
+    headers: {
+      apikey: process.env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: prefer,
+    },
+    body: JSON.stringify(row),
   });
   if (!res.ok) {
     throw new Error(`Supabase POST ${table}: ${res.status} ${await res.text()}`);
@@ -307,12 +304,9 @@ async function classifyWithClaude(apiKey, pageTitle, pageText) {
   return items.map(normalizeClassifiedItem).filter(Boolean);
 }
 
-async function loadProcessedPageIds(config) {
+async function loadProcessedPageIds() {
   try {
-    const data = await supabaseGet(
-      config,
-      "notion_pages_processed?select=page_id",
-    );
+    const data = await supabaseGet("notion_pages_processed?select=page_id");
     return new Set(
       (Array.isArray(data) ? data : [])
         .map((row) => normalizeNotionId(row.page_id))
@@ -324,9 +318,8 @@ async function loadProcessedPageIds(config) {
   }
 }
 
-async function markPageProcessed(config, page, itemsSaved) {
+async function markPageProcessed(page, itemsSaved) {
   await supabasePost(
-    config,
     "notion_pages_processed",
     {
       page_id: normalizeNotionId(page.id),
@@ -339,13 +332,13 @@ async function markPageProcessed(config, page, itemsSaved) {
   );
 }
 
-async function saveItemsToKbItems(config, page, items) {
+async function saveItemsToKbItems(page, items) {
   const pageId = normalizeNotionId(page.id);
   const pageUrl = page.url || `https://www.notion.so/${pageId}`;
   const now = new Date().toISOString();
 
   for (const item of items) {
-    await supabasePost(config, "kb_items", {
+    await supabasePost("kb_items", {
       item_type: item.item_type,
       title: item.title,
       content: item.content,
@@ -365,7 +358,7 @@ async function main() {
   const config = readEnv();
   const stats = { saved: 0, skipped: 0, errors: [] };
 
-  const processedIds = await loadProcessedPageIds(config);
+  const processedIds = await loadProcessedPageIds();
   const query = await queryNotionDatabase(config);
   const pages = query.results || [];
 
@@ -384,7 +377,7 @@ async function main() {
       const pageText = await extractPagePlainText(config.notionToken, page.id);
 
       if (!pageText.trim()) {
-        await markPageProcessed(config, page, 0);
+        await markPageProcessed(page, 0);
         processedIds.add(pageId);
         stats.skipped += 1;
         continue;
@@ -402,14 +395,14 @@ async function main() {
       claudeCalls += 1;
 
       if (!items.length) {
-        await markPageProcessed(config, page, 0);
+        await markPageProcessed(page, 0);
         processedIds.add(pageId);
         stats.skipped += 1;
         continue;
       }
 
-      const count = await saveItemsToKbItems(config, page, items);
-      await markPageProcessed(config, page, count);
+      const count = await saveItemsToKbItems(page, items);
+      await markPageProcessed(page, count);
       processedIds.add(pageId);
       stats.saved += count;
     } catch (err) {
