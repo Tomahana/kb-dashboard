@@ -9,9 +9,14 @@ create table if not exists public.kb_items (
   status text not null default 'open',
   priority text default 'medium',
   evidence text,
+  topics text[] default '{}',
+  owner text,
+  deadline timestamptz,
+  confidence numeric(4,3),
   source_notion_page_url text,
   notion_page_id text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz default now()
 );
 
 create index if not exists kb_items_created_at_idx on public.kb_items (created_at desc);
@@ -52,6 +57,12 @@ alter table public.notion_pages_processed enable row level security;
 drop policy if exists kb_items_select_authenticated on public.kb_items;
 create policy kb_items_select_authenticated on public.kb_items
   for select to authenticated using (true);
+
+drop policy if exists kb_items_write_authenticated on public.kb_items;
+create policy kb_items_write_authenticated on public.kb_items
+  for all to authenticated using (true) with check (true);
+
+grant select, insert, update, delete on public.kb_items to authenticated;
 
 drop policy if exists kb_pending_select_authenticated on public.kb_pending;
 create policy kb_pending_select_authenticated on public.kb_pending

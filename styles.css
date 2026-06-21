@@ -791,6 +791,23 @@ dialog form { padding: 1rem; }
   line-height: 1.55;
 }
 .kbItemDetailLink { color: var(--accent); font-weight: 700; word-break: break-all; }
+.kbItemEditForm { display: grid; gap: .75rem; }
+.kbItemField { display: grid; gap: .35rem; font-size: .88rem; font-weight: 600; }
+.kbItemField input,
+.kbItemField select,
+.kbItemField textarea {
+  width: 100%;
+  padding: .55rem .65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+}
+.kbItemField textarea { resize: vertical; min-height: 4rem; }
+.kbItemFieldGrid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.kbItemReadonlyMeta { display: grid; gap: .25rem; margin-top: .25rem; }
+.kbItemDialogStatus { margin: .5rem 0 0; }
+.kbItemDialogStatus--error { color: #b42318; }
 .kbItemDetailTags { display: flex; flex-wrap: wrap; gap: .35rem; }
 .kbItemDetailTag {
   font-size: .78rem;
@@ -810,4 +827,5 @@ dialog form { padding: 1rem; }
   .cards, .overviewGrid { grid-template-columns: 1fr 1fr; }
   .topbar { align-items: flex-start; flex-direction: column; }
   .grid2 { grid-template-columns: 1fr; }
+  .kbItemFieldGrid { grid-template-columns: 1fr; }
 }

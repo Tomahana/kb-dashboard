@@ -190,6 +190,7 @@
             <input id="kbItemsFilterOwner" type="search" placeholder="Filtr owner…" />
           </label>
           <button id="btnLoadKbItems" type="button" class="button accent">Načíst záznamy</button>
+          <button id="btnNewKbItem" type="button" class="button secondary">Nový záznam</button>
         </div>
         <div id="kbItemsList" class="kbItemsList"></div>
       </section>
@@ -368,7 +369,7 @@
       </section>
       <section class="panel">
         <h2>KB záznamy (AI agent)</h2>
-        <p class="hint">Modul čte tabulku <code>kb_items</code> v Supabase (typy TASK, KNOWLEDGE, DECISION, …). Ujistěte se, že tabulka existuje a má RLS pro přihlášené uživatele. Data se načítají po otevření stránky <strong>KB záznamy</strong> nebo z přehledu modulů.</p>
+        <p class="hint">Modul čte tabulku <code>kb_items</code> v Supabase (typy TASK, KNOWLEDGE, DECISION, …). Pro úpravu záznamů a export do ClickUp spusťte <code>supabase/kb-items-migrate-v2.sql</code> a přihlaste se. ClickUp token nastavte v Nastavení.</p>
       </section>
       <section class="panel">
         <h2>AI poradce</h2>
@@ -770,7 +771,8 @@
   </dialog>
 
   <dialog id="kbItemDialog" class="kbItemDialog">
-    <form method="dialog">
+    <form id="kbItemForm" method="dialog">
+      <input type="hidden" id="kbItemEditId" />
       <div class="dialogHeader">
         <div class="kbItemDialogHead">
           <span id="kbItemDialogType" class="kbItemType"></span>
@@ -778,8 +780,70 @@
         </div>
         <button class="iconButton" type="submit" value="cancel" aria-label="Zavřít">×</button>
       </div>
-      <div id="kbItemDialogBody" class="kbItemDetail"></div>
+      <div id="kbItemDialogBody" class="kbItemDetail kbItemEditForm">
+        <label class="kbItemField">Typ
+          <select id="kbItemEditItemType">
+            <option value="TASK">TASK</option>
+            <option value="KNOWLEDGE">KNOWLEDGE</option>
+            <option value="DECISION">DECISION</option>
+            <option value="QUESTION">QUESTION</option>
+            <option value="IDEA">IDEA</option>
+            <option value="RISK_OR_WARNING">RISK_OR_WARNING</option>
+            <option value="REFERENCE">REFERENCE</option>
+          </select>
+        </label>
+        <label class="kbItemField">Název
+          <input id="kbItemEditTitle" type="text" required />
+        </label>
+        <label class="kbItemField">Obsah
+          <textarea id="kbItemEditContent" rows="6"></textarea>
+        </label>
+        <label class="kbItemField">Evidence
+          <textarea id="kbItemEditEvidence" rows="3"></textarea>
+        </label>
+        <div class="kbItemFieldGrid">
+          <label class="kbItemField">Stav
+            <select id="kbItemEditStatus">
+              <option value="open">open</option>
+              <option value="in_progress">in_progress</option>
+              <option value="done">done</option>
+              <option value="archived">archived</option>
+              <option value="closed">closed</option>
+            </select>
+          </label>
+          <label class="kbItemField">Priorita
+            <select id="kbItemEditPriority">
+              <option value="LOW">LOW</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="HIGH">HIGH</option>
+              <option value="CRITICAL">CRITICAL</option>
+              <option value="UNSPECIFIED">UNSPECIFIED</option>
+            </select>
+          </label>
+        </div>
+        <label class="kbItemField">Témata <span class="hint">(oddělená čárkou)</span>
+          <input id="kbItemEditTopics" type="text" placeholder="Věda a výzkum, DKRVO" />
+        </label>
+        <div class="kbItemFieldGrid">
+          <label class="kbItemField">Vlastník
+            <input id="kbItemEditOwner" type="text" />
+          </label>
+          <label class="kbItemField">Termín
+            <input id="kbItemEditDeadline" type="datetime-local" />
+          </label>
+        </div>
+        <label class="kbItemField">Confidence (0–1)
+          <input id="kbItemEditConfidence" type="number" min="0" max="1" step="0.01" />
+        </label>
+        <div class="kbItemReadonlyMeta">
+          <p id="kbItemEditNotion" class="hint"></p>
+          <p id="kbItemEditCreated" class="hint"></p>
+        </div>
+      </div>
+      <p id="kbItemDialogStatus" class="hint kbItemDialogStatus" hidden></p>
       <div class="dialogActions">
+        <button type="button" id="kbItemClickUpBtn" class="button secondary">Vytvořit úkol v ClickUp</button>
+        <button type="button" id="kbItemSaveBtn" class="button accent">Uložit</button>
         <button type="submit" value="cancel" class="button secondary">Zavřít</button>
       </div>
     </form>
