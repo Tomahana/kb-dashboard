@@ -3,7 +3,8 @@
  * KB Agent — Notion → Claude → Supabase kb_items (Node.js, fetch + REST).
  *
  * Env: NOTION_TOKEN, NOTION_DATABASE_ID, ANTHROPIC_API_KEY,
- *      SUPABASE_URL, SUPABASE_SERVICE_KEY
+ *      SUPABASE_URL, SUPABASE_SERVICE_KEY,
+ *      CLICKUP_API_KEY, CLICKUP_LIST_ID (volitelné — export TASK do ClickUp)
  */
 
 const NOTION_VERSION = "2022-06-28";
@@ -442,6 +443,46 @@ async function markPageProcessed(pageId, page, itemsSaved) {
   );
 }
 
+async function createClickUpTask({ name, description, priority, due_date, assignees = [] }) {
+  const apiKey = process.env.CLICKUP_API_KEY?.trim() || "";
+  const listId = process.env.CLICKUP_LIST_ID?.trim() || "";
+
+  if (!apiKey || !listId) {
+    throw new Error("Chybí CLICKUP_API_KEY nebo CLICKUP_LIST_ID");
+  }
+
+  const body = {
+    name,
+    description,
+    priority,
+    assignees,
+  };
+  if (due_date != null) body.due_date = due_date;
+
+  const res = await fetch(`https://api.clickup.com/api/v2/list/${listId}/task`, {
+    method: "POST",
+    headers: {
+      Authorization: apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    throw new Error(`ClickUp API: ${res.status} ${await res.text()}`);
+  }
+
+  return res.json();
+}
+
+function clickUpPriority(priority) {
+  const p = String(priority || "").toUpperCase();
+  if (p === "CRITICAL") return 1;
+  if (p === "HIGH") return 2;
+  if (p === "MEDIUM") return 3;
+  return 4;
+}
+
 async function saveItemsToKbItems(page, items) {
   const pageId = normalizeNotionId(page.id);
   const pageUrl = page.url || `https://www.notion.so/${pageId}`;
@@ -461,6 +502,20 @@ async function saveItemsToKbItems(page, items) {
       notion_page_id: pageId,
       created_at: now,
     });
+
+    if (item.item_type === "TASK") {
+      try {
+        await createClickUpTask({
+          name: item.title,
+          description: `${item.content}\n\nZdroj: ${pageUrl}`,
+          priority: clickUpPriority(item.priority),
+          due_date: item.deadline ? new Date(item.deadline).getTime() : null,
+          assignees: [],
+        });
+      } catch (err) {
+        console.error(`ClickUp [${item.title}]:`, err.message || String(err));
+      }
+    }
   }
 
   return items.length;
