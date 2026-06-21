@@ -318,11 +318,12 @@ async function loadProcessedPageIds() {
   }
 }
 
-async function markPageProcessed(page, itemsSaved) {
+async function markPageProcessed(pageId, page, itemsSaved) {
   await supabasePost(
     "notion_pages_processed",
     {
-      page_id: normalizeNotionId(page.id),
+      page_id: pageId,
+      notion_page_id: pageId,
       notion_last_edited: page.last_edited_time || null,
       processed_at: new Date().toISOString(),
       items_saved: itemsSaved,
@@ -377,7 +378,7 @@ async function main() {
       const pageText = await extractPagePlainText(config.notionToken, page.id);
 
       if (!pageText.trim()) {
-        await markPageProcessed(page, 0);
+        await markPageProcessed(pageId, page, 0);
         processedIds.add(pageId);
         stats.skipped += 1;
         continue;
@@ -404,14 +405,14 @@ async function main() {
       }
 
       if (!items.length) {
-        await markPageProcessed(page, 0);
+        await markPageProcessed(pageId, page, 0);
         processedIds.add(pageId);
         stats.skipped += 1;
         continue;
       }
 
       const count = await saveItemsToKbItems(page, items);
-      await markPageProcessed(page, count);
+      await markPageProcessed(pageId, page, count);
       processedIds.add(pageId);
       stats.saved += count;
     } catch (err) {
