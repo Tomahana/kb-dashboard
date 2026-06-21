@@ -275,10 +275,22 @@ function extractPageTitle(page) {
   return "Bez názvu";
 }
 
+function cleanClaudeJson(text) {
+  return text
+    .replace(/```json/g, "").replace(/```/g, "")
+    .replace(/„/g, '"').replace(/"/g, '"').replace(/"/g, '"')
+    .replace(/‚/g, "'").replace(/'/g, "'")
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .trim();
+}
+
 function parseClaudeJson(raw) {
   const trimmed = String(raw || "").trim();
+  console.log("Claude raw response:", trimmed.slice(0, 200));
+
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = (fenced ? fenced[1] : trimmed).trim();
+  let candidate = (fenced ? fenced[1] : trimmed).trim();
+  candidate = cleanClaudeJson(candidate);
 
   try {
     return JSON.parse(candidate);
@@ -286,7 +298,7 @@ function parseClaudeJson(raw) {
     const start = candidate.indexOf("{");
     const end = candidate.lastIndexOf("}");
     if (start >= 0 && end > start) {
-      return JSON.parse(candidate.slice(start, end + 1));
+      return JSON.parse(cleanClaudeJson(candidate.slice(start, end + 1)));
     }
     throw new Error("Claude nevrátil validní JSON.");
   }
