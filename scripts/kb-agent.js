@@ -1,21 +1,14 @@
 #!/usr/bin/env node
 /**
- * KB Agent — přímý běh v Node.js (GitHub Actions nebo lokálně).
+ * KB Agent — Notion → Claude → Supabase kb_items (Node.js, fetch + REST).
  *
- * Env:
- *   NOTION_TOKEN, NOTION_DATABASE_ID, ANTHROPIC_API_KEY,
- *   SUPABASE_URL, SUPABASE_SERVICE_KEY
- *
- * Volitelné:
- *   KB_AGENT_START_CURSOR — pokračování stránkování Notion DB
+ * Env: NOTION_TOKEN, NOTION_DATABASE_ID, ANTHROPIC_API_KEY,
+ *      SUPABASE_URL, SUPABASE_SERVICE_KEY
  */
 
-const { Client: NotionClient } = require("@notionhq/client");
-const Anthropic = require("@anthropic-ai/sdk");
-const { createClient } = require("@supabase/supabase-js");
-
+const NOTION_VERSION = "2022-06-28";
+const ANTHROPIC_VERSION = "2023-06-01";
 const CLAUDE_MODEL = "claude-sonnet-4-6";
-const CONFIDENCE_THRESHOLD = 0.7;
 const NOTION_PAGE_SIZE = 5;
 const CLAUDE_RATE_LIMIT_MS = 500;
 const MAX_PAGE_TEXT = 120_000;
@@ -112,6 +105,64 @@ function readEnv() {
   };
 }
 
+async function supabaseGet(path) {
+  const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      apikey: process.env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Supabase GET ${path}: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+async function supabasePost(table, row, prefer = "return=minimal") {
+  const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${table}`, {
+    method: "POST",
+    headers: {
+      apikey: process.env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: prefer,
+    },
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) {
+    throw new Error(`Supabase POST ${table}: ${res.status} ${await res.text()}`);
+  }
+}
+
+async function notionFetch(token, path, init = {}) {
+  return fetch(`https://api.notion.com/v1${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Notion-Version": NOTION_VERSION,
+      "Content-Type": "application/json",
+      ...(init.headers || {}),
+    },
+  });
+}
+
+async function queryNotionDatabase(config) {
+  const body = { page_size: NOTION_PAGE_SIZE };
+  if (config.startCursor) body.start_cursor = config.startCursor;
+
+  const res = await notionFetch(
+    config.notionToken,
+    `/databases/${config.notionDatabaseId}/query`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+
+  if (!res.ok) {
+    throw new Error(`Notion database query: ${res.status} ${await res.text()}`);
+  }
+
+  return res.json();
+}
+
 function richTextToPlain(richText) {
   if (!Array.isArray(richText)) return "";
   return richText.map((part) => part.plain_text || "").join("");
@@ -125,35 +176,48 @@ function blockToPlainText(block) {
   return "";
 }
 
-async function fetchAllBlockText(notion, blockId) {
-  const lines = [];
+async function fetchBlockChildren(token, blockId) {
+  const blocks = [];
+  let cursor;
 
-  async function walk(id) {
-    let cursor;
-    do {
-      const res = await notion.blocks.children.list({
-        block_id: id,
-        page_size: 100,
-        start_cursor: cursor,
-      });
+  do {
+    const query = new URLSearchParams({ page_size: "100" });
+    if (cursor) query.set("start_cursor", cursor);
 
-      for (const block of res.results) {
-        const text = blockToPlainText(block).trim();
-        if (text) lines.push(text);
-        if (block.has_children) await walk(block.id);
+    const res = await notionFetch(
+      token,
+      `/blocks/${blockId}/children?${query.toString()}`,
+    );
+
+    if (!res.ok) {
+      throw new Error(`Notion blocks ${blockId}: ${res.status} ${await res.text()}`);
+    }
+
+    const payload = await res.json();
+    for (const block of payload.results || []) {
+      blocks.push(block);
+      if (block.has_children) {
+        blocks.push(...(await fetchBlockChildren(token, block.id)));
       }
+    }
 
-      cursor = res.has_more ? res.next_cursor : undefined;
-    } while (cursor);
-  }
+    cursor = payload.has_more ? payload.next_cursor : undefined;
+  } while (cursor);
 
-  await walk(blockId);
-  return lines.join("\n").slice(0, MAX_PAGE_TEXT);
+  return blocks;
+}
+
+async function extractPagePlainText(token, pageId) {
+  const blocks = await fetchBlockChildren(token, pageId);
+  return blocks
+    .map((block) => blockToPlainText(block).trim())
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, MAX_PAGE_TEXT);
 }
 
 function extractPageTitle(page) {
-  const props = page.properties || {};
-  for (const value of Object.values(props)) {
+  for (const value of Object.values(page.properties || {})) {
     if (value?.type === "title" && Array.isArray(value.title)) {
       const title = richTextToPlain(value.title).trim();
       if (title) return title;
@@ -185,10 +249,8 @@ function normalizeClassifiedItem(raw) {
   const itemType = String(raw.item_type || "").trim().toUpperCase();
   const title = String(raw.title || "").trim();
   const content = String(raw.content || "").trim();
-  const confidence = Number(raw.confidence);
 
   if (!VALID_ITEM_TYPES.has(itemType) || !title) return null;
-  if (!Number.isFinite(confidence)) return null;
 
   return {
     item_type: itemType,
@@ -196,30 +258,42 @@ function normalizeClassifiedItem(raw) {
     content: content || title,
     status: String(raw.status || "open").trim() || "open",
     priority: String(raw.priority || "medium").trim() || "medium",
-    confidence: Math.max(0, Math.min(1, confidence)),
     evidence: String(raw.evidence || "").trim() || null,
   };
 }
 
-async function classifyWithClaude(client, pageTitle, pageText) {
-  const message = await client.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: MAX_CLAUDE_TOKENS,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: [
-          `Název stránky Notion: ${pageTitle}`,
-          "",
-          "Text stránky:",
-          pageText || "(prázdná stránka)",
-        ].join("\n"),
-      },
-    ],
+async function classifyWithClaude(apiKey, pageTitle, pageText) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": ANTHROPIC_VERSION,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: MAX_CLAUDE_TOKENS,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: [
+            `Název stránky Notion: ${pageTitle}`,
+            "",
+            "Text stránky:",
+            pageText || "(prázdná stránka)",
+          ].join("\n"),
+        },
+      ],
+    }),
   });
 
-  const text = (message.content || [])
+  if (!res.ok) {
+    throw new Error(`Claude API: ${res.status} ${await res.text()}`);
+  }
+
+  const payload = await res.json();
+  const text = (payload.content || [])
     .filter((part) => part.type === "text")
     .map((part) => part.text || "")
     .join("\n")
@@ -230,104 +304,63 @@ async function classifyWithClaude(client, pageTitle, pageText) {
   return items.map(normalizeClassifiedItem).filter(Boolean);
 }
 
-async function loadProcessedPageIds(supabase) {
-  const { data, error } = await supabase
-    .from("notion_pages_processed")
-    .select("page_id");
-
-  if (error) {
-    console.warn("notion_pages_processed unreadable:", error.message);
+async function loadProcessedPageIds() {
+  try {
+    const data = await supabaseGet("notion_pages_processed?select=page_id");
+    return new Set(
+      (Array.isArray(data) ? data : [])
+        .map((row) => normalizeNotionId(row.page_id))
+        .filter(Boolean),
+    );
+  } catch (err) {
+    console.warn("notion_pages_processed unreadable:", err.message);
     return new Set();
   }
-
-  return new Set(
-    (data || [])
-      .map((row) => normalizeNotionId(row.page_id))
-      .filter(Boolean),
-  );
 }
 
-async function markPageProcessed(supabase, page, saved, pending) {
-  const { error } = await supabase.from("notion_pages_processed").upsert(
+async function markPageProcessed(page, itemsSaved) {
+  await supabasePost(
+    "notion_pages_processed",
     {
       page_id: normalizeNotionId(page.id),
       notion_last_edited: page.last_edited_time || null,
       processed_at: new Date().toISOString(),
-      items_saved: saved,
-      items_pending: pending,
+      items_saved: itemsSaved,
+      items_pending: 0,
     },
-    { onConflict: "page_id" },
+    "resolution=merge-duplicates",
   );
-
-  if (error) throw new Error(`notion_pages_processed: ${error.message}`);
 }
 
-async function saveClassifiedItems(supabase, page, items, stats) {
+async function saveItemsToKbItems(page, items) {
   const pageId = normalizeNotionId(page.id);
   const pageUrl = page.url || `https://www.notion.so/${pageId}`;
   const now = new Date().toISOString();
 
-  let saved = 0;
-  let pending = 0;
-
   for (const item of items) {
-    const row = {
+    await supabasePost("kb_items", {
       item_type: item.item_type,
       title: item.title,
       content: item.content,
-      status: item.status || "open",
-      priority: item.priority || "medium",
+      status: item.status,
+      priority: item.priority,
       evidence: item.evidence,
       source_notion_page_url: pageUrl,
       notion_page_id: pageId,
       created_at: now,
-    };
-
-    if (item.confidence >= CONFIDENCE_THRESHOLD) {
-      const { error } = await supabase.from("kb_items").insert(row);
-      if (error) throw new Error(`kb_items: ${error.message}`);
-      saved += 1;
-      stats.saved += 1;
-    } else {
-      const { error } = await supabase.from("kb_pending").insert({
-        ...row,
-        confidence: item.confidence,
-        raw_classification: item,
-      });
-      if (error) throw new Error(`kb_pending: ${error.message}`);
-      pending += 1;
-      stats.pending += 1;
-    }
+    });
   }
 
-  return { saved, pending };
+  return items.length;
 }
 
 async function main() {
   const config = readEnv();
-  const notion = new NotionClient({ auth: config.notionToken });
-  const anthropic = new Anthropic({ apiKey: config.anthropicApiKey });
-  const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
+  const stats = { saved: 0, skipped: 0, errors: [] };
 
-  const stats = {
-    saved: 0,
-    pending: 0,
-    skipped: 0,
-    errors: [],
-    pagesProcessed: 0,
-    pagesTotal: 0,
-  };
-
-  const processedIds = await loadProcessedPageIds(supabase);
-
-  const query = await notion.databases.query({
-    database_id: config.notionDatabaseId,
-    page_size: NOTION_PAGE_SIZE,
-    start_cursor: config.startCursor,
-  });
-
+  const processedIds = await loadProcessedPageIds();
+  const query = await queryNotionDatabase(config);
   const pages = query.results || [];
-  stats.pagesTotal = pages.length;
 
   let claudeCalls = 0;
 
@@ -341,10 +374,10 @@ async function main() {
     }
 
     try {
-      const pageText = await fetchAllBlockText(notion, page.id);
+      const pageText = await extractPagePlainText(config.notionToken, page.id);
 
       if (!pageText.trim()) {
-        await markPageProcessed(supabase, page, 0, 0);
+        await markPageProcessed(page, 0);
         processedIds.add(pageId);
         stats.skipped += 1;
         continue;
@@ -354,20 +387,24 @@ async function main() {
         await sleep(CLAUDE_RATE_LIMIT_MS);
       }
 
-      const items = await classifyWithClaude(anthropic, pageTitle, pageText);
+      const items = await classifyWithClaude(
+        config.anthropicApiKey,
+        pageTitle,
+        pageText,
+      );
       claudeCalls += 1;
 
       if (!items.length) {
-        await markPageProcessed(supabase, page, 0, 0);
+        await markPageProcessed(page, 0);
         processedIds.add(pageId);
         stats.skipped += 1;
         continue;
       }
 
-      const counts = await saveClassifiedItems(supabase, page, items, stats);
-      await markPageProcessed(supabase, page, counts.saved, counts.pending);
+      const count = await saveItemsToKbItems(page, items);
+      await markPageProcessed(page, count);
       processedIds.add(pageId);
-      stats.pagesProcessed += 1;
+      stats.saved += count;
     } catch (err) {
       const message = `[${pageId}] ${err.message || String(err)}`;
       console.error(message);
@@ -375,16 +412,7 @@ async function main() {
     }
   }
 
-  const result = {
-    ok: stats.errors.length === 0,
-    ...stats,
-  };
-
-  if (query.has_more && query.next_cursor) {
-    result.next_cursor = query.next_cursor;
-  }
-
-  console.log(JSON.stringify(result, null, 2));
+  console.log(JSON.stringify(stats, null, 2));
 
   if (stats.errors.length) process.exitCode = 1;
 }
