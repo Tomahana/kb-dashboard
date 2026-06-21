@@ -3,7 +3,7 @@
  * Notion databáze → Claude klasifikace → Supabase kb_items / kb_pending
  *
  * Env: NOTION_TOKEN, NOTION_DATABASE_ID, ANTHROPIC_API_KEY,
- *      SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ *      KB_SUPABASE_URL, KB_SUPABASE_SERVICE_ROLE_KEY
  *
  * Nasazení (Supabase CLI): zkopírujte do supabase/functions/kb-agent/index.ts
  *   supabase functions deploy kb-agent --project-ref <ref>
@@ -86,16 +86,16 @@ function readEnv(): EnvConfig {
   const notionToken = Deno.env.get("NOTION_TOKEN")?.trim() || "";
   const notionDatabaseId = Deno.env.get("NOTION_DATABASE_ID")?.trim() || "";
   const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY")?.trim() || "";
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim() || "";
+  const supabaseUrl = Deno.env.get("KB_SUPABASE_URL")?.trim() || "";
   const supabaseServiceRoleKey =
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim() || "";
+    Deno.env.get("KB_SUPABASE_SERVICE_ROLE_KEY")?.trim() || "";
 
   const missing = [
     !notionToken && "NOTION_TOKEN",
     !notionDatabaseId && "NOTION_DATABASE_ID",
     !anthropicApiKey && "ANTHROPIC_API_KEY",
-    !supabaseUrl && "SUPABASE_URL",
-    !supabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
+    !supabaseUrl && "KB_SUPABASE_URL",
+    !supabaseServiceRoleKey && "KB_SUPABASE_SERVICE_ROLE_KEY",
   ].filter(Boolean);
 
   if (missing.length) {
