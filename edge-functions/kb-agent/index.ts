@@ -215,7 +215,7 @@ async function queryNotionDatabase(
   let cursor: string | undefined;
 
   do {
-    const body: Record<string, unknown> = { page_size: 100 };
+    const body: Record<string, unknown> = { page_size: 3 };
     if (cursor) body.start_cursor = cursor;
 
     const res = await notionFetch(token, `/databases/${databaseId}/query`, {
@@ -528,6 +528,7 @@ async function processNotionPages(config: EnvConfig): Promise<Stats> {
         continue;
       }
 
+      await new Promise((r) => setTimeout(r, 300));
       const items = await classifyWithClaude(
         config.anthropicApiKey,
         pageTitle,
