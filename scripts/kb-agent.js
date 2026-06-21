@@ -332,12 +332,24 @@ function normalizeClassifiedItem(raw) {
   if (!VALID_ITEM_TYPES.has(itemType) || !title) return null;
 
   const ownerRaw = raw.owner == null ? null : String(raw.owner).trim();
+  const statusRaw = String(raw.status || "open")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  const status =
+    statusRaw === "closed" || statusRaw === "cancelled" || statusRaw === "canceled"
+      ? "archived"
+      : ["open", "in_progress", "done", "archived"].includes(statusRaw)
+        ? statusRaw
+        : statusRaw === "complete" || statusRaw === "completed" || statusRaw === "resolved"
+          ? "done"
+          : "open";
 
   return {
     item_type: itemType,
     title,
     content: content || title,
-    status: (String(raw.status || "open").trim() || "open").toLowerCase(),
+    status,
     priority: (String(raw.priority || "UNSPECIFIED").trim() || "UNSPECIFIED").toUpperCase(),
     evidence: String(raw.evidence || "").trim() || null,
     topics: Array.isArray(raw.topics)

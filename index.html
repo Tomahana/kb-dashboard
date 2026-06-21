@@ -369,7 +369,7 @@
       </section>
       <section class="panel">
         <h2>KB záznamy (AI agent)</h2>
-        <p class="hint">Modul čte tabulku <code>kb_items</code> v Supabase (typy TASK, KNOWLEDGE, DECISION, …). Pro úpravu záznamů a export do ClickUp spusťte <code>supabase/kb-items-migrate-v2.sql</code> a přihlaste se. ClickUp token nastavte v Nastavení.</p>
+        <p class="hint">Modul čte tabulku <code>kb_items</code> v Supabase (typy TASK, KNOWLEDGE, DECISION, …). Pro úpravu záznamů a export do ClickUp spusťte <code>supabase/kb-items-migrate-v2.sql</code>. Při chybě <code>kb_items_status_check</code> spusťte <code>supabase/kb-items-status-fix.sql</code>. ClickUp token nastavte v Nastavení.</p>
       </section>
       <section class="panel">
         <h2>AI poradce</h2>
@@ -808,7 +808,6 @@
               <option value="in_progress">in_progress</option>
               <option value="done">done</option>
               <option value="archived">archived</option>
-              <option value="closed">closed</option>
             </select>
           </label>
           <label class="kbItemField">Priorita

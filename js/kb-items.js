@@ -7,6 +7,8 @@ const KB_ITEMS_PATH = "kb_items";
 const KB_ITEMS_SELECT =
   "id,item_type,title,content,status,priority,evidence,topics,owner,deadline,confidence,source_notion_page_url,notion_page_id,created_at,updated_at";
 
+const KB_ITEM_STATUSES = ["open", "in_progress", "done", "archived"];
+
 let cachedItems = [];
 let dialogBound = false;
 
@@ -29,6 +31,17 @@ async function requireSession() {
   const { data: { session } } = await supa.auth.getSession();
   if (!session) throw new Error("Pro úpravu záznamů je nutné přihlášení.");
   return supa;
+}
+
+function normalizeKbItemStatus(status) {
+  const s = String(status || "open")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  if (s === "closed" || s === "cancelled" || s === "canceled") return "archived";
+  if (s === "complete" || s === "completed" || s === "resolved") return "done";
+  if (KB_ITEM_STATUSES.includes(s)) return s;
+  return "open";
 }
 
 function formatDate(iso) {
@@ -133,7 +146,7 @@ function readKbItemFormValues() {
     title: String(document.getElementById("kbItemEditTitle")?.value || "").trim(),
     content: String(document.getElementById("kbItemEditContent")?.value || "").trim() || null,
     evidence: String(document.getElementById("kbItemEditEvidence")?.value || "").trim() || null,
-    status: document.getElementById("kbItemEditStatus")?.value || "open",
+    status: normalizeKbItemStatus(document.getElementById("kbItemEditStatus")?.value),
     priority: document.getElementById("kbItemEditPriority")?.value || "MEDIUM",
     topics: parseTopicsInput(document.getElementById("kbItemEditTopics")?.value),
     owner: String(document.getElementById("kbItemEditOwner")?.value || "").trim() || null,
@@ -149,7 +162,7 @@ function fillKbItemForm(item) {
   document.getElementById("kbItemEditTitle").value = item?.title || "";
   document.getElementById("kbItemEditContent").value = item?.content || "";
   document.getElementById("kbItemEditEvidence").value = item?.evidence || "";
-  document.getElementById("kbItemEditStatus").value = item?.status || "open";
+  document.getElementById("kbItemEditStatus").value = normalizeKbItemStatus(item?.status);
   document.getElementById("kbItemEditPriority").value = item?.priority || "MEDIUM";
   document.getElementById("kbItemEditTopics").value = topicsToInputValue(item?.topics);
   document.getElementById("kbItemEditOwner").value = item?.owner || "";

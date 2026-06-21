@@ -6,7 +6,8 @@ create table if not exists public.kb_items (
   item_type text not null,
   title text not null,
   content text,
-  status text not null default 'open',
+  status text not null default 'open'
+    check (status in ('open', 'in_progress', 'done', 'archived')),
   priority text default 'medium',
   evidence text,
   topics text[] default '{}',
