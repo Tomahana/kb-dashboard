@@ -229,6 +229,14 @@ const DocIntelligenceModule = (() => {
             <div class="di-field"><div class="di-field-lbl">Kategorie · soubor · velikost</div><div class="di-field-val" id="di-p-meta">—</div></div>
             <div class="di-field"><div class="di-field-lbl">Klíčová slova</div><div class="di-field-val muted" id="di-p-keywords">—</div></div>
             <div class="di-field"><div class="di-field-lbl">Doporučená akce (AI)</div><div class="di-field-val muted" id="di-p-akce">—</div></div>
+            <div class="di-field">
+              <div class="di-field-lbl">Cesta k souboru</div>
+              <div id="di-p-path"
+                style="font-size:12px; font-family:monospace; background:var(--color-bg-secondary,#f8f7f4);
+                padding:6px 10px; border-radius:6px; word-break:break-all;
+                user-select:all; cursor:text; border:1px solid var(--color-border)"
+                title="Označte a zkopírujte cestu"></div>
+            </div>
             <hr class="di-sep">
             <div class="di-field">
               <div class="di-field-lbl">Priorita</div>
@@ -255,7 +263,6 @@ const DocIntelligenceModule = (() => {
           </div>
           <div class="di-panel-footer">
             <button class="di-btn primary" onclick="DocIntelligenceModule.save()">💾 Uložit</button>
-            <a class="di-btn" id="di-p-link" href="#" target="_blank">🔗 Otevřít soubor</a>
             <button class="di-btn" id="di-p-ck" onclick="DocIntelligenceModule.createTask()">➕ ClickUp</button>
           </div>
         </div>
@@ -384,7 +391,8 @@ const DocIntelligenceModule = (() => {
     document.getElementById("di-p-akce").textContent     = doc.akce_doporucena || "Žádná doporučená akce";
     document.getElementById("di-p-notes").value          = doc.poznamky || "";
     document.getElementById("di-p-termin").value         = doc.termin || "";
-    document.getElementById("di-p-link").href            = doc.file_url || "#";
+    const path = (doc.file_path || "").replace(/\//g, "\\");
+    document.getElementById("di-p-path").textContent     = path || "—";
     document.getElementById("di-p-ck").textContent       = doc.clickup_task_id ? `✅ ClickUp (${doc.clickup_task_id})` : "➕ ClickUp";
 
     // Priority buttons
