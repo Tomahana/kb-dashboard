@@ -17,3 +17,4 @@ Thumbs.db
 doc-intelligence-agent/.env
 doc-intelligence-agent/venv/
 doc-intelligence-agent/logs/
+doc-intelligence-agent/__pycache__/
