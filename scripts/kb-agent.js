@@ -16,6 +16,8 @@ const CLAUDE_CHUNK_MAX_CHARS = 1500;
 const MAX_PAGE_TEXT = 120_000;
 const MAX_CLAUDE_TOKENS = 8192;
 
+const SKIP_PAGE_IDS = ["37abfe4c9f4f80f8a8aff0dab85c62d7"];
+
 const VALID_ITEM_TYPES = new Set([
   "TASK",
   "KNOWLEDGE",
@@ -546,6 +548,12 @@ async function main() {
   for (const page of pages) {
     const pageId = normalizeNotionId(page.id);
     const pageTitle = extractPageTitle(page);
+
+    if (SKIP_PAGE_IDS.includes(pageId)) {
+      console.log(`[${pageId}] Přeskočeno — blacklist`);
+      stats.skipped++;
+      continue;
+    }
 
     if (processedIds.has(pageId)) {
       stats.skipped += 1;
