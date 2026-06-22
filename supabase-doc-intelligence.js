@@ -1,7 +1,9 @@
 /**
  * supabase-doc-intelligence.js
  * Datová vrstva pro Document Intelligence modul v kb-dashboard.
- * Tabulka doc_intelligence — projekt uhk-analytics (nebo stejný jako KB_SUPABASE).
+ *
+ * ⚠️ TENTO SOUBOR NEPATŘÍ DO SUPABASE SQL EDITORU — je to JavaScript pro prohlížeč.
+ * SQL schéma spusťte v SQL Editoru: supabase/doc-intelligence-schema.sql
  */
 
 const DocIntelligenceDB = (() => {
