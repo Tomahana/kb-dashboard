@@ -1,15 +1,15 @@
 :root {
   --bg: #050814;
-  --panel: #0E1A33;
-  --text: #e8eef8;
-  --muted: #8b9cb8;
-  --line: rgba(86, 240, 255, 0.14);
-  --accent: #56F0FF;
-  --accent-dark: #3dd4e8;
-  --soft: rgba(86, 240, 255, 0.08);
-  --danger: #FF4F6D;
-  --warning: #FFB84D;
-  --ok: #4DFFB5;
+  --panel: #ffffff;
+  --text: #102033;
+  --muted: #4f6b8d;
+  --line: #d7e7f8;
+  --accent: #0d8aad;
+  --accent-dark: #0a7694;
+  --soft: #eef5fc;
+  --danger: #c92d52;
+  --warning: #c97a12;
+  --ok: #0d8a62;
 }
 
 * { box-sizing: border-box; }
@@ -19,14 +19,11 @@ body {
   background: var(--bg);
   color: var(--text);
 }
-.app-shell {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  min-height: 100vh;
-}
+
+/* Dark sidebar base — overridden by command-deck.css when active */
 .sidebar {
-  background: #101828;
-  color: #e2e8f0;
+  background: #071226;
+  color: #f3f7ff;
   padding: 1.25rem 1rem;
   display: flex;
   flex-direction: column;
@@ -35,6 +32,12 @@ body {
   top: 0;
   height: 100vh;
   overflow: hidden;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
 }
 .brand strong { display: block; font-size: 1.1rem; color: white; }
 .brand span { display: block; margin-top: .2rem; font-size: .78rem; color: #94a3b8; }
@@ -279,15 +282,17 @@ body.auth-locked .appMain {
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  background: white;
-  border-bottom: 1px solid var(--line);
+  background: #071226;
+  color: #f3f7ff;
+  border-bottom: 1px solid rgba(86, 240, 255, 0.18);
   align-items: center;
   position: sticky;
   top: 0;
   z-index: 50;
 }
-.pageHead h1 { margin: 0; font-size: 1.35rem; }
-.pageHead p { margin: .2rem 0 0; color: var(--muted); font-size: .9rem; }
+.pageHead h1 { margin: 0; font-size: 1.35rem; color: #f3f7ff; }
+.pageHead p { margin: .2rem 0 0; color: #b9c9e8; font-size: .9rem; }
+.topbarVersion { margin: .35rem 0 0; font-size: .78rem; font-weight: 650; color: #b9c9e8; }
 .actions, .settingsActions, .inlineActions, .pageToolbar {
   display: flex;
   gap: .5rem;
@@ -377,7 +382,8 @@ body.auth-locked .appMain {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 1rem;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, .04);
+  box-shadow: 0 1px 4px rgba(16, 32, 51, 0.06);
+  color: var(--text);
 }
 .filters {
   position: sticky;
@@ -502,6 +508,7 @@ textarea { resize: vertical; }
   display: block;
   font-size: 2rem;
   font-weight: 800;
+  color: var(--text);
 }
 .metric small { color: var(--muted); }
 .sectionHeader {
