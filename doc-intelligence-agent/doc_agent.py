@@ -327,6 +327,15 @@ def run_agent() -> int:
         log("")
         log("Denní souhrn:")
         log(summary)
+        try:
+            sb.table("doc_intelligence_summary").insert({
+                "summary_text": summary,
+                "doc_count": len(saved),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+            log("  ✓ Denní souhrn uložen do doc_intelligence_summary")
+        except Exception as exc:
+            log(f"  ✗ Nepodařilo se uložit souhrn: {exc}")
 
     log("")
     log(f"Hotovo — uloženo {len(saved)} nových dokumentů.")

@@ -392,7 +392,7 @@
       </section>
       <section class="panel">
         <h2>Document Intelligence</h2>
-        <p class="hint">Modul čte tabulku <code>doc_intelligence</code> v Supabase (projekt uhk-analytics). Spusťte <code>supabase/doc-intelligence-schema.sql</code>. V <code>supabase-config.js</code> nastavte <code>DOC_SUPABASE</code> (URL + anon key). ClickUp token pro vytváření úkolů v listu „věda“ nastavte v Nastavení → Export úkolů. Python agent pro skenování OneDrive: složka <code>doc-intelligence-agent/</code>.</p>
+        <p class="hint">Modul čte tabulku <code>doc_intelligence</code> v Supabase (projekt uhk-analytics). Spusťte <code>supabase/doc-intelligence-schema.sql</code> a pro propojení s Tématy <code>supabase/doc-intelligence-topics-migrate.sql</code>. V <code>supabase-config.js</code> nastavte <code>DOC_SUPABASE</code> a <code>clickupConfig.token</code>. ClickUp token lze také doplnit v Nastavení → Export úkolů. Python agent: <code>doc-intelligence-agent/</code>.</p>
       </section>
     </section>
   </div>

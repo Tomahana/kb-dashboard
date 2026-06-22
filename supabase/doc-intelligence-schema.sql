@@ -36,3 +36,18 @@ create index if not exists idx_di_stav      on doc_intelligence(stav);
 create index if not exists idx_di_kat       on doc_intelligence(kategorie);
 create index if not exists idx_di_prio      on doc_intelligence(dulezitost desc);
 create index if not exists idx_di_created   on doc_intelligence(created_at desc);
+
+-- Denní souhrn z Python agenta
+create table if not exists doc_intelligence_summary (
+  id uuid primary key default gen_random_uuid(),
+  summary_text text not null,
+  doc_count integer,
+  created_at timestamptz default now()
+);
+
+alter table doc_intelligence_summary enable row level security;
+
+drop policy if exists "allow_all" on doc_intelligence_summary;
+create policy "allow_all" on doc_intelligence_summary for all using (true);
+
+create index if not exists idx_di_summary_created on doc_intelligence_summary(created_at desc);
