@@ -113,6 +113,14 @@
       stats: ["organsTotal", "organsPendingAi"]
     },
     {
+      slug: "doc-intelligence",
+      title: "Dokumenty",
+      description: "AI analýza dokumentů z OneDrive — třídění, priority, poznámky a export úkolů do ClickUp (list věda).",
+      status: "active",
+      icon: "📄",
+      stats: ["docIntelligenceTotal", "docIntelligenceNew"]
+    },
+    {
       slug: "modul-dkrvo",
       title: "DKRVO",
       description: "Roční výkaz výzkumu, sběr dat a odeslání na MŠMT.",
@@ -182,6 +190,7 @@
     const vystupyItems = window.kbVystupy?.getVystupy?.() || [];
     const organList = window.kbRadyOrgany?.getOrgans?.() || [];
     const kbItems = window.kbItems?.getItems?.() || [];
+    const diStats = window.kbDocIntelligence?.stats || {};
 
     return {
       emailsTotal: data.length,
@@ -205,7 +214,9 @@
       organsTotal: organList.length,
       organsPendingAi: window.kbRadyOrgany?.pendingChecksCount?.() || 0,
       kbItemsTotal: kbItems.length,
-      kbItemsOpen: window.kbItems?.getOpenCount?.() ?? kbItems.filter((i) => !["done", "archived", "closed"].includes((i.status || "").toLowerCase())).length
+      kbItemsOpen: window.kbItems?.getOpenCount?.() ?? kbItems.filter((i) => !["done", "archived", "closed"].includes((i.status || "").toLowerCase())).length,
+      docIntelligenceTotal: diStats.total || 0,
+      docIntelligenceNew: diStats.new || 0
     };
   }
 
@@ -232,7 +243,9 @@
       organsTotal: `${value} orgánů`,
       organsPendingAi: `${value} AI ke kontrole`,
       kbItemsTotal: `${value} KB záznamů`,
-      kbItemsOpen: `${value} otevřených záznamů`
+      kbItemsOpen: `${value} otevřených záznamů`,
+      docIntelligenceTotal: `${value} dokumentů`,
+      docIntelligenceNew: `${value} ke zpracování`
     };
     return labels[key] || String(value);
   }
@@ -400,6 +413,7 @@
     document.addEventListener("kb:vystupy-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:rady-organy-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:kb-items-loaded", () => setTimeout(renderModulesGrid, 60));
+    document.addEventListener("kb:doc-intelligence-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("input", () => setTimeout(renderModulesGrid, 120));
   }
 

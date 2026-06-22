@@ -12,3 +12,8 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Document Intelligence agent — lokální konfigurace
+doc-intelligence-agent/.env
+doc-intelligence-agent/venv/
+doc-intelligence-agent/logs/

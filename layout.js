@@ -15,6 +15,7 @@
     casopisy: { title: "Databáze časopisů", subtitle: "JCR exporty, AIS pořadí v oborech, decily a nejlepší výsledky" },
     vystupy: { title: "Výstupy", subtitle: "Publikační výstupy Jimp, JSC, B a C — samostatné tabulky pro DKRVO, PPK a analýzy" },
     "rady-organy": { title: "Rady a orgány", subtitle: "Vědecká rada, Správní rada, AS, MPK, Etická komise, Rada pro komercializaci — členové a AI kontrola změn" },
+    "doc-intelligence": { title: "Dokumenty", subtitle: "AI analýza dokumentů — filtrování, priority, poznámky a ClickUp" },
     nastaveni: { title: "Nastavení", subtitle: "Supabase, AI, import a export" },
     modul: { title: "Modul", subtitle: "Oblast v přípravě" }
   };
