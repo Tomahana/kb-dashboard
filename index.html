@@ -36,6 +36,7 @@
         Rady a orgány
         <span id="navBadgeOrgans" class="navBadge navBadgeOrgan" hidden></span>
       </a>
+      <a href="#doc-intelligence" class="navItem" data-page="doc-intelligence">📄 Dokumenty</a>
       <a href="#nastaveni" class="navItem" data-page="nastaveni">Nastavení</a>
     </nav>
     <div class="sidebarFoot">
@@ -312,6 +313,11 @@
       <div id="radyOrganyPageRoot"></div>
     </section>
 
+    <!-- DOCUMENT INTELLIGENCE -->
+    <section id="page-doc-intelligence" class="page">
+      <div id="docIntelligencePageRoot"></div>
+    </section>
+
     <!-- NASTAVENÍ -->
     <section id="page-nastaveni" class="page">
       <section class="panel">
@@ -383,6 +389,10 @@
       <section class="panel">
         <h2>Databáze časopisů</h2>
         <p class="hint">Spusťte <code>supabase/journal-db-schema.sql</code>, poté <code>security-rls.sql</code>. Import JCR exportů po částech: CSV, TSV, CSC nebo XLSX (Excel). Klíč časopisu = ISSN nebo eISSN. Vzor: <code>data/journal-db-import.example.tsv</code>.</p>
+      </section>
+      <section class="panel">
+        <h2>Document Intelligence</h2>
+        <p class="hint">Modul čte tabulku <code>doc_intelligence</code> v Supabase (projekt uhk-analytics). Spusťte <code>supabase/doc-intelligence-schema.sql</code>. V <code>supabase-config.js</code> nastavte <code>DOC_SUPABASE</code> (URL + anon key). ClickUp token pro vytváření úkolů v listu „věda“ nastavte v Nastavení → Export úkolů. Python agent pro skenování OneDrive: složka <code>doc-intelligence-agent/</code>.</p>
       </section>
     </section>
   </div>
@@ -920,6 +930,8 @@
   <script src="vystupy.js?v=3.116"></script>
   <script src="supabase-rady-organy.js?v=3.116"></script>
   <script src="rady-organy.js?v=3.116"></script>
+  <script src="supabase-doc-intelligence.js?v=3.116"></script>
+  <script src="doc-intelligence.js?v=3.116"></script>
   <script type="module" src="js/kb-items.js?v=3.116"></script>
 </body>
 </html>

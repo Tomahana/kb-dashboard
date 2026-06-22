@@ -22,3 +22,13 @@ window.KB_SUPABASE = {
     clearLocalDataOnLogout: false
   }
 };
+
+// Document Intelligence — tabulka doc_intelligence (projekt uhk-analytics).
+// Pokud je stejný Supabase projekt jako KB, tento blok nemusíte nastavovat.
+// window.DOC_SUPABASE = {
+//   url: "https://uhk-analytics.supabase.co",
+//   anonKey: "VAS_ANON_KEY"
+// };
+
+// Volitelně: ClickUp token pro modul Dokumenty (jinak Nastavení → Export úkolů).
+// window.clickupConfig = { token: "pk_...", listId: "901514038952" };
