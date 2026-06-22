@@ -1,0 +1,602 @@
+/* UHK Knowledge Command Deck — sci-fi mission control theme */
+
+:root {
+  --bg: #050814;
+  --bg-elevated: #0a1224;
+  --panel: #0E1A33;
+  --panel-hover: #132040;
+  --text: #e8eef8;
+  --muted: #8b9cb8;
+  --line: rgba(86, 240, 255, 0.14);
+  --line-strong: rgba(86, 240, 255, 0.28);
+  --accent: #56F0FF;
+  --accent-dark: #3dd4e8;
+  --accent-secondary: #A777FF;
+  --soft: rgba(86, 240, 255, 0.08);
+  --danger: #FF4F6D;
+  --warning: #FFB84D;
+  --ok: #4DFFB5;
+  --glow: 0 0 12px rgba(86, 240, 255, 0.22);
+  --glow-violet: 0 0 12px rgba(167, 119, 255, 0.22);
+  --glow-danger: 0 0 10px rgba(255, 79, 109, 0.25);
+  --color-bg: var(--panel);
+  --color-bg-secondary: var(--bg-elevated);
+  --color-border: var(--line);
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--muted);
+  --color-accent: var(--accent);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(86, 240, 255, 0.06), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(167, 119, 255, 0.04), transparent);
+}
+
+.app-shell.command-deck {
+  display: grid;
+  grid-template-columns: 252px 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "mission mission"
+    "sidebar main";
+  min-height: 100vh;
+}
+
+.missionHeader {
+  grid-area: mission;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: .65rem 1.25rem;
+  background: linear-gradient(180deg, #0a1224 0%, #050814 100%);
+  border-bottom: 1px solid var(--line-strong);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.missionBrand {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+
+.missionLogo {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 1rem;
+  box-shadow: var(--glow);
+}
+
+.missionBrand strong {
+  display: block;
+  font-size: .95rem;
+  letter-spacing: .04em;
+  color: var(--text);
+}
+
+.missionBrand span {
+  display: block;
+  font-size: .72rem;
+  color: var(--muted);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.missionStatus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  align-items: center;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .28rem .65rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(14, 26, 51, 0.8);
+  font-size: .72rem;
+  font-weight: 650;
+  color: var(--muted);
+  letter-spacing: .02em;
+}
+
+.statusPill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.statusPill.ok { border-color: rgba(77, 255, 181, 0.35); color: var(--ok); }
+.statusPill.ok .dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+.statusPill.warn { border-color: rgba(255, 184, 77, 0.35); color: var(--warning); }
+.statusPill.warn .dot { background: var(--warning); }
+.statusPill.err { border-color: rgba(255, 79, 109, 0.35); color: var(--danger); }
+.statusPill.err .dot { background: var(--danger); }
+.statusPill.ai { border-color: rgba(167, 119, 255, 0.35); color: var(--accent-secondary); }
+.statusPill.ai .dot { background: var(--accent-secondary); box-shadow: var(--glow-violet); }
+.statusPill.active { border-color: rgba(86, 240, 255, 0.45); color: var(--accent); box-shadow: var(--glow); }
+.statusPill.active .dot { background: var(--accent); box-shadow: var(--glow); }
+
+.missionVersion {
+  font-size: .7rem;
+  color: var(--muted);
+  margin-left: .25rem;
+}
+
+.command-deck .sidebar {
+  grid-area: sidebar;
+  background: #070d1a;
+  border-right: 1px solid var(--line);
+  height: calc(100vh - 52px);
+  position: sticky;
+  top: 52px;
+}
+
+.command-deck .brand {
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: .25rem;
+}
+
+.command-deck .brand strong { color: var(--accent); font-size: .88rem; letter-spacing: .06em; text-transform: uppercase; }
+.command-deck .brand span { color: var(--muted); font-size: .72rem; }
+
+.navSector {
+  margin-top: .65rem;
+}
+
+.navSectorLabel {
+  display: block;
+  padding: .35rem .75rem .2rem;
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(139, 156, 184, 0.65);
+}
+
+.command-deck .navItem {
+  color: #a8b8d0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: .84rem;
+  font-weight: 600;
+  transition: border-color .15s, background .15s, color .15s, box-shadow .15s;
+}
+
+.command-deck .navItem:hover {
+  background: rgba(86, 240, 255, 0.06);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.command-deck .navItem.active {
+  background: rgba(86, 240, 255, 0.1);
+  color: var(--accent);
+  border-color: rgba(86, 240, 255, 0.45);
+  box-shadow: inset 3px 0 0 var(--accent), var(--glow);
+}
+
+.command-deck .navItem[data-page="ai-poradce"].active {
+  border-color: rgba(167, 119, 255, 0.45);
+  box-shadow: inset 3px 0 0 var(--accent-secondary), var(--glow-violet);
+  color: var(--accent-secondary);
+}
+
+.command-deck .navBadge {
+  background: var(--warning);
+  color: #1a0f00;
+  font-size: .68rem;
+}
+
+.command-deck .navBadgeAi { background: var(--accent-secondary); color: #1a1030; }
+.command-deck .navBadgeDeadline { background: var(--warning); }
+.command-deck .navBadgeOrgan { background: var(--danger); color: #fff; }
+
+.command-deck .appMain {
+  grid-area: main;
+  background: transparent;
+}
+
+.command-deck .topbar {
+  background: rgba(14, 26, 51, 0.6);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+
+.command-deck .pageHead h1 {
+  font-size: 1.2rem;
+  letter-spacing: .02em;
+}
+
+.command-deck .panel,
+.command-deck .metric,
+.command-deck .record,
+.command-deck .topicCard,
+.command-deck .kbCard,
+.command-deck .topicChip,
+.command-deck .topicRecordItem,
+.command-deck .notionMeetingCard,
+.command-deck .notionSearchResults,
+.command-deck .taskExportDetails,
+.command-deck .notionPanel,
+.command-deck .taskExportPanel {
+  background: var(--panel);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.command-deck .panel {
+  border-radius: 12px;
+}
+
+.command-deck .scanFilters,
+.command-deck .inboxFilters {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 12px;
+}
+
+.command-deck .scanFilters h2,
+.command-deck .inboxFilters h2 {
+  font-size: .75rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: .5rem;
+}
+
+.command-deck .scanFilters::before,
+.command-deck .inboxFilters::before {
+  content: "SCAN FILTERS";
+  display: block;
+  font-size: .62rem;
+  letter-spacing: .14em;
+  color: var(--muted);
+  margin-bottom: .35rem;
+  opacity: .7;
+}
+
+.command-deck .scanFilters h2,
+.command-deck .inboxFilters h2 { display: none; }
+
+.command-deck select,
+.command-deck input,
+.command-deck textarea,
+.command-deck .kb-picker-btn {
+  background: var(--bg-elevated);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.command-deck select:focus,
+.command-deck input:focus,
+.command-deck textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(86, 240, 255, 0.15);
+}
+
+.command-deck .button {
+  background: rgba(86, 240, 255, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(86, 240, 255, 0.35);
+}
+
+.command-deck .button:hover {
+  background: rgba(86, 240, 255, 0.2);
+  box-shadow: var(--glow);
+}
+
+.command-deck .button.secondary {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.command-deck .button.secondary:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.command-deck .button.accent {
+  background: rgba(86, 240, 255, 0.18);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.command-deck .button.danger {
+  background: rgba(255, 79, 109, 0.12);
+  color: var(--danger);
+  border: 1px solid rgba(255, 79, 109, 0.35);
+}
+
+.command-deck table {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.command-deck th {
+  background: var(--bg-elevated);
+  color: var(--muted);
+  font-size: .72rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.command-deck td {
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+}
+
+.command-deck tr:hover td {
+  background: rgba(86, 240, 255, 0.04);
+}
+
+.command-deck .badge {
+  background: rgba(86, 240, 255, 0.1);
+  color: var(--accent);
+  border: 1px solid rgba(86, 240, 255, 0.2);
+}
+
+.command-deck .badge.risk {
+  background: rgba(255, 79, 109, 0.12);
+  color: var(--danger);
+  border-color: rgba(255, 79, 109, 0.3);
+}
+
+.command-deck .badge.meeting,
+.command-deck .badge.classify { background: rgba(255, 184, 77, 0.12); color: var(--warning); border-color: rgba(255, 184, 77, 0.3); }
+.command-deck .badge.priority { background: rgba(255, 79, 109, 0.1); color: var(--danger); border-color: rgba(255, 79, 109, 0.25); }
+
+.command-deck .record-clickable:hover,
+.command-deck .recordRow:hover,
+.command-deck .kbCard:hover {
+  border-color: var(--accent);
+  background: var(--panel-hover);
+  box-shadow: var(--glow);
+}
+
+.command-deck .record.needsClassify { border-left-color: var(--warning); }
+.command-deck .record.hasAiProposal { border-left-color: var(--accent-secondary); }
+
+.command-deck dialog,
+.command-deck .authCard {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+}
+
+.command-deck .iconButton {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.command-deck .kb-picker-menu {
+  background: var(--panel);
+  border-color: var(--line-strong);
+}
+
+.command-deck .kb-picker-option:hover { background: var(--panel-hover); }
+.command-deck .kb-picker-option.selected { background: rgba(86, 240, 255, 0.1); }
+
+.command-deck .groupTitle {
+  background: rgba(86, 240, 255, 0.08);
+  color: var(--accent);
+  border: 1px solid var(--line);
+}
+
+.command-deck .linkish { color: var(--accent); }
+
+/* Command dashboard KPIs */
+.commandDashboard { display: grid; gap: 1.25rem; }
+
+.commandKpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: .85rem;
+}
+
+.commandKpi {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+  position: relative;
+  overflow: hidden;
+}
+
+.commandKpi::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: .6;
+}
+
+.commandKpi:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--glow);
+  transform: translateY(-1px);
+}
+
+.commandKpi--new::before { background: var(--accent); }
+.commandKpi--risk::before { background: var(--danger); }
+.commandKpi--meeting::before { background: var(--accent-secondary); }
+.commandKpi--deadline::before { background: var(--warning); }
+
+.commandKpi--risk:hover { box-shadow: var(--glow-danger); }
+.commandKpi--deadline:hover { box-shadow: 0 0 12px rgba(255, 184, 77, 0.2); }
+
+.commandKpiVal {
+  display: block;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.commandKpiLabel {
+  display: block;
+  margin-top: .25rem;
+  font-size: .78rem;
+  color: var(--muted);
+  letter-spacing: .02em;
+}
+
+.commandKpiHint {
+  display: block;
+  margin-top: .45rem;
+  font-size: .68rem;
+  color: var(--accent);
+  opacity: .7;
+}
+
+/* Module sector panels */
+.modulesSection { margin-bottom: 1.35rem; }
+
+.modulesSectionTitle {
+  margin: 0 0 .65rem;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.modulesSectionTitle::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line-strong), transparent);
+}
+
+.modulesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: .85rem;
+}
+
+.moduleCard {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  gap: .5rem .75rem;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+  position: relative;
+}
+
+.moduleCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: inset 0 0 0 1px rgba(86, 240, 255, 0.2);
+  transition: opacity .15s;
+}
+
+.moduleCard:hover,
+.moduleCard:focus-visible {
+  border-color: rgba(86, 240, 255, 0.35);
+  box-shadow: var(--glow);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.moduleCard:hover::after { opacity: 1; }
+
+.moduleCardActive { border-left: 3px solid var(--accent); }
+.moduleCardPlanned { opacity: .65; border-left: 3px solid var(--muted); }
+
+.moduleCard[data-sector="ai"] { border-top: 1px solid rgba(167, 119, 255, 0.25); }
+.moduleCard[data-sector="ai"].moduleCardActive { border-left-color: var(--accent-secondary); }
+
+.moduleCardIcon { font-size: 1.6rem; line-height: 1; grid-row: 1 / span 2; filter: saturate(.9); }
+.moduleCardBody { grid-column: 2; min-width: 0; }
+.moduleStatusDot { grid-column: 3; grid-row: 1; align-self: start; margin-top: .15rem; }
+.moduleCardTitle { margin: 0; font-size: .98rem; font-weight: 700; color: var(--text); }
+.moduleCardDesc { margin: .2rem 0 0; font-size: .82rem; color: var(--muted); line-height: 1.45; }
+
+.moduleCardStats { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .45rem; }
+
+.moduleStat {
+  font-size: .72rem;
+  font-weight: 700;
+  background: rgba(86, 240, 255, 0.08);
+  color: var(--accent);
+  padding: .18rem .45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.moduleStatusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 6px var(--ok);
+  margin-left: auto;
+  align-self: start;
+}
+
+.moduleCardPlanned .moduleStatusDot {
+  background: var(--muted);
+  box-shadow: none;
+}
+
+.moduleCardFoot { grid-column: 1 / -1; display: flex; justify-content: flex-end; padding-top: .25rem; }
+.moduleCardCta { font-size: .8rem; font-weight: 700; color: var(--accent); }
+.moduleCardBadge { font-size: .72rem; font-weight: 700; color: var(--muted); background: var(--bg-elevated); padding: .2rem .5rem; border-radius: 999px; border: 1px solid var(--line); }
+
+.modulePlaceholderBox {
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  padding: 1rem;
+  background: var(--bg-elevated);
+}
+
+.command-deck .authOverlay { background: rgba(5, 8, 20, 0.88); }
+.command-deck .selectionToolbar { background: var(--bg-elevated); border-color: var(--line); }
+.command-deck .kbItemDetailText { background: var(--bg-elevated); border-color: var(--line); color: var(--text); }
+.command-deck .kbItemStatus { background: var(--bg-elevated); color: var(--muted); }
+.command-deck .topic { background: rgba(86, 240, 255, 0.12); color: var(--accent); }
+
+@media (max-width: 900px) {
+  .app-shell.command-deck { grid-template-columns: 1fr; grid-template-areas: "mission" "sidebar" "main"; }
+  .command-deck .sidebar { height: auto; position: static; }
+  .commandKpis { grid-template-columns: 1fr 1fr; }
+}

@@ -1,6 +1,33 @@
 // Přehled modulů – klikatelné karty a placeholdery pro budoucí oblasti.
 
 (function () {
+  const MODULE_SECTORS = [
+    {
+      id: "operativa",
+      title: "Operativa",
+      slugs: ["emaily", "kb-items", "terminy", "doc-intelligence", "temata"]
+    },
+    {
+      id: "strategie",
+      title: "Strategie",
+      slugs: [
+        "interni-souteze", "pcr-vyzkum", "casopisy", "vystupy",
+        "modul-ppk", "modul-spev", "modul-dkrvo", "modul-vyrocni-zpravy",
+        "modul-bilancni-zpravy", "modul-doktorska-skola"
+      ]
+    },
+    {
+      id: "lide",
+      title: "Lidé a orgány",
+      slugs: ["osoby", "rady-organy", "eiz-tokeny"]
+    },
+    {
+      id: "ai",
+      title: "AI a data",
+      slugs: ["ai-poradce"]
+    }
+  ];
+
   const MODULES = [
     {
       slug: "emaily",
@@ -157,6 +184,82 @@
     return MODULES.find(m => m.slug === slug) || null;
   }
 
+  function getDashboardKpis() {
+    const stats = getStats();
+    const deadlines = window.kbDeadlines?.getDeadlines?.() || [];
+    const now = new Date();
+    const in30 = new Date(now);
+    in30.setDate(in30.getDate() + 30);
+    const upcoming = deadlines.filter((d) => {
+      const date = new Date(d.termin_odeslani || d.termin_interni || d.termin_sberu || "");
+      return date && date >= now && date <= in30;
+    }).length;
+
+    let meetings = 0;
+    try {
+      const data = typeof filteredRecords === "function" ? filteredRecords() : (window.records || []);
+      const lower = (s) => (s || "").toString().trim().toLowerCase();
+      meetings = data.filter((r) => {
+        const k = lower(r.kam_patri);
+        return k && !["nezařazeno", "archiv"].includes(k);
+      }).length;
+    } catch (_) {}
+
+    return {
+      newCount: stats.emailsNew,
+      riskCount: stats.emailsRisks,
+      meetingCount: meetings,
+      deadlineCount: upcoming
+    };
+  }
+
+  function renderCommandKpis() {
+    const root = el("commandKpis");
+    if (!root) return;
+    const k = getDashboardKpis();
+    root.innerHTML = `
+      <article class="commandKpi commandKpi--new" data-goto="emaily" tabindex="0" role="button" aria-label="Nové k roztřídění">
+        <span class="commandKpiVal">${k.newCount}</span>
+        <span class="commandKpiLabel">Nové / k roztřídění</span>
+        <span class="commandKpiHint">Otevřít e-maily →</span>
+      </article>
+      <article class="commandKpi commandKpi--risk" data-goto="emaily" tabindex="0" role="button" aria-label="Rizika a problémy">
+        <span class="commandKpiVal">${k.riskCount}</span>
+        <span class="commandKpiLabel">Rizika / problémy</span>
+        <span class="commandKpiHint">Filtrovat rizika →</span>
+      </article>
+      <article class="commandKpi commandKpi--meeting" data-goto="emaily" tabindex="0" role="button" aria-label="K jednání">
+        <span class="commandKpiVal">${k.meetingCount}</span>
+        <span class="commandKpiLabel">K jednání</span>
+        <span class="commandKpiHint">Záznamy k jednání →</span>
+      </article>
+      <article class="commandKpi commandKpi--deadline" data-goto="terminy" tabindex="0" role="button" aria-label="Nadcházející termíny">
+        <span class="commandKpiVal">${k.deadlineCount}</span>
+        <span class="commandKpiLabel">Nadcházející termíny</span>
+        <span class="commandKpiHint">Otevřít termíny →</span>
+      </article>
+    `;
+    if (root.__kpiBound) return;
+    root.addEventListener("click", (e) => {
+      const card = e.target.closest?.("[data-goto]");
+      if (!card) return;
+      window.kbLayout?.setActivePage(card.dataset.goto);
+    });
+    root.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const card = e.target.closest?.("[data-goto]");
+      if (!card) return;
+      e.preventDefault();
+      window.kbLayout?.setActivePage(card.dataset.goto);
+    });
+    root.__kpiBound = true;
+  }
+
+  function getModuleSector(slug) {
+    const sector = MODULE_SECTORS.find((s) => s.slugs.includes(slug));
+    return sector?.id || "operativa";
+  }
+
   function getStats() {
     let data = [];
     try {
@@ -252,18 +355,20 @@
 
   function renderModuleCard(mod, stats) {
     const active = mod.status === "active";
+    const sector = getModuleSector(mod.slug);
     const statHtml = (mod.stats || [])
       .map(key => stats[key] > 0 ? `<span class="moduleStat">${html(statLabel(key, stats[key]))}</span>` : "")
       .filter(Boolean)
       .join("");
     return `
-      <article class="moduleCard ${active ? "moduleCardActive" : "moduleCardPlanned"}" data-module-slug="${html(mod.slug)}" tabindex="0" role="button" aria-label="${html(mod.title)}">
+      <article class="moduleCard ${active ? "moduleCardActive" : "moduleCardPlanned"}" data-module-slug="${html(mod.slug)}" data-sector="${html(sector)}" tabindex="0" role="button" aria-label="${html(mod.title)}">
         <div class="moduleCardIcon" aria-hidden="true">${mod.icon}</div>
         <div class="moduleCardBody">
           <h3 class="moduleCardTitle">${html(mod.title)}</h3>
           <p class="moduleCardDesc">${html(mod.description)}</p>
           ${statHtml ? `<div class="moduleCardStats">${statHtml}</div>` : ""}
         </div>
+        <span class="moduleStatusDot" title="${active ? "Aktivní" : "Připravujeme"}"></span>
         <div class="moduleCardFoot">
           ${active ? `<span class="moduleCardCta">Otevřít modul →</span>` : `<span class="moduleCardBadge">Připravujeme</span>`}
         </div>
@@ -275,19 +380,17 @@
     const root = el("modulesGrid");
     if (!root) return;
     const stats = getStats();
-    const active = MODULES.filter(m => m.status === "active");
-    const planned = MODULES.filter(m => m.status === "planned");
-    root.innerHTML = `
-      <div class="modulesSection">
-        <h3 class="modulesSectionTitle">Aktivní moduly</h3>
-        <div class="modulesGrid">${active.map(m => renderModuleCard(m, stats)).join("")}</div>
-      </div>
-      <div class="modulesSection">
-        <h3 class="modulesSectionTitle">Plánované moduly</h3>
-        <p class="hint modulesSectionHint">Tyto oblasti doplníme postupně. Kliknutím zobrazíte náhled.</p>
-        <div class="modulesGrid modulesGridPlanned">${planned.map(m => renderModuleCard(m, stats)).join("")}</div>
-      </div>
-    `;
+    renderCommandKpis();
+    root.innerHTML = MODULE_SECTORS.map((sector) => {
+      const mods = sector.slugs.map((slug) => getModule(slug)).filter(Boolean);
+      if (!mods.length) return "";
+      return `
+        <div class="modulesSection">
+          <h3 class="modulesSectionTitle">${html(sector.title)}</h3>
+          <div class="modulesGrid">${mods.map((m) => renderModuleCard(m, stats)).join("")}</div>
+        </div>
+      `;
+    }).join("");
   }
 
   function renderModulePlaceholder(slug) {
@@ -349,53 +452,7 @@
     grid.__bound = true;
   }
 
-  function injectStyles() {
-    if (el("modulesStyles")) return;
-    const style = document.createElement("style");
-    style.id = "modulesStyles";
-    style.textContent = `
-      .modulesSection { margin-bottom: 1.5rem; }
-      .modulesSectionTitle { margin: 0 0 .65rem; font-size: 1rem; font-weight: 800; color: var(--text); }
-      .modulesSectionHint { margin: -.35rem 0 .75rem; }
-      .modulesGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .85rem; }
-      .moduleCard {
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: white;
-        padding: 1rem;
-        display: grid;
-        grid-template-columns: auto 1fr;
-        grid-template-rows: auto auto;
-        gap: .5rem .75rem;
-        cursor: pointer;
-        transition: border-color .15s, box-shadow .15s, transform .15s;
-      }
-      .moduleCard:hover, .moduleCard:focus-visible {
-        border-color: var(--accent);
-        box-shadow: 0 4px 14px rgba(0,0,0,.06);
-        outline: none;
-        transform: translateY(-1px);
-      }
-      .moduleCardActive { border-left: 4px solid var(--accent); }
-      .moduleCardPlanned { opacity: .92; border-left: 4px solid #d0d5dd; }
-      .moduleCardIcon { font-size: 1.75rem; line-height: 1; grid-row: 1 / span 2; }
-      .moduleCardTitle { margin: 0; font-size: 1.05rem; font-weight: 800; }
-      .moduleCardDesc { margin: .2rem 0 0; font-size: .88rem; color: var(--muted); line-height: 1.45; }
-      .moduleCardStats { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .45rem; }
-      .moduleStat { font-size: .78rem; font-weight: 700; background: #f2f4f7; color: #344054; padding: .2rem .45rem; border-radius: 999px; }
-      .moduleCardFoot { grid-column: 1 / -1; display: flex; justify-content: flex-end; padding-top: .25rem; }
-      .moduleCardCta { font-size: .85rem; font-weight: 700; color: var(--accent); }
-      .moduleCardBadge { font-size: .78rem; font-weight: 700; color: #667085; background: #f2f4f7; padding: .2rem .5rem; border-radius: 999px; }
-      .modulePlaceholderPanel { max-width: 720px; }
-      .modulePlaceholderHead { display: flex; gap: 1rem; align-items: start; margin-bottom: 1rem; }
-      .modulePlaceholderIcon { font-size: 2.5rem; line-height: 1; }
-      .modulePlaceholderBox { border: 1px dashed var(--line); border-radius: 12px; padding: 1rem; background: #f8fafc; }
-    `;
-    document.head.appendChild(style);
-  }
-
   function init() {
-    injectStyles();
     renderModulesGrid();
     bindModuleCards();
     document.addEventListener("kb:page-changed", (e) => {
@@ -417,7 +474,7 @@
     document.addEventListener("input", () => setTimeout(renderModulesGrid, 120));
   }
 
-  window.kbModules = { MODULES, getModule, renderModulesGrid, openModule };
+  window.kbModules = { MODULES, MODULE_SECTORS, getModule, getStats, getDashboardKpis, renderModulesGrid, renderCommandKpis, openModule };
 
   document.addEventListener("DOMContentLoaded", init);
 })();

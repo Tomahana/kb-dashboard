@@ -3,44 +3,80 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>KB Dashboard – Znalostní báze</title>
+  <title>KB Dashboard – OVV Command Deck</title>
+  <link rel="icon" href="kb-dashboard-favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="styles.css?v=3.118" />
+  <link rel="stylesheet" href="command-deck.css?v=3.118" />
 </head>
-<body class="app-shell">
-  <aside class="sidebar">
-    <div class="brand">
-      <strong>KB Dashboard</strong>
-      <span>Interní znalostní báze</span>
+<body class="app-shell command-deck">
+  <header class="missionHeader" aria-label="Mission control status">
+    <div class="missionBrand">
+      <span class="missionLogo" aria-hidden="true">◈</span>
+      <div>
+        <strong>KB Dashboard</strong>
+        <span>OVV Command Deck</span>
+      </div>
     </div>
-    <nav class="sidebarNav" aria-label="Hlavní navigace">
-      <a href="#prehled" class="navItem" data-page="prehled">Přehled modulů</a>
-      <a href="#emaily" class="navItem" data-page="emaily">
-        E-maily
-        <span id="navBadgeNew" class="navBadge" hidden></span>
-        <span id="navBadgeAi" class="navBadge navBadgeAi" hidden></span>
-      </a>
-      <a href="#kb-items" class="navItem" data-page="kb-items">KB záznamy</a>
-      <a href="#temata" class="navItem" data-page="temata">Témata</a>
-      <a href="#terminy" class="navItem" data-page="terminy">
-        Termíny
-        <span id="navBadgeDeadlines" class="navBadge navBadgeDeadline" hidden></span>
-      </a>
-      <a href="#osoby" class="navItem" data-page="osoby">Osoby</a>
-      <a href="#interni-souteze" class="navItem" data-page="interni-souteze">Interní soutěže</a>
-      <a href="#pcr-vyzkum" class="navItem" data-page="pcr-vyzkum">Výzkumné směry PČR</a>
-      <a href="#ai-poradce" class="navItem" data-page="ai-poradce">AI poradce</a>
-      <a href="#eiz-tokeny" class="navItem" data-page="eiz-tokeny">EIZ tokeny</a>
-      <a href="#casopisy" class="navItem" data-page="casopisy">Databáze časopisů</a>
-      <a href="#vystupy" class="navItem" data-page="vystupy">Výstupy</a>
-      <a href="#rady-organy" class="navItem" data-page="rady-organy">
-        Rady a orgány
-        <span id="navBadgeOrgans" class="navBadge navBadgeOrgan" hidden></span>
-      </a>
-      <a href="#doc-intelligence" class="navItem" data-page="doc-intelligence">📄 Dokumenty</a>
-      <a href="#nastaveni" class="navItem" data-page="nastaveni">Nastavení</a>
+    <div class="missionStatus">
+      <div class="statusPill" id="missionSupabase"><span class="dot"></span> Supabase</div>
+      <div class="statusPill" id="missionAi"><span class="dot"></span> AI</div>
+      <div class="statusPill" id="missionNew"><span class="dot"></span> Nové <strong id="missionNewCount">0</strong></div>
+      <div class="statusPill" id="missionRisks"><span class="dot"></span> Rizika <strong id="missionRiskCount">0</strong></div>
+      <div class="statusPill" id="missionDeadlines"><span class="dot"></span> Termíny <strong id="missionDeadlineCount">0</strong></div>
+      <span class="missionVersion" id="missionVersion"></span>
+    </div>
+  </header>
+
+  <aside class="sidebar sectorNav">
+    <div class="brand">
+      <strong>Sektory</strong>
+      <span>Znalostní báze OVV</span>
+    </div>
+    <nav class="sidebarNav" aria-label="Navigace sektory">
+      <a href="#prehled" class="navItem" data-page="prehled">◈ Přehled</a>
+
+      <div class="navSector">
+        <span class="navSectorLabel">Operativa</span>
+        <a href="#emaily" class="navItem" data-page="emaily">
+          E-maily
+          <span id="navBadgeNew" class="navBadge" hidden></span>
+          <span id="navBadgeAi" class="navBadge navBadgeAi" hidden></span>
+        </a>
+        <a href="#kb-items" class="navItem" data-page="kb-items">KB záznamy</a>
+        <a href="#terminy" class="navItem" data-page="terminy">
+          Termíny
+          <span id="navBadgeDeadlines" class="navBadge navBadgeDeadline" hidden></span>
+        </a>
+        <a href="#doc-intelligence" class="navItem" data-page="doc-intelligence">Dokumenty</a>
+        <a href="#temata" class="navItem" data-page="temata">Témata</a>
+      </div>
+
+      <div class="navSector">
+        <span class="navSectorLabel">Strategie</span>
+        <a href="#interni-souteze" class="navItem" data-page="interni-souteze">Interní soutěže</a>
+        <a href="#pcr-vyzkum" class="navItem" data-page="pcr-vyzkum">Výzkumné směry PČR</a>
+        <a href="#casopisy" class="navItem" data-page="casopisy">Databáze časopisů</a>
+        <a href="#vystupy" class="navItem" data-page="vystupy">Výstupy</a>
+      </div>
+
+      <div class="navSector">
+        <span class="navSectorLabel">Lidé a orgány</span>
+        <a href="#osoby" class="navItem" data-page="osoby">Osoby</a>
+        <a href="#rady-organy" class="navItem" data-page="rady-organy">
+          Rady a orgány
+          <span id="navBadgeOrgans" class="navBadge navBadgeOrgan" hidden></span>
+        </a>
+        <a href="#eiz-tokeny" class="navItem" data-page="eiz-tokeny">EIZ tokeny</a>
+      </div>
+
+      <div class="navSector">
+        <span class="navSectorLabel">AI a data</span>
+        <a href="#ai-poradce" class="navItem" data-page="ai-poradce">AI poradce</a>
+        <a href="#nastaveni" class="navItem" data-page="nastaveni">Nastavení</a>
+      </div>
     </nav>
     <div class="sidebarFoot">
-      <p class="hint">Vyberte modul v přehledu</p>
+      <p class="hint">Mission control · interní nástroj OVV</p>
       <p class="appVersion" id="appVersion">Verze 3.118</p>
     </div>
   </aside>
@@ -55,13 +91,16 @@
       <div id="topbarActions" class="actions pageActions"></div>
     </header>
 
-    <!-- PŘEHLED MODULŮ -->
+    <!-- PŘEHLED / COMMAND DASHBOARD -->
     <section id="page-prehled" class="page active">
-      <section class="panel">
-        <h2>Moduly</h2>
-        <p class="hint">Klikněte na modul pro otevření příslušné části aplikace. Plánované moduly budeme doplňovat postupně.</p>
-        <div id="modulesGrid"></div>
-      </section>
+      <div class="commandDashboard">
+        <div class="commandKpis" id="commandKpis" aria-label="Operativní přehled"></div>
+        <section class="panel">
+          <h2>Moduly podle sektorů</h2>
+          <p class="hint">Vyberte oblast práce. Plánované moduly jsou označeny jako připravujeme.</p>
+          <div id="modulesGrid"></div>
+        </section>
+      </div>
     </section>
 
     <!-- PLACEHOLDER PRO PLÁNOVANÉ MODULY -->
@@ -72,7 +111,7 @@
     <!-- E-Maily -->
     <section id="page-emaily" class="page">
       <div class="inboxLayout">
-        <aside class="panel filters inboxFilters">
+        <aside class="panel filters inboxFilters scanFilters">
           <h2>Filtry</h2>
           <label>Období
             <select id="periodFilter">
@@ -235,7 +274,7 @@
             <small>po termínu</small>
           </article>
         </div>
-        <div class="deadlinesFilters">
+        <div class="deadlinesFilters scanFilters panel">
           <label>Oblast
             <select id="deadlinesOblastFilter"><option value="">Vše</option></select>
           </label>
