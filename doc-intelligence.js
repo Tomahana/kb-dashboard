@@ -17,6 +17,7 @@ const DocIntelligenceModule = (() => {
   let sortCol = "created_at";
   let sortDir = "desc";
   let isLoading = false;
+  const activeFilters = { date: "" };
 
   // ── CSS (injektuje se jednou) ─────────────────────────────────────────────
   const CSS = `
@@ -29,6 +30,11 @@ const DocIntelligenceModule = (() => {
       background:var(--color-bg-secondary, #f8f7f4);
       border:1px solid var(--color-border, rgba(60,60,58,.12));
       border-radius:8px; padding:10px 16px; min-width:100px; flex:1;
+      cursor:pointer; transition:all .15s;
+    }
+    .di-stat:hover {
+      border-color:var(--color-accent, #534ab7);
+      background:var(--color-bg, #fff);
     }
     .di-stat-val { font-size:22px; font-weight:600; color:var(--color-text-primary, #2c2c2a); }
     .di-stat-lbl { font-size:11px; color:var(--color-text-secondary, #888); margin-top:2px; }
@@ -168,11 +174,16 @@ const DocIntelligenceModule = (() => {
   // ── HTML šablona ──────────────────────────────────────────────────────────
   function buildHTML() {
     return `
+      <div id="di-summary-box" style="background:var(--color-bg-secondary,#f8f7f4);border-radius:8px;padding:14px 16px;margin-bottom:16px;border:1px solid var(--color-border,rgba(60,60,58,.12));display:none">
+        <div id="di-summary-date" style="font-size:11px;opacity:.5;margin-bottom:6px"></div>
+        <div id="di-summary" style="font-size:13px;line-height:1.6"></div>
+      </div>
+
       <div class="di-stats">
-        <div class="di-stat"><div class="di-stat-val" id="di-s-total">—</div><div class="di-stat-lbl">Celkem dokumentů</div></div>
-        <div class="di-stat"><div class="di-stat-val" id="di-s-today">—</div><div class="di-stat-lbl">Přidáno dnes</div></div>
-        <div class="di-stat"><div class="di-stat-val" id="di-s-new">—</div><div class="di-stat-lbl">Ke zpracování</div></div>
-        <div class="di-stat"><div class="di-stat-val" id="di-s-critical">—</div><div class="di-stat-lbl">Kritické</div></div>
+        <div class="di-stat" data-di-filter="all"><div class="di-stat-val" id="di-s-total">—</div><div class="di-stat-lbl">Celkem dokumentů</div></div>
+        <div class="di-stat" data-di-filter="today"><div class="di-stat-val" id="di-s-today">—</div><div class="di-stat-lbl">Přidáno dnes</div></div>
+        <div class="di-stat" data-di-filter="new"><div class="di-stat-val" id="di-s-new">—</div><div class="di-stat-lbl">Ke zpracování</div></div>
+        <div class="di-stat" data-di-filter="critical"><div class="di-stat-val" id="di-s-critical">—</div><div class="di-stat-lbl">Kritické</div></div>
       </div>
 
       <div class="di-toolbar">
@@ -229,6 +240,14 @@ const DocIntelligenceModule = (() => {
             <div class="di-field"><div class="di-field-lbl">Kategorie · soubor · velikost</div><div class="di-field-val" id="di-p-meta">—</div></div>
             <div class="di-field"><div class="di-field-lbl">Klíčová slova</div><div class="di-field-val muted" id="di-p-keywords">—</div></div>
             <div class="di-field"><div class="di-field-lbl">Doporučená akce (AI)</div><div class="di-field-val muted" id="di-p-akce">—</div></div>
+            <div class="di-field">
+              <div class="di-field-lbl">Cesta k souboru</div>
+              <div id="di-p-path"
+                style="font-size:12px; font-family:monospace; background:var(--color-bg-secondary,#f8f7f4);
+                padding:6px 10px; border-radius:6px; word-break:break-all;
+                user-select:all; cursor:text; border:1px solid var(--color-border)"
+                title="Označte a zkopírujte cestu"></div>
+            </div>
             <hr class="di-sep">
             <div class="di-field">
               <div class="di-field-lbl">Priorita</div>
@@ -255,7 +274,6 @@ const DocIntelligenceModule = (() => {
           </div>
           <div class="di-panel-footer">
             <button class="di-btn primary" onclick="DocIntelligenceModule.save()">💾 Uložit</button>
-            <a class="di-btn" id="di-p-link" href="#" target="_blank">🔗 Otevřít soubor</a>
             <button class="di-btn" id="di-p-ck" onclick="DocIntelligenceModule.createTask()">➕ ClickUp</button>
           </div>
         </div>
@@ -269,6 +287,50 @@ const DocIntelligenceModule = (() => {
     document.getElementById("di-overlay").addEventListener("click", e => {
       if (e.target === document.getElementById("di-overlay")) closePanel();
     });
+    bindStatCards();
+  }
+
+  function resetListFilters() {
+    activeFilters.date = "";
+    const search = document.getElementById("di-search");
+    const kat = document.getElementById("di-f-kat");
+    const stav = document.getElementById("di-f-stav");
+    const prio = document.getElementById("di-f-prio");
+    if (search) search.value = "";
+    if (kat) kat.value = "";
+    if (stav) stav.value = "";
+    if (prio) prio.value = "";
+  }
+
+  function bindStatCards() {
+    document.querySelectorAll(".di-stat[data-di-filter]").forEach((card) => {
+      card.addEventListener("click", () => {
+        resetListFilters();
+        const kind = card.dataset.diFilter;
+        if (kind === "today") {
+          activeFilters.date = new Date().toISOString().slice(0, 10);
+        } else if (kind === "new") {
+          document.getElementById("di-f-stav").value = "nový";
+        } else if (kind === "critical") {
+          document.getElementById("di-f-prio").value = "5";
+        }
+        filter();
+      });
+    });
+  }
+
+  async function loadSummary() {
+    try {
+      const s = await DocIntelligenceDB.getLatestSummary();
+      const box = document.getElementById("di-summary-box");
+      if (!s || !box) return;
+      document.getElementById("di-summary").textContent = s.summary_text || "";
+      document.getElementById("di-summary-date").textContent =
+        "Poslední aktualizace: " + (s.created_at || "").slice(0, 10);
+      box.style.display = "block";
+    } catch (_) {
+      /* souhrn je volitelný */
+    }
   }
 
   // ── Načtení dat ───────────────────────────────────────────────────────────
@@ -280,6 +342,7 @@ const DocIntelligenceModule = (() => {
       ]);
       allDocs = docs;
       updateStats(stats);
+      await loadSummary();
       filter();
     } catch(e) {
       document.getElementById("di-tbody").innerHTML =
@@ -308,6 +371,7 @@ const DocIntelligenceModule = (() => {
       if (kat && d.kategorie !== kat)                          return false;
       if (stv && d.stav !== stv)                              return false;
       if (pri && String(d.dulezitost) !== pri)                return false;
+      if (activeFilters.date && (d.created_at || "").slice(0, 10) !== activeFilters.date) return false;
       return true;
     });
 
@@ -384,7 +448,8 @@ const DocIntelligenceModule = (() => {
     document.getElementById("di-p-akce").textContent     = doc.akce_doporucena || "Žádná doporučená akce";
     document.getElementById("di-p-notes").value          = doc.poznamky || "";
     document.getElementById("di-p-termin").value         = doc.termin || "";
-    document.getElementById("di-p-link").href            = doc.file_url || "#";
+    const path = (doc.file_path || "").replace(/\//g, "\\");
+    document.getElementById("di-p-path").textContent     = path || "—";
     document.getElementById("di-p-ck").textContent       = doc.clickup_task_id ? `✅ ClickUp (${doc.clickup_task_id})` : "➕ ClickUp";
 
     // Priority buttons
@@ -424,6 +489,11 @@ const DocIntelligenceModule = (() => {
         poznamky: c.poznamky, stav: c.stav,
         dulezitost: c.dulezitost, termin: c.termin || null,
       });
+      try {
+        await DocIntelligenceDB.syncDocToTopics(c);
+      } catch (syncErr) {
+        console.warn("syncDocToTopics:", syncErr);
+      }
       const idx = allDocs.findIndex(d => d.id === c.id);
       if (idx >= 0) Object.assign(allDocs[idx], c);
       filter();

@@ -77,25 +77,90 @@ def file_hash(path: Path) -> str:
     return h.hexdigest()
 
 
-def extract_text(path: Path) -> str:
+def _extract_doc_with_word(file_path: str) -> str:
+    import win32com.client
+
+    word = win32com.client.Dispatch("Word.Application")
+    word.Visible = False
+    doc = None
+    try:
+        doc = word.Documents.Open(file_path)
+        return doc.Content.Text or ""
+    finally:
+        if doc is not None:
+            doc.Close(False)
+        word.Quit()
+
+
+def _extract_doc_with_antiword(file_path: str) -> str:
+    import subprocess
+
+    result = subprocess.run(
+        ["antiword", file_path],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or result.stdout or "antiword selhal").strip())
+    return result.stdout
+
+
+def extract_text_preview(path: Path, max_chars: int = 12000) -> str:
+    file_path = str(path.resolve())
     ext = path.suffix.lower()
     try:
         if ext in {".txt", ".md", ".rtf"}:
-            return path.read_text(encoding="utf-8", errors="replace")[:12000]
+            return path.read_text(encoding="utf-8", errors="replace")[:max_chars]
         if ext == ".docx":
             from docx import Document
-            doc = Document(str(path))
-            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())[:12000]
+
+            doc = Document(file_path)
+            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())[:max_chars]
+        if ext == ".doc":
+            try:
+                text = _extract_doc_with_word(file_path)
+            except Exception:
+                try:
+                    text = _extract_doc_with_antiword(file_path)
+                except Exception as exc:
+                    return f"[Nepodařilo se extrahovat text z .doc: {exc}]"
+            return text[:max_chars]
+        if ext == ".xlsx":
+            import openpyxl
+
+            wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+            try:
+                text = ""
+                for sheet in wb.worksheets[:3]:
+                    text += f"[List: {sheet.title}]\n"
+                    for row in sheet.iter_rows(max_row=50, values_only=True):
+                        line = " | ".join(str(v) for v in row if v is not None)
+                        if line.strip():
+                            text += line + "\n"
+                    if len(text) > max_chars:
+                        break
+                return text[:max_chars]
+            finally:
+                wb.close()
         if ext == ".pdf":
             from pypdf import PdfReader
-            reader = PdfReader(str(path))
+
+            reader = PdfReader(file_path)
             parts = []
             for page in reader.pages[:20]:
                 parts.append(page.extract_text() or "")
-            return "\n".join(parts)[:12000]
+            return "\n".join(parts)[:max_chars]
     except Exception as exc:
         return f"[Nepodařilo se extrahovat text: {exc}]"
     return f"[Nepodporovaný formát pro extrakci: {ext}]"
+
+
+def extract_text(path: Path) -> str:
+    return extract_text_preview(path, max_chars=12000)
 
 
 def find_recent_files(root: Path, hours_back: int) -> list[Path]:
@@ -262,6 +327,15 @@ def run_agent() -> int:
         log("")
         log("Denní souhrn:")
         log(summary)
+        try:
+            sb.table("doc_intelligence_summary").insert({
+                "summary_text": summary,
+                "doc_count": len(saved),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+            log("  ✓ Denní souhrn uložen do doc_intelligence_summary")
+        except Exception as exc:
+            log(f"  ✗ Nepodařilo se uložit souhrn: {exc}")
 
     log("")
     log(f"Hotovo — uloženo {len(saved)} nových dokumentů.")

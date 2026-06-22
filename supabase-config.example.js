@@ -31,4 +31,7 @@ window.KB_SUPABASE = {
 // };
 
 // Volitelně: ClickUp token pro modul Dokumenty (jinak Nastavení → Export úkolů).
-// window.clickupConfig = { token: "pk_...", listId: "901514038952" };
+window.clickupConfig = {
+  token: "pk_TVŮJ_TOKEN",
+  listId: "901514038952"
+};
