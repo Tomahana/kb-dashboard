@@ -2,7 +2,7 @@
 
 (function () {
   const PAGES = {
-    prehled: { title: "Přehled", subtitle: "Moduly a oblasti práce OVV" },
+    prehled: { title: "Command Deck", subtitle: "Operativní přehled a moduly OVV" },
     emaily: { title: "Znalostní báze z e-mailů", subtitle: "Zachytávání, třídění, klasifikace a práce se záznamy" },
     "kb-items": { title: "KB záznamy", subtitle: "Záznamy z AI agenta — úkoly, znalosti, rozhodnutí a reference" },
     temata: { title: "Témata", subtitle: "Seskupení e-mailů, AI shrnutí a analýza agend" },
@@ -112,6 +112,52 @@
     if (window.kbModules?.renderModulesGrid) {
       setTimeout(() => window.kbModules.renderModulesGrid(), 0);
     }
+    updateMissionHeader();
+  }
+
+  function setPill(el, state, html) {
+    if (!el) return;
+    el.className = "statusPill" + (state ? ` ${state}` : "");
+    el.innerHTML = html;
+  }
+
+  async function updateMissionHeader() {
+    const kpis = window.kbModules?.getDashboardKpis?.() || {};
+    const newEl = el("missionNewCount");
+    const riskEl = el("missionRiskCount");
+    const deadlineEl = el("missionDeadlineCount");
+    if (newEl) newEl.textContent = String(kpis.newCount ?? 0);
+    if (riskEl) riskEl.textContent = String(kpis.riskCount ?? 0);
+    if (deadlineEl) deadlineEl.textContent = String(kpis.deadlineCount ?? 0);
+
+    const newPill = el("missionNew");
+    const riskPill = el("missionRisks");
+    const deadlinePill = el("missionDeadlines");
+    if (newPill) newPill.classList.toggle("warn", (kpis.newCount || 0) > 0);
+    if (riskPill) riskPill.classList.toggle("err", (kpis.riskCount || 0) > 0);
+    if (deadlinePill) deadlinePill.classList.toggle("warn", (kpis.deadlineCount || 0) > 0);
+
+    try {
+      const session = await window.kbAuth?.getSession?.();
+      setPill(
+        el("missionSupabase"),
+        session ? "ok" : "warn",
+        `<span class="dot"></span> Supabase · ${session ? "online" : "offline"}`
+      );
+    } catch (_) {
+      setPill(el("missionSupabase"), "err", '<span class="dot"></span> Supabase · chyba');
+    }
+
+    let aiReady = false;
+    try {
+      const raw = JSON.parse(localStorage.getItem("kb-dashboard-ai-settings-v1") || "{}");
+      aiReady = !!(raw.apiKey || "").trim();
+    } catch (_) {}
+    setPill(
+      el("missionAi"),
+      aiReady ? "ai ok" : "warn",
+      `<span class="dot"></span> AI · ${aiReady ? "ready" : "nenastaveno"}`
+    );
   }
 
   function bindNav() {
@@ -166,8 +212,10 @@
     const apply = (text) => {
       const box = el("appVersion");
       const top = el("topbarVersion");
+      const mission = el("missionVersion");
       if (box) box.textContent = text;
       if (top) top.textContent = text;
+      if (mission) mission.textContent = text;
     };
     fetch(`version.json?_${Date.now()}`)
       .then((res) => (res.ok ? res.json() : null))
@@ -191,17 +239,19 @@
     setTimeout(() => {
       mountTopbarActions();
       updateBadges();
+      updateMissionHeader();
     }, 80);
     document.addEventListener("input", () => setTimeout(updateBadges, 60));
     document.addEventListener("kb:records-loaded", () => setTimeout(updateBadges, 60));
     document.addEventListener("kb:rady-organy-loaded", () => setTimeout(updateBadges, 60));
+    document.addEventListener("kb:deadlines-loaded", () => setTimeout(updateBadges, 60));
     document.addEventListener("kb:page-changed", () => {
       if (window.kbPickers?.closeOpenMenu) window.kbPickers.closeOpenMenu();
     });
     document.addEventListener("kb:ui-ready", () => mountTopbarActions());
   }
 
-  window.kbLayout = { setActivePage, updateBadges, getPage, resolveRoute, mountTopbarActions };
+  window.kbLayout = { setActivePage, updateBadges, updateMissionHeader, getPage, resolveRoute, mountTopbarActions };
 
   document.addEventListener("DOMContentLoaded", init);
 })();
