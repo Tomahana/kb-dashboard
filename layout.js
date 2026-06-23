@@ -16,6 +16,7 @@
     vystupy: { title: "Výstupy", subtitle: "Publikační výstupy Jimp, JSC, B a C — samostatné tabulky pro DKRVO, PPK a analýzy" },
     "rady-organy": { title: "Rady a orgány", subtitle: "Vědecká rada, Správní rada, AS, MPK, Etická komise, Rada pro komercializaci — členové a AI kontrola změn" },
     "doc-intelligence": { title: "Dokumenty", subtitle: "AI analýza dokumentů — filtrování, priority, poznámky a ClickUp" },
+    "outlook-emaily": { title: "Outlook emaily", subtitle: "AI analýza e-mailů z Outlooku — složky, priority, úkoly a termíny" },
     nastaveni: { title: "Nastavení", subtitle: "Supabase, AI, import a export" },
     modul: { title: "Modul", subtitle: "Oblast v přípravě" }
   };
