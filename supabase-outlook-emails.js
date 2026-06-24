@@ -97,12 +97,22 @@ const OutlookEmailsDB = (() => {
       };
     },
 
-    async getTopics() {
-      const supa = getKbClient();
-      if (!supa) return [];
-      const { data, error } = await supa.from("kb_topics").select("id,name,agenda").order("name");
-      if (error) throw error;
-      return data || [];
+    async getByIds(ids) {
+      const unique = [...new Set((ids || []).map(String).filter(Boolean))];
+      if (!unique.length) return [];
+      return req(`emails?id=in.(${unique.join(",")})&select=id,tema,subject,sender_name,received_at,stav`);
+    },
+
+    async getTemataIndex({ showHidden = false } = {}) {
+      const emails = await this.getAll({ limit: 500, showHidden });
+      const map = new Map();
+      emails.forEach((email) => {
+        const tema = (email.tema || "").trim();
+        if (!tema) return;
+        if (!map.has(tema)) map.set(tema, []);
+        map.get(tema).push(email);
+      });
+      return [...map.entries()].map(([tema, items]) => ({ tema, emails: items, count: items.length }));
     },
 
     async updateStav(id, stav) {
@@ -115,10 +125,6 @@ const OutlookEmailsDB = (() => {
 
     async updateKategorieManual(id, kategorie) {
       return patchEmail(id, { kategorie_manual: kategorie });
-    },
-
-    async updateTopicIds(id, topicIds) {
-      return patchEmail(id, { topic_ids: topicIds });
     }
   };
 })();
