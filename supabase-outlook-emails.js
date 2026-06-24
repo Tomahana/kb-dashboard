@@ -78,6 +78,11 @@ const OutlookEmailsDB = (() => {
       return r[0] || null;
     },
 
+    async getLastUpdated() {
+      const r = await req("emails?select=processed_at&order=processed_at.desc.nullslast&limit=1");
+      return r[0]?.processed_at || null;
+    },
+
     async getStats({ showHidden = false } = {}) {
       const hiddenFilter = showHidden ? "" : "&stav=neq.skryto";
       const today = new Date().toISOString().slice(0, 10);

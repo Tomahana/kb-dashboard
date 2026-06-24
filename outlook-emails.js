@@ -47,6 +47,13 @@ const OutlookEmailsModule = (() => {
     }
     .oe-stat-val { font-size:22px; font-weight:600; color:var(--color-text-primary, #2c2c2a); }
     .oe-stat-lbl { font-size:11px; color:var(--color-text-secondary, #888); margin-top:2px; }
+    .oe-updated {
+      font-size:12px; color:var(--color-text-secondary, #888);
+      margin-bottom:14px; padding:8px 12px;
+      background:var(--color-bg-secondary, #f8f7f4);
+      border:1px solid var(--color-border, rgba(60,60,58,.1));
+      border-radius:8px;
+    }
     .oe-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; }
     .oe-tab {
       padding:6px 12px; border-radius:20px; font-size:12px; font-weight:500;
@@ -180,6 +187,8 @@ const OutlookEmailsModule = (() => {
 
   function buildHTML() {
     return `
+      <p class="oe-updated" id="oe-last-updated">Poslední aktualizace emailů: —</p>
+
       <div class="oe-stats">
         <div class="oe-stat" data-oe-filter="all"><div class="oe-stat-val" id="oe-s-total">—</div><div class="oe-stat-lbl">Celkem emailů</div></div>
         <div class="oe-stat" data-oe-filter="today"><div class="oe-stat-val" id="oe-s-today">—</div><div class="oe-stat-lbl">Dnes</div></div>
@@ -336,17 +345,34 @@ const OutlookEmailsModule = (() => {
     if (idx >= 0) Object.assign(allEmails[idx], patch);
   }
 
+  function formatDateTime(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso).slice(0, 16).replace("T", " ");
+    return d.toLocaleString("cs-CZ", { dateStyle: "short", timeStyle: "short" });
+  }
+
+  function updateLastUpdated(processedAt) {
+    const el = document.getElementById("oe-last-updated");
+    if (!el) return;
+    el.textContent = processedAt
+      ? `Poslední aktualizace emailů: ${formatDateTime(processedAt)}`
+      : "Poslední aktualizace emailů: —";
+  }
+
   async function load() {
     const list = document.getElementById("oe-list");
     try {
       await ensureTopicsLoaded();
       showHidden = !!document.getElementById("oe-show-hidden")?.checked;
-      const [emails, stats] = await Promise.all([
+      const [emails, stats, lastUpdated] = await Promise.all([
         OutlookEmailsDB.getAll({ limit: 500, showHidden }),
-        OutlookEmailsDB.getStats({ showHidden })
+        OutlookEmailsDB.getStats({ showHidden }),
+        OutlookEmailsDB.getLastUpdated()
       ]);
       allEmails = emails;
       updateStats(stats);
+      updateLastUpdated(lastUpdated);
       filter();
     } catch (e) {
       if (list) list.innerHTML = `<div class="oe-empty">Chyba: ${esc(e.message)}</div>`;
