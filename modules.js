@@ -39,8 +39,8 @@
     },
     {
       slug: "kb-items",
-      title: "KB záznamy",
-      description: "Záznamy z AI agenta — úkoly, znalosti, rozhodnutí, otázky, rizika a reference v Supabase.",
+      title: "KB Notion meeting notes",
+      description: "Notion meeting notes z AI agenta — úkoly, znalosti, rozhodnutí, otázky, rizika a reference v Supabase.",
       status: "active",
       icon: "🧠",
       stats: ["kbItemsTotal", "kbItemsOpen"]
@@ -360,8 +360,8 @@
       vystupyJsc: `${value} JSC`,
       organsTotal: `${value} orgánů`,
       organsPendingAi: `${value} AI ke kontrole`,
-      kbItemsTotal: `${value} KB záznamů`,
-      kbItemsOpen: `${value} otevřených záznamů`,
+      kbItemsTotal: `${value} meeting notes`,
+      kbItemsOpen: `${value} otevřených notes`,
       docIntelligenceTotal: `${value} dokumentů`,
       docIntelligenceNew: `${value} ke zpracování`
     };

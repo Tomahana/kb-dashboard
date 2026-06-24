@@ -4,7 +4,7 @@
   const PAGES = {
     prehled: { title: "Command Deck", subtitle: "Operativní přehled a moduly OVV" },
     emaily: { title: "Znalostní báze z e-mailů", subtitle: "Zachytávání, třídění, klasifikace a práce se záznamy" },
-    "kb-items": { title: "KB záznamy", subtitle: "Záznamy z AI agenta — úkoly, znalosti, rozhodnutí a reference" },
+    "kb-items": { title: "KB Notion meeting notes", subtitle: "Notion meeting notes z AI agenta — úkoly, znalosti, rozhodnutí a reference" },
     temata: { title: "Témata", subtitle: "Seskupení e-mailů, AI shrnutí a analýza agend" },
     terminy: { title: "Termíny", subtitle: "Termíny sběrů dat a odesílání na úřady" },
     podklady: { title: "Podklady k jednáním", subtitle: "Evidence podkladů, bodů a poznámek k jednáním — témata a termíny" },
