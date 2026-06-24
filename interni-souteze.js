@@ -27,6 +27,7 @@
   let loading = false;
   let activeProgram = PROGRAMS[0].slug;
   let activeCompetitionId = null;
+  let activeMainView = "prehled";
   let overviewFilterRok = "";
   let overviewFilterProgram = "";
   let overviewFilterBeh = "";
@@ -41,6 +42,65 @@
   const html = (s) => n(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;" }[c]));
   const uuid = () => crypto.randomUUID?.() || `comp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const fmtMoney = (v) => new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(Number(v) || 0);
+
+  function parseCompetitionRoute() {
+    const raw = (location.hash || "").replace(/^#\/?/, "").trim();
+    const parts = raw.split("/").filter(Boolean);
+    if (parts[0] !== "interni-souteze") return { view: "prehled", compId: null };
+    if (parts.length < 2 || parts[1] === "prehled") return { view: "prehled", compId: null };
+    const program = parts[1];
+    const compId = parts[2] || null;
+    if (PROGRAMS.some((p) => p.slug === program)) return { view: program, compId };
+    return { view: "prehled", compId: null };
+  }
+
+  function setCompetitionRoute(view, compId) {
+    let hash = "#interni-souteze";
+    if (view && view !== "prehled") {
+      hash += `/${view}`;
+      if (compId) hash += `/${compId}`;
+    }
+    if (location.hash !== hash) history.replaceState(null, "", hash);
+  }
+
+  function applyCompetitionRoute() {
+    const route = parseCompetitionRoute();
+    activeMainView = route.view;
+    if (route.view !== "prehled") {
+      activeProgram = route.view;
+      if (route.compId && getCompetition(route.compId)) {
+        activeCompetitionId = route.compId;
+      } else {
+        const items = competitionsForProgram(route.view);
+        activeCompetitionId = items[0]?.id || null;
+      }
+    }
+  }
+
+  function switchMainView(view, compId) {
+    activeMainView = view;
+    if (view !== "prehled") {
+      activeProgram = view;
+      if (compId && getCompetition(compId)) activeCompetitionId = compId;
+      else if (!getCompetition(activeCompetitionId) || getCompetition(activeCompetitionId)?.program_slug !== view) {
+        activeCompetitionId = competitionsForProgram(view)[0]?.id || null;
+      }
+    }
+    setCompetitionRoute(view, activeCompetitionId);
+    updateMainViewSubtitle();
+    render();
+  }
+
+  function updateMainViewSubtitle() {
+    const sub = el("pageSubtitle");
+    if (!sub || window.kbLayout?.getPage?.() !== "interni-souteze") return;
+    if (activeMainView === "prehled") {
+      sub.textContent = "Přehled čerpání alokací — filtry, roční souhrny a přechod do správy soutěží";
+    } else {
+      const prog = getProgram(activeMainView);
+      sub.textContent = `${prog.title} — běhy, přihlášky, hodnocení a finance`;
+    }
+  }
 
   function getProgram(slug) {
     return PROGRAMS.find(p => p.slug === slug) || PROGRAMS[0];
@@ -649,10 +709,7 @@
 
     grid.querySelectorAll(".competitionOverviewCard[data-comp-id]").forEach(card => {
       const open = () => {
-        activeProgram = card.dataset.program;
-        activeCompetitionId = card.dataset.compId;
-        render();
-        el("competitionDetail")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+        switchMainView(card.dataset.program, card.dataset.compId);
       };
       card.addEventListener("click", open);
       card.addEventListener("keydown", (e) => {
@@ -909,6 +966,7 @@
       setStatus(`Chyba: ${e.message || e}`, true);
     } finally {
       loading = false;
+      applyCompetitionRoute();
       render();
       document.dispatchEvent(new CustomEvent("kb:competitions-loaded"));
     }
@@ -1174,6 +1232,7 @@
       }
       activeProgram = programSlug;
       activeCompetitionId = lastSaved?.id || activeCompetitionId;
+      switchMainView(programSlug, activeCompetitionId);
       setStatus(`Šablona načtena: ${entries.map(s => `běh ${s.beh_cislo}`).join(", ")}.`);
     } catch (err) {
       console.error(err);
@@ -1266,6 +1325,7 @@
       const saved = await saveCompetition(updated);
       activeProgram = programSlug;
       activeCompetitionId = saved.id;
+      switchMainView(programSlug, saved.id);
       setStatus(`Import dokončen: ${applications.length} přihlášek, ${supported.length} podpořených projektů, ${(data.persons || []).length} osob.`);
     } catch (err) {
       console.error(err);
@@ -1621,20 +1681,21 @@
     return saved;
   }
 
-  function renderProgramTabs() {
-    const box = el("competitionProgramTabs");
+  function renderMainViewTabs() {
+    const box = el("competitionMainTabs");
     if (!box) return;
-    box.innerHTML = PROGRAMS.map(p => {
-      const count = competitionsForProgram(p.slug).length;
-      const active = p.slug === activeProgram ? "active" : "";
-      return `<button type="button" class="competitionTab ${active}" data-program="${html(p.slug)}">${p.icon} ${html(p.title)}${count ? ` <span class="tabCount">${count}</span>` : ""}</button>`;
-    }).join("");
-    box.querySelectorAll("[data-program]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        activeProgram = btn.dataset.program;
-        activeCompetitionId = null;
-        render();
-      });
+    const prehledActive = activeMainView === "prehled" ? "active" : "";
+    const tabs = [
+      `<button type="button" class="competitionMainTab ${prehledActive}" data-view="prehled">📊 Přehled čerpání alokací</button>`,
+      ...PROGRAMS.map(p => {
+        const count = competitionsForProgram(p.slug).length;
+        const active = p.slug === activeMainView ? "active" : "";
+        return `<button type="button" class="competitionMainTab ${active}" data-view="${html(p.slug)}">${p.icon} ${html(p.title)}${count ? ` <span class="tabCount">${count}</span>` : ""}</button>`;
+      })
+    ];
+    box.innerHTML = tabs.join("");
+    box.querySelectorAll("[data-view]").forEach(btn => {
+      btn.addEventListener("click", () => switchMainView(btn.dataset.view));
     });
   }
 
@@ -1671,7 +1732,11 @@
       </article>`;
     }).join("")}</div>`;
     box.querySelectorAll(".competitionCard").forEach(card => {
-      card.addEventListener("click", () => { activeCompetitionId = card.dataset.compId; render(); });
+      card.addEventListener("click", () => {
+        activeCompetitionId = card.dataset.compId;
+        setCompetitionRoute(activeMainView, activeCompetitionId);
+        render();
+      });
     });
   }
 
@@ -1965,12 +2030,10 @@
     };
     try {
       const saved = await saveCompetition(comp);
-      activeCompetitionId = saved.id;
-      activeProgram = saved.program_slug;
       resetPdfDialogState(saved);
       el("competitionDialog").close();
       setStatus("Běh soutěže uložen.");
-      render();
+      switchMainView(saved.program_slug, saved.id);
     } catch (err) {
       alert("Uložení selhalo: " + formatSaveError(err));
     }
@@ -1985,7 +2048,12 @@
       }
       competitions = competitions.filter(c => c.id !== id);
       if (!useSupabase) persistLocal();
-      if (activeCompetitionId === id) activeCompetitionId = null;
+      if (activeCompetitionId === id) {
+        activeCompetitionId = activeMainView === "prehled"
+          ? null
+          : competitionsForProgram(activeMainView)[0]?.id || null;
+        if (activeMainView !== "prehled") setCompetitionRoute(activeMainView, activeCompetitionId);
+      }
       render();
     } catch (err) {
       alert("Smazání selhalo: " + (err.message || err));
@@ -2201,7 +2269,7 @@
 
   function injectPage() {
     const root = el("interniSoutezeRoot");
-    if (!root || el("competitionProgramTabs")) return;
+    if (!root || el("competitionMainTabs")) return;
     root.innerHTML = `
       <section class="panel">
         <div class="sectionHeader">
@@ -2217,11 +2285,12 @@
         </div>
         <p id="competitionsStatus" class="competitionsStatus hint">Načítám…</p>
       </section>
-      <section class="panel competitionOverviewPanel">
+      <nav id="competitionMainTabs" class="competitionMainTabs" aria-label="Přehled a programy"></nav>
+      <section id="competitionPrehledView" class="panel competitionOverviewPanel">
         <div class="sectionHeader">
           <div>
             <h3>Přehled čerpání alokací</h3>
-            <p class="hint">Filtrujte podle roku a soutěže — dlaždice ukazují souhrn za všechny běhy dané soutěže. Celková alokace roku zadáváte ručně.</p>
+            <p class="hint">Filtrujte podle roku a soutěže — dlaždice ukazují souhrn za všechny běhy dané soutěže. Celková alokace roku zadáváte ručně. Kliknutím na dlaždici přejdete do správy programu.</p>
           </div>
         </div>
         <div class="competitionOverviewFilters">
@@ -2253,20 +2322,18 @@
         </div>
         <div id="competitionOverviewGrid"></div>
       </section>
-      <section class="panel competitionProgramsPanel">
-        <h3>Programy a detail běhu</h3>
-        <div id="competitionProgramTabs" class="competitionProgramTabs"></div>
+      <section id="competitionProgramView" class="competitionProgramView" hidden>
         <div id="competitionProgramBanner" hidden></div>
+        <div class="competitionLayout">
+          <section class="panel competitionListPanel">
+            <h3>Běhy / výzvy</h3>
+            <div id="competitionList"></div>
+          </section>
+          <section class="panel competitionDetailPanel">
+            <div id="competitionDetail"></div>
+          </section>
+        </div>
       </section>
-      <div class="competitionLayout">
-        <section class="panel competitionListPanel">
-          <h3>Běhy / výzvy</h3>
-          <div id="competitionList"></div>
-        </section>
-        <section class="panel competitionDetailPanel">
-          <div id="competitionDetail"></div>
-        </section>
-      </div>
     `;
     el("competitionsReloadBtn").addEventListener("click", loadCompetitions);
     el("newCompetitionBtn").addEventListener("click", () => openCompetitionDialog());
@@ -2437,10 +2504,12 @@
     style.textContent = `
       #interniSoutezeRoot { min-width: 0; max-width: 100%; }
       #interniSoutezeRoot .sectionHeader { flex-wrap: wrap; align-items: flex-start; }
-      .competitionProgramTabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
-      .competitionTab { border: 1px solid var(--line); background: white; border-radius: 999px; padding: .4rem .75rem; font-size: .85rem; cursor: pointer; }
-      .competitionTab.active { background: var(--accent); color: white; border-color: var(--accent); }
-      .competitionTab .tabCount { opacity: .85; font-weight: 700; }
+      .competitionMainTabs { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1rem; }
+      .competitionMainTab { border: 1px solid var(--line); background: white; border-radius: 999px; padding: .45rem .85rem; font-size: .85rem; cursor: pointer; font-weight: 600; }
+      .competitionMainTab:hover { border-color: var(--accent); background: #f8fafc; }
+      .competitionMainTab.active { background: var(--accent); color: white; border-color: var(--accent); }
+      .competitionMainTab .tabCount { opacity: .85; font-weight: 700; }
+      .competitionProgramView { min-width: 0; }
       .competitionLayout { display: grid; grid-template-columns: minmax(0, 280px) minmax(0, 1fr); gap: 1rem; align-items: start; min-width: 0; }
       .competitionListPanel, .competitionDetailPanel { min-width: 0; max-width: 100%; }
       .competitionCards { display: grid; gap: .5rem; }
@@ -2528,11 +2597,21 @@
   }
 
   function render() {
-    renderCompetitionOverview();
-    renderProgramTabs();
-    renderProgramSeedBanner();
-    renderCompetitionList();
-    renderCompetitionDetail();
+    renderMainViewTabs();
+    const isPrehled = activeMainView === "prehled";
+    const prehledView = el("competitionPrehledView");
+    const programView = el("competitionProgramView");
+    if (prehledView) prehledView.hidden = !isPrehled;
+    if (programView) programView.hidden = isPrehled;
+    if (isPrehled) {
+      renderCompetitionOverview();
+    } else {
+      activeProgram = activeMainView;
+      renderProgramSeedBanner();
+      renderCompetitionList();
+      renderCompetitionDetail();
+    }
+    updateMainViewSubtitle();
   }
 
   function init() {
@@ -2540,10 +2619,18 @@
     injectStyles();
     injectPage();
     injectDialogs();
+    applyCompetitionRoute();
     setTimeout(loadCompetitions, 150);
+    window.addEventListener("hashchange", () => {
+      if (window.kbLayout?.getPage?.() !== "interni-souteze") return;
+      applyCompetitionRoute();
+      render();
+    });
     document.addEventListener("kb:page-changed", async (e) => {
       if (e.detail?.page !== "interni-souteze") return;
+      applyCompetitionRoute();
       if (!competitions.length && !loading) loadCompetitions();
+      else render();
       await window.kbPersons?.ensureLoaded?.();
     });
     document.addEventListener("kb:persons-loaded", () => render());

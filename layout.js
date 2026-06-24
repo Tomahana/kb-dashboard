@@ -31,6 +31,7 @@
     const raw = (hash || "").replace(/^#\/?/, "").trim().toLowerCase();
     if (raw === "analyza") return { page: "temata", moduleSlug: null, topicsTab: "analysis" };
     if (PAGES[raw]) return { page: raw, moduleSlug: null };
+    if (/^interni-souteze(\/|$)/.test(raw)) return { page: "interni-souteze", moduleSlug: null };
     if (/^modul-/.test(raw)) return { page: "modul", moduleSlug: raw };
     return { page: DEFAULT_PAGE, moduleSlug: null };
   }
@@ -69,8 +70,12 @@
     if (el("pageTitle")) el("pageTitle").textContent = title;
     if (el("pageSubtitle")) el("pageSubtitle").textContent = subtitle;
 
+    const currentRaw = location.hash.replace(/^#\/?/, "").toLowerCase();
     const hashTarget = route.page === "modul" ? route.moduleSlug : route.page;
-    if (location.hash.replace(/^#\/?/, "").toLowerCase() !== hashTarget) {
+    const preserveInterniSubRoute = options.fromHashChange
+      && route.page === "interni-souteze"
+      && currentRaw.startsWith("interni-souteze/");
+    if (!preserveInterniSubRoute && currentRaw !== hashTarget) {
       history.replaceState(null, "", `#${hashTarget}`);
     }
 
@@ -175,7 +180,8 @@
       const route = resolveRoute(location.hash);
       setActivePage(route.page === "modul" ? route.moduleSlug : route.page, {
         isModule: route.page === "modul",
-        topicsTab: route.topicsTab
+        topicsTab: route.topicsTab,
+        fromHashChange: true
       });
     });
   }
