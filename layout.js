@@ -9,6 +9,7 @@
     terminy: { title: "Termíny", subtitle: "Termíny sběrů dat a odesílání na úřady" },
     osoby: { title: "Osoby", subtitle: "Centrální evidence osob pro všechny moduly" },
     "interni-souteze": { title: "Interní soutěže", subtitle: "UHK programy, běhy, přihlášky, hodnocení a finance" },
+    navraty: { title: "OP JAK Návraty", subtitle: "Soutěž OP JAK Návraty — běhy, přihlášky, hodnocení a finance" },
     "pcr-vyzkum": { title: "Výzkumné směry PČR", subtitle: "Témata pro spolupráci UHK s Policií ČR — sync, analýza a osoby" },
     "ai-poradce": { title: "AI poradce", subtitle: "Dotazy nad daty aplikace — odpovědi jen z modulů KB Dashboardu" },
     "eiz-tokeny": { title: "EIZ tokeny", subtitle: "Transformační smlouvy, roční tokeny a publikace z APC" },
@@ -32,6 +33,7 @@
     if (raw === "analyza") return { page: "temata", moduleSlug: null, topicsTab: "analysis" };
     if (PAGES[raw]) return { page: raw, moduleSlug: null };
     if (/^interni-souteze(\/|$)/.test(raw)) return { page: "interni-souteze", moduleSlug: null };
+    if (/^navraty(\/|$)/.test(raw)) return { page: "navraty", moduleSlug: null };
     if (/^modul-/.test(raw)) return { page: "modul", moduleSlug: raw };
     return { page: DEFAULT_PAGE, moduleSlug: null };
   }
@@ -75,7 +77,10 @@
     const preserveInterniSubRoute = options.fromHashChange
       && route.page === "interni-souteze"
       && currentRaw.startsWith("interni-souteze/");
-    if (!preserveInterniSubRoute && currentRaw !== hashTarget) {
+    const preserveNavratySubRoute = options.fromHashChange
+      && route.page === "navraty"
+      && currentRaw.startsWith("navraty/");
+    if (!preserveInterniSubRoute && !preserveNavratySubRoute && currentRaw !== hashTarget) {
       history.replaceState(null, "", `#${hashTarget}`);
     }
 

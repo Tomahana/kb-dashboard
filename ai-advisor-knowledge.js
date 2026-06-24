@@ -11,6 +11,7 @@
     { id: "terminy", label: "Termíny", page: "terminy", status: "active" },
     { id: "pcr-vyzkum", label: "Výzkumné směry PČR", page: "pcr-vyzkum", status: "active" },
     { id: "interni-souteze", label: "Interní soutěže", page: "interni-souteze", status: "active" },
+    { id: "navraty", label: "OP JAK Návraty", page: "navraty", status: "active" },
     { id: "temata", label: "Témata", page: "temata", status: "active" },
     { id: "emaily", label: "E-maily / znalostní báze", page: "emaily", status: "active" },
     { id: "kb-items", label: "KB záznamy (AI agent)", page: "kb-items", status: "active" },
@@ -119,34 +120,37 @@
     const out = [];
     for (const c of comps) {
       const prog = c.program_slug || "";
+      const source = prog === "navraty" ? "navraty" : "interni-souteze";
+      const sourceLabel = prog === "navraty" ? "OP JAK Návraty" : "Interní soutěže";
+      const link = prog === "navraty" ? "#navraty" : "#interni-souteze";
       out.push(chunk(
         `comp:${c.id}`,
-        "interni-souteze",
-        "Interní soutěže",
+        source,
+        sourceLabel,
         `${c.nazev || prog} (${c.rok || "—"}, běh ${c.beh_cislo || 1})`,
         [prog, c.stav, c.poznamka, `přihlášek: ${(c.applications || []).length}`, `podpořeno: ${(c.supported || []).length}`].join(" · "),
-        "#interni-souteze",
+        link,
         { program: prog, rok: c.rok }
       ));
       for (const a of c.applications || []) {
         out.push(chunk(
           `comp-app:${a.id}`,
-          "interni-souteze",
-          "Interní soutěže · přihláška",
+          source,
+          `${sourceLabel} · přihláška`,
           a.nazev_projektu || a.projekt_id,
           [a.fakulta, a.katedra, a.stav, a.resitel, a.resitel_osobni_cislo, a.financni_pozadavek, a.poznamka].filter(Boolean).join(" · "),
-          "#interni-souteze",
+          link,
           { competition_id: c.id, stav: a.stav }
         ));
       }
       for (const s of c.supported || []) {
         out.push(chunk(
           `comp-sup:${s.id}`,
-          "interni-souteze",
-          "Interní soutěže · podpořeno",
+          source,
+          `${sourceLabel} · podpořeno`,
           s.nazev_projektu || s.projekt_id,
           [s.fakulta, s.resitel, s.castka_podpory, s.poznamka].filter(Boolean).join(" · "),
-          "#interni-souteze",
+          link,
           { competition_id: c.id }
         ));
       }
@@ -345,7 +349,8 @@
     osoby: buildPersonChunks,
     terminy: buildDeadlineChunks,
     "pcr-vyzkum": buildPcrChunks,
-    "interni-souteze": buildCompetitionChunks,
+    "interni-souteze": () => buildCompetitionChunks().filter((c) => c.source === "interni-souteze"),
+    navraty: () => buildCompetitionChunks().filter((c) => c.source === "navraty"),
     temata: buildTopicChunks,
     emaily: buildEmailChunks,
     "kb-items": buildKbItemChunks,
