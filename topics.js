@@ -5,12 +5,52 @@
   const TOPICS_KEY = "kb-dashboard-topics-v1";
   const TOPIC_FILTER_KEY = "kb-dashboard-topic-filter-v1";
   let topics = [];
+  let topicGroups = [];
+  let groupsUseSupabase = false;
+  let outlookEmailCache = new Map();
+  let activeGroupFilter = "";
+  const topicMergeSelection = new Set();
 
   const el = (id) => document.getElementById(id);
   const n = (s) => (s || "").toString().trim();
   const l = (s) => n(s).toLowerCase();
   const html = (s) => n(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;" }[c]));
   const uuid = () => crypto.randomUUID?.() || `topic-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  function getGroup(id) {
+    return topicGroups.find((g) => g.id === id) || null;
+  }
+
+  function groupLabel(groupId) {
+    const g = getGroup(groupId);
+    return g?.name || "";
+  }
+
+  function topicOutlookCount(topic) {
+    return (topic?.outlookEmailIds || []).length;
+  }
+
+  function outlookEmailsForTopic(topicId) {
+    const topic = getTopic(topicId);
+    if (!topic) return [];
+    return (topic.outlookEmailIds || []).map((id) => outlookEmailCache.get(String(id)) || { id, tema: `Email #${id}` });
+  }
+
+  function openOutlookEmail(emailId) {
+    sessionStorage.setItem("kb-outlook-email-focus", String(emailId));
+    window.kbLayout?.setActivePage?.("outlook-emaily");
+  }
+
+  async function ensureOutlookEmailsLoaded(ids) {
+    const missing = [...new Set((ids || []).map(String).filter(Boolean))].filter((id) => !outlookEmailCache.has(id));
+    if (!missing.length || !window.OutlookEmailsDB?.getByIds) return;
+    try {
+      const emails = await OutlookEmailsDB.getByIds(missing);
+      (emails || []).forEach((email) => outlookEmailCache.set(String(email.id), email));
+    } catch (error) {
+      console.warn("Outlook emaily pro téma:", error);
+    }
+  }
 
   function getRecords() {
     return Array.isArray(records) ? records : [];
@@ -136,6 +176,12 @@
       topicsUseSupabase = true;
       await window.kbSupabaseTopics.migrateLocalTopicsIfNeeded();
       topics = await window.kbSupabaseTopics.loadTopicsFromSupabase();
+      if (window.kbSupabaseTopics.probeGroups) {
+        groupsUseSupabase = await window.kbSupabaseTopics.probeGroups();
+        topicGroups = groupsUseSupabase
+          ? await window.kbSupabaseTopics.loadTopicGroupsFromSupabase()
+          : window.kbSupabaseTopics.loadLocalGroups?.() || [];
+      }
     } catch (error) {
       console.error(error);
       topicsUseSupabase = false;
@@ -246,6 +292,8 @@
       ai_summary: n(el("topicAiSummary").value),
       recordIds: existing?.recordIds || [],
       deadlineIds: existing?.deadlineIds || [],
+      outlookEmailIds: existing?.outlookEmailIds || [],
+      group_id: el("topicGroupSelect")?.value || existing?.group_id || null,
       created_at: existing?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
       ai_summary_updated_at: existing?.ai_summary_updated_at || null,
@@ -268,6 +316,7 @@
       el("topicEditId").value = saved.id;
       renderTopicsPanel();
       renderTopicRecordsList(saved.id);
+      renderTopicOutlookList(saved.id);
       renderTopicDeadlinesList(saved.id);
       populateTopicDeadlineSelect(saved.id);
       if (typeof render === "function") render();
@@ -317,7 +366,9 @@
     el("topicDescription").value = topic?.description || "";
     el("topicAiSummary").value = topic?.ai_summary || "";
     renderTopicRecordsList(topic?.id);
+    renderTopicOutlookList(topic?.id);
     renderTopicDeadlinesList(topic?.id);
+    populateTopicGroupSelect(topic?.group_id);
     populateTopicDeadlineSelect(topic?.id);
     el("topicDialog").showModal();
   }
@@ -375,6 +426,217 @@
     });
   }
 
+  function renderTopicOutlookList(topicId) {
+    const box = el("topicOutlookList");
+    if (!box) return;
+    if (!topicId) {
+      box.innerHTML = `<p class="hint">Po uložení tématu zobrazíme propojené Outlook emaily jako odkazy.</p>`;
+      return;
+    }
+    const ids = getTopic(topicId)?.outlookEmailIds || [];
+    if (!ids.length) {
+      box.innerHTML = `<p class="hint">Téma zatím nemá propojené Outlook emaily. Použijte <strong>Import témat z Outlook emailů</strong> nebo import podle AI tématu e-mailu.</p>`;
+      return;
+    }
+    ensureOutlookEmailsLoaded(ids).then(() => {
+      const items = outlookEmailsForTopic(topicId);
+      box.innerHTML = `<div class="topicRecords">${items.map((email) => {
+        const title = email.tema || email.subject || `Email #${email.id}`;
+        const date = (email.received_at || "").slice(0, 10);
+        return `<div class="topicRecordItem">
+          <div>
+            <button type="button" class="linkish topicOutlookLink" data-open-outlook-email="${html(email.id)}">${html(title)}</button>
+            <div class="smallMuted">${html(email.sender_name || "")}${date ? ` · ${html(date)}` : ""}</div>
+          </div>
+        </div>`;
+      }).join("")}</div>`;
+      box.querySelectorAll("[data-open-outlook-email]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          el("topicDialog")?.close();
+          openOutlookEmail(btn.dataset.openOutlookEmail);
+        });
+      });
+    });
+  }
+
+  function populateTopicGroupSelect(selectedId) {
+    const select = el("topicGroupSelect");
+    if (!select) return;
+    select.innerHTML = `<option value="">— bez skupiny —</option>` +
+      topicGroups.map((g) => `<option value="${html(g.id)}">${html(g.name)}</option>`).join("");
+    select.value = selectedId && topicGroups.some((g) => g.id === selectedId) ? selectedId : "";
+  }
+
+  async function importTopicsFromOutlook() {
+    if (!window.OutlookEmailsDB?.getTemataIndex) {
+      alert("Modul Outlook emaily není načtený.");
+      return;
+    }
+    const btn = el("importOutlookTopicsBtn");
+    const prev = btn?.textContent;
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = "Importuji…"; }
+      const temata = await OutlookEmailsDB.getTemataIndex();
+      if (!temata.length) {
+        alert("V Outlook emailech nejsou žádná AI témata (pole tema).");
+        return;
+      }
+      let created = 0;
+      let linked = 0;
+      const byName = new Map(topics.map((t) => [l(t.name), t]));
+      for (const entry of temata) {
+        const key = l(entry.tema);
+        let topic = byName.get(key);
+        if (!topic) {
+          topic = {
+            id: uuid(),
+            name: entry.tema,
+            agenda: "",
+            description: `Importováno z Outlook emailů (${entry.count} e-mailů)`,
+            recordIds: [],
+            outlookEmailIds: [],
+            deadlineIds: [],
+            group_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            __existing: false
+          };
+          topic = await persistTopic(topic);
+          topics.unshift(topic);
+          byName.set(key, topic);
+          created += 1;
+        }
+        const ids = new Set(topic.outlookEmailIds || []);
+        entry.emails.forEach((email) => ids.add(String(email.id)));
+        topic.outlookEmailIds = [...ids];
+        topic.__existing = true;
+        await persistTopic(topic);
+        const idx = topics.findIndex((t) => t.id === topic.id);
+        if (idx >= 0) topics[idx] = { ...topics[idx], ...topic };
+        linked += entry.emails.length;
+      }
+      renderTopicsPanel();
+      populateTopicFilter();
+      alert(`Import dokončen: ${created} nových témat, ${linked} propojení na Outlook emaily.`);
+    } catch (error) {
+      console.error(error);
+      alert("Import selhal: " + (error.message || error));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = prev || "Import témat z Outlook emailů"; }
+    }
+  }
+
+  async function createTopicGroup() {
+    const name = n(prompt("Název skupiny témat:", ""));
+    if (!name) return;
+    const group = {
+      id: uuid(),
+      name,
+      description: "",
+      __existing: false,
+      created_at: new Date().toISOString()
+    };
+    if (groupsUseSupabase && window.kbSupabaseTopics?.saveTopicGroup) {
+      const saved = await window.kbSupabaseTopics.saveTopicGroup(group);
+      topicGroups.push(saved);
+    } else {
+      topicGroups.push(group);
+      localStorage.setItem("kb-dashboard-topic-groups-v1", JSON.stringify(topicGroups, null, 2));
+    }
+    populateTopicGroupSelect();
+    renderTopicsPanel();
+  }
+
+  async function mergeSelectedTopics() {
+    const ids = [...topicMergeSelection];
+    if (ids.length < 2) {
+      alert("Vyberte alespoň dvě témata ke sloučení (zaškrtněte v seznamu).");
+      return;
+    }
+    const targetId = ids[0];
+    const sourceIds = ids.slice(1);
+    if (!confirm(`Sloučit ${ids.length} témat do „${getTopic(targetId)?.name || "téma"}“? Ostatní témata budou smazána, odkazy se přesunou.`)) return;
+    try {
+      if (topicsUseSupabase && window.kbSupabaseTopics?.mergeTopics) {
+        await window.kbSupabaseTopics.mergeTopics(targetId, sourceIds);
+      } else {
+        const target = getTopic(targetId);
+        if (!target) throw new Error("Cílové téma neexistuje.");
+        target.recordIds = [...(target.recordIds || [])];
+        target.outlookEmailIds = [...(target.outlookEmailIds || [])];
+        target.deadlineIds = [...(target.deadlineIds || [])];
+        sourceIds.forEach((sid) => {
+          const src = getTopic(sid);
+          if (!src) return;
+          (src.recordIds || []).forEach((id) => target.recordIds.push(id));
+          (src.outlookEmailIds || []).forEach((id) => target.outlookEmailIds.push(id));
+          (src.deadlineIds || []).forEach((id) => target.deadlineIds.push(id));
+          topics = topics.filter((t) => t.id !== sid);
+        });
+        target.recordIds = [...new Set(target.recordIds || [])];
+        target.outlookEmailIds = [...new Set(target.outlookEmailIds || [])];
+        target.deadlineIds = [...new Set(target.deadlineIds || [])];
+        await persistTopic(target);
+      }
+      topicMergeSelection.clear();
+      await loadTopics();
+      alert("Témata sloučena.");
+    } catch (error) {
+      alert("Sloučení selhalo: " + (error.message || error));
+    }
+  }
+
+  async function duplicateSelectedToGroup() {
+    const ids = [...topicMergeSelection];
+    if (!ids.length) {
+      alert("Vyberte alespoň jedno téma k duplikaci.");
+      return;
+    }
+    populateDuplicateGroupSelect();
+    el("duplicateTopicDialog")?.showModal();
+    el("duplicateTopicIds").value = ids.join(",");
+  }
+
+  function populateDuplicateGroupSelect() {
+    const select = el("duplicateGroupSelect");
+    if (!select) return;
+    select.innerHTML = `<option value="">— bez skupiny —</option>` +
+      topicGroups.map((g) => `<option value="${html(g.id)}">${html(g.name)}</option>`).join("");
+  }
+
+  async function confirmDuplicateToGroup() {
+    const ids = (el("duplicateTopicIds")?.value || "").split(",").filter(Boolean);
+    const groupId = el("duplicateGroupSelect")?.value || null;
+    if (!ids.length) return;
+    try {
+      for (const id of ids) {
+        if (topicsUseSupabase && window.kbSupabaseTopics?.duplicateTopicToGroup) {
+          await window.kbSupabaseTopics.duplicateTopicToGroup(id, groupId || null);
+        } else {
+          const src = getTopic(id);
+          if (!src) continue;
+          const copy = {
+            ...src,
+            id: uuid(),
+            name: `${src.name} (kopie)`,
+            group_id: groupId,
+            __existing: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          await persistTopic(copy);
+          topics.unshift(copy);
+        }
+      }
+      topicMergeSelection.clear();
+      el("duplicateTopicDialog")?.close();
+      await loadTopics();
+      alert(`Vytvořeno ${ids.length} kopií témat.`);
+    } catch (error) {
+      alert("Duplikace selhala: " + (error.message || error));
+    }
+  }
+
   function renderTopicRecordsList(topicId) {
     const box = el("topicRecordsList");
     if (!box) return;
@@ -420,14 +682,22 @@
       list.innerHTML = `<p class="hint">${setupHint}</p>`;
       return;
     }
-    list.innerHTML = topics.map(t => {
+    list.innerHTML = topics
+      .filter((t) => !activeGroupFilter || t.group_id === activeGroupFilter)
+      .map(t => {
       const count = topicRecordCount(t);
+      const outlookCount = topicOutlookCount(t);
       const dlCount = topicDeadlineCount(t);
       const hasSummary = !!n(t.ai_summary);
+      const groupName = groupLabel(t.group_id);
+      const checked = topicMergeSelection.has(t.id) ? "checked" : "";
       return `<article class="topicCard ${el("topicFilter")?.value === t.id ? "active" : ""}" data-topic-id="${html(t.id)}">
+        <label class="topicMergeCheck" title="Vybrat ke sloučení / duplikaci">
+          <input type="checkbox" data-topic-merge="${html(t.id)}" ${checked} />
+        </label>
         <button type="button" class="topicCardMain" data-topic-open="${html(t.id)}" title="${html(t.description || "")}">
           <strong class="topicChipName">${html(t.name)}</strong>
-          <span class="topicChipMeta">${count} e-mailů${dlCount ? ` · ${dlCount} termínů` : ""}${hasSummary ? " · shrnuto" : ""}</span>
+          <span class="topicChipMeta">${count} KB e-mailů · ${outlookCount} Outlook${dlCount ? ` · ${dlCount} termínů` : ""}${hasSummary ? " · shrnuto" : ""}${groupName ? ` · skupina: ${html(groupName)}` : ""}</span>
           ${t.description ? `<p class="topicCardDesc">${html(t.description)}</p>` : ""}
           ${t.ai_summary ? `<p class="topicCardSummary">${html(t.ai_summary.slice(0, 160))}${t.ai_summary.length > 160 ? "…" : ""}</p>` : ""}
         </button>
@@ -455,7 +725,23 @@
     list.querySelectorAll("[data-topic-open]").forEach(btn => {
       btn.addEventListener("click", () => openTopicDialog(btn.dataset.topicOpen));
     });
+    list.querySelectorAll("[data-topic-merge]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const id = input.dataset.topicMerge;
+        if (input.checked) topicMergeSelection.add(id);
+        else topicMergeSelection.delete(id);
+      });
+    });
     populateTopicFilter();
+    populateTopicGroupFilter();
+  }
+
+  function populateTopicGroupFilter() {
+    const select = el("topicGroupFilter");
+    if (!select) return;
+    select.innerHTML = `<option value="">Všechny skupiny</option>` +
+      topicGroups.map((g) => `<option value="${html(g.id)}">${html(g.name)}</option>`).join("");
+    select.value = activeGroupFilter && topicGroups.some((g) => g.id === activeGroupFilter) ? activeGroupFilter : "";
   }
 
   function populateTopicFilter() {
@@ -483,22 +769,42 @@
           <p id="topicsStorageHint" class="hint">Seskupujte e-maily do témat, generujte AI shrnutí a ukládejte je k tématu. Analýza agend a mind mapa jsou na záložce <button type="button" class="linkish" data-open-topics-analysis>Analýza témat</button>.</p>
         </div>
         <div class="topicsHeaderActions">
+          <button id="importOutlookTopicsBtn" type="button" class="button small secondary">Import témat z Outlook emailů</button>
+          <button id="newTopicGroupBtn" type="button" class="button small secondary">+ Skupina</button>
+          <button id="mergeTopicsBtn" type="button" class="button small secondary">Sloučit vybraná</button>
+          <button id="duplicateTopicsBtn" type="button" class="button small secondary">Duplikovat do skupiny</button>
           <button id="reloadTopicsBtn" type="button" class="button small secondary">Obnovit témata</button>
           <button id="newTopicBtn" type="button" class="button accent">+ Nové téma</button>
         </div>
       </div>
-      <p class="hint">Filtr podle tématu je v sekci <button type="button" class="linkish" data-goto="emaily">E-maily</button>.</p>
+      <div class="topicsToolbar">
+        <label>Skupina
+          <select id="topicGroupFilter"><option value="">Všechny skupiny</option></select>
+        </label>
+      </div>
+      <p class="hint">Filtr podle tématu je v sekci <button type="button" class="linkish" data-goto="emaily">E-maily</button>. Outlook emaily u tématu jsou jen odkazy do modulu <button type="button" class="linkish" data-goto-outlook>Outlook emaily</button>. Analýza: <button type="button" class="linkish" data-open-topics-analysis>Analýza témat</button>.</p>
       <div id="topicsList" class="topicsList topicsGrid"></div>
     `;
     root.appendChild(section);
     section.querySelector('[data-goto="emaily"]')?.addEventListener("click", () => {
       if (window.kbLayout?.setActivePage) window.kbLayout.setActivePage("emaily");
     });
+    section.querySelector("[data-goto-outlook]")?.addEventListener("click", () => {
+      window.kbLayout?.setActivePage?.("outlook-emaily");
+    });
     section.querySelector("[data-open-topics-analysis]")?.addEventListener("click", () => {
       window.kbLayout?.setActivePage?.("temata", { topicsTab: "analysis" });
     });
     el("newTopicBtn").addEventListener("click", () => openTopicDialog());
     el("reloadTopicsBtn").addEventListener("click", () => loadTopics());
+    el("importOutlookTopicsBtn")?.addEventListener("click", importTopicsFromOutlook);
+    el("newTopicGroupBtn")?.addEventListener("click", createTopicGroup);
+    el("mergeTopicsBtn")?.addEventListener("click", mergeSelectedTopics);
+    el("duplicateTopicsBtn")?.addEventListener("click", duplicateSelectedToGroup);
+    el("topicGroupFilter")?.addEventListener("change", (e) => {
+      activeGroupFilter = e.target.value || "";
+      renderTopicsPanel();
+    });
   }
 
   function injectTopicDialog() {
@@ -526,6 +832,9 @@
             <option>Smlouvy / právní agenda</option><option>Rizika a konflikty</option><option>Ostatní</option>
           </select>
         </label>
+        <label>Skupina témat
+          <select id="topicGroupSelect"><option value="">— bez skupiny —</option></select>
+        </label>
         <label>Popis / kontext tématu
           <textarea id="topicDescription" rows="3" placeholder="Krátký kontext pro AI a tým…"></textarea>
         </label>
@@ -534,6 +843,11 @@
           <button id="assignAllVisibleToTopicBtn" type="button" class="button small secondary">Přidat vše z filtru</button>
         </div>
         <div id="topicRecordsList"></div>
+        <div class="sectionHeader compact">
+          <h3>Outlook emaily</h3>
+        </div>
+        <p class="hint">Odkazy do modulu Outlook emaily — bez úprav vazeb zde.</p>
+        <div id="topicOutlookList"></div>
         <div class="sectionHeader compact">
           <h3>Propojené termíny</h3>
         </div>
@@ -607,6 +921,31 @@
       renderTopicsPanel();
       if (typeof render === "function") render();
     });
+  }
+
+  function injectDuplicateDialog() {
+    if (el("duplicateTopicDialog")) return;
+    const dialog = document.createElement("dialog");
+    dialog.id = "duplicateTopicDialog";
+    dialog.innerHTML = `
+      <form method="dialog">
+        <div class="dialogHeader">
+          <h2>Duplikovat témata do skupiny</h2>
+          <button class="iconButton" value="cancel">×</button>
+        </div>
+        <input type="hidden" id="duplicateTopicIds" />
+        <label>Skupina pro kopie
+          <select id="duplicateGroupSelect"><option value="">— bez skupiny —</option></select>
+        </label>
+        <p class="hint">Vytvoří kopie vybraných témat včetně propojených e-mailů a Outlook odkazů.</p>
+        <div class="dialogActions">
+          <button value="cancel" class="button secondary">Zrušit</button>
+          <button id="confirmDuplicateTopicsBtn" type="button" class="button accent">Duplikovat</button>
+        </div>
+      </form>
+    `;
+    document.body.appendChild(dialog);
+    el("confirmDuplicateTopicsBtn").addEventListener("click", confirmDuplicateToGroup);
   }
 
   function injectAssignDialog() {
@@ -889,6 +1228,7 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
     injectTopicStyles();
     injectTopicsPanel();
     injectTopicDialog();
+    injectDuplicateDialog();
     injectAssignDialog();
     injectRecordAiButton();
     patchFilteredRecords();
@@ -914,14 +1254,18 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
 
   window.kbTopics = {
     get topics() { return topics; },
+    get groups() { return topicGroups; },
     getTopic,
     recordsForTopic,
+    outlookEmailsForTopic,
     deadlinesForTopic,
     topicsForDeadline,
     addRecordsToTopic,
     addDeadlineToTopic,
     removeDeadlineFromTopic,
     loadTopics,
+    importTopicsFromOutlook,
+    openOutlookEmail,
     openTopicDialog,
     buildTopicPrompt,
     showTopicAiPrompt,
@@ -944,6 +1288,7 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
       const topicId = el("topicEditId")?.value;
       populateTopicDeadlineSelect(topicId);
       renderTopicDeadlinesList(topicId);
+      renderTopicOutlookList(topicId);
     }
   });
 
@@ -956,6 +1301,11 @@ ${r.text || "(text zatím nenačten – otevřete záznam pro načtení ze Supab
       .topicDeadlineAdd label { flex: 1; min-width: 220px; margin: 0; }
       .topicDeadlineHint { margin: -.25rem 0 .5rem; }
       .topicRecordActions { display: flex; gap: .35rem; flex-shrink: 0; }
+      .topicsToolbar { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: .5rem; }
+      .topicsToolbar label { margin: 0; font-size: .85rem; }
+      .topicMergeCheck { position: absolute; top: .65rem; left: .55rem; z-index: 2; }
+      .topicCard { position: relative; padding-left: 2rem; }
+      .topicOutlookLink { font-weight: 700; text-align: left; }
     `;
     document.head.appendChild(style);
   }

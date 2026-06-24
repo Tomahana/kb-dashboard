@@ -136,22 +136,8 @@ const OutlookEmailsModule = (() => {
       background:var(--color-bg-secondary, #f8f7f4);
       border:1px solid var(--color-border, rgba(60,60,58,.1));
     }
-    .oe-topic-tags { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
-    .oe-topic-tag {
-      display:inline-flex; align-items:center; gap:4px;
-      padding:3px 8px; border-radius:14px; font-size:11px;
-      background:#eeedfe; color:#534ab7; border:1px solid rgba(83,74,183,.2);
-    }
-    .oe-topic-remove {
-      border:none; background:transparent; cursor:pointer; padding:0 2px;
-      font-size:12px; line-height:1; color:inherit; opacity:.6;
-    }
-    .oe-topic-remove:hover { opacity:1; }
-    .oe-topic-add { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .oe-topic-add select {
-      min-width:180px; font-size:12px; padding:6px 8px;
-      border:1px solid var(--color-border, rgba(60,60,58,.15)); border-radius:6px;
-      background:var(--color-bg, #fff); color:inherit;
+    .oe-card-focus {
+      box-shadow: 0 0 0 2px var(--color-accent, #534ab7);
     }
     .oe-stav-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
     .oe-btn {
@@ -280,21 +266,6 @@ const OutlookEmailsModule = (() => {
       return;
     }
 
-    const topicRemove = e.target.closest("[data-oe-topic-remove]");
-    if (topicRemove) {
-      e.stopPropagation();
-      removeTopic(topicRemove.dataset.emailId, topicRemove.dataset.topicId);
-      return;
-    }
-
-    const topicAdd = e.target.closest("[data-oe-topic-add]");
-    if (topicAdd) {
-      e.stopPropagation();
-      const select = document.querySelector(`[data-oe-topic-select="${topicAdd.dataset.emailId}"]`);
-      if (select?.value) addTopic(topicAdd.dataset.emailId, select.value);
-      return;
-    }
-
     const head = e.target.closest(".oe-card-head");
     if (head) {
       const card = head.closest(".oe-card");
@@ -312,20 +283,6 @@ const OutlookEmailsModule = (() => {
     if (search) search.value = "";
     if (kat) kat.value = "";
     if (prio) prio.value = "";
-  }
-
-  async function ensureTopicsLoaded() {
-    if (window.kbTopics?.loadTopics) {
-      try { await window.kbTopics.loadTopics(); } catch (_) {}
-      return;
-    }
-    try {
-      await OutlookEmailsDB.getTopics();
-    } catch (_) {}
-  }
-
-  function getTopics() {
-    return window.kbTopics?.topics || [];
   }
 
   function getPriorita(email) {
@@ -363,7 +320,6 @@ const OutlookEmailsModule = (() => {
   async function load() {
     const list = document.getElementById("oe-list");
     try {
-      await ensureTopicsLoaded();
       showHidden = !!document.getElementById("oe-show-hidden")?.checked;
       const [emails, stats, lastUpdated] = await Promise.all([
         OutlookEmailsDB.getAll({ limit: 500, showHidden }),
@@ -393,6 +349,17 @@ const OutlookEmailsModule = (() => {
     return tasks.length > 0 || getKategorie(email) === "akce_required";
   }
 
+  function applyEmailFocus() {
+    const focusId = sessionStorage.getItem("kb-outlook-email-focus");
+    if (!focusId) return;
+    sessionStorage.removeItem("kb-outlook-email-focus");
+    const card = document.querySelector(`.oe-card[data-id="${focusId}"]`);
+    if (!card) return;
+    card.classList.add("open", "oe-card-focus");
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => card.classList.remove("oe-card-focus"), 3200);
+  }
+
   function filter() {
     const q = (document.getElementById("oe-search")?.value || "").toLowerCase();
     const kat = document.getElementById("oe-f-kat")?.value || "";
@@ -412,6 +379,7 @@ const OutlookEmailsModule = (() => {
     });
 
     renderList(emails, openIds);
+    applyEmailFocus();
   }
 
   const katBadge = {
@@ -428,40 +396,6 @@ const OutlookEmailsModule = (() => {
     střední: "oe-badge-prio-stredni",
     vysoká: "oe-badge-prio-vysoka"
   };
-
-  function topicsForEmail(email) {
-    const ids = new Set((email.topic_ids || []).map(String));
-    return getTopics().filter((t) => ids.has(String(t.id)));
-  }
-
-  function renderTopicSection(email) {
-    const linked = topicsForEmail(email);
-    const linkedIds = new Set(linked.map((t) => String(t.id)));
-    const available = getTopics().filter((t) => !linkedIds.has(String(t.id)));
-
-    const tags = linked.length
-      ? linked.map((t) => `
-          <span class="oe-topic-tag">
-            ${esc(t.name)}
-            <button type="button" class="oe-topic-remove" data-oe-topic-remove data-email-id="${email.id}" data-topic-id="${escAttr(t.id)}" title="Odebrat">×</button>
-          </span>`).join("")
-      : `<span class="oe-field-val muted">Zatím bez témat</span>`;
-
-    const select = getTopics().length
-      ? `<select data-oe-topic-select="${email.id}">
-          <option value="">— přidat téma —</option>
-          ${available.map((t) => `<option value="${escAttr(t.id)}">${esc(t.name)}</option>`).join("")}
-        </select>
-        <button type="button" class="oe-btn small" data-oe-topic-add data-email-id="${email.id}">Přidat</button>`
-      : `<span class="oe-field-val muted">Nejdříve vytvořte téma (modul Témata)</span>`;
-
-    return `
-      <div class="oe-field">
-        <div class="oe-field-lbl">Témata</div>
-        <div class="oe-topic-tags">${tags}</div>
-        <div class="oe-topic-add">${select}</div>
-      </div>`;
-  }
 
   function renderStavButtons(email) {
     const stav = email.stav || "aktivní";
@@ -557,7 +491,6 @@ const OutlookEmailsModule = (() => {
                   : '<span class="oe-field-val muted">—</span>'}
               </div>
             </div>
-            ${renderTopicSection(email)}
           </div>
         </article>`;
     }).join("");
@@ -641,38 +574,6 @@ const OutlookEmailsModule = (() => {
       else patchLocalEmail(id, { kategorie_manual: kategorie });
       filter();
       toast("✓ Kategorie uložena");
-    } catch (e) {
-      toast("Chyba: " + e.message, true);
-    }
-  }
-
-  async function addTopic(emailId, topicId) {
-    const email = getEmail(emailId);
-    if (!email) return;
-    const ids = [...(email.topic_ids || []).map(String)];
-    if (ids.includes(String(topicId))) return;
-    ids.push(String(topicId));
-    try {
-      const updated = await OutlookEmailsDB.updateTopicIds(emailId, ids);
-      if (updated) patchLocalEmail(emailId, updated);
-      else patchLocalEmail(emailId, { topic_ids: ids });
-      filter();
-      toast("✓ Téma přidáno");
-    } catch (e) {
-      toast("Chyba: " + e.message, true);
-    }
-  }
-
-  async function removeTopic(emailId, topicId) {
-    const email = getEmail(emailId);
-    if (!email) return;
-    const ids = (email.topic_ids || []).map(String).filter((id) => id !== String(topicId));
-    try {
-      const updated = await OutlookEmailsDB.updateTopicIds(emailId, ids);
-      if (updated) patchLocalEmail(emailId, updated);
-      else patchLocalEmail(emailId, { topic_ids: ids });
-      filter();
-      toast("✓ Téma odebráno");
     } catch (e) {
       toast("Chyba: " + e.message, true);
     }
