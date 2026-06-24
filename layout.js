@@ -7,6 +7,7 @@
     "kb-items": { title: "KB záznamy", subtitle: "Záznamy z AI agenta — úkoly, znalosti, rozhodnutí a reference" },
     temata: { title: "Témata", subtitle: "Seskupení e-mailů, AI shrnutí a analýza agend" },
     terminy: { title: "Termíny", subtitle: "Termíny sběrů dat a odesílání na úřady" },
+    podklady: { title: "Podklady k jednáním", subtitle: "Evidence podkladů, bodů a poznámek k jednáním — témata a termíny" },
     osoby: { title: "Osoby", subtitle: "Centrální evidence osob pro všechny moduly" },
     "interni-souteze": { title: "Interní soutěže", subtitle: "UHK programy, běhy, přihlášky, hodnocení a finance" },
     navraty: { title: "OP JAK Návraty", subtitle: "Soutěž OP JAK Návraty — běhy, přihlášky, hodnocení a finance" },
