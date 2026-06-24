@@ -11,7 +11,7 @@
       id: "strategie",
       title: "Strategie",
       slugs: [
-        "interni-souteze", "pcr-vyzkum", "casopisy", "vystupy",
+        "interni-souteze", "navraty", "pcr-vyzkum", "casopisy", "vystupy",
         "modul-ppk", "modul-spev", "modul-dkrvo", "modul-vyrocni-zpravy",
         "modul-bilancni-zpravy", "modul-doktorska-skola"
       ]
@@ -86,10 +86,18 @@
     {
       slug: "interni-souteze",
       title: "Interní soutěže",
-      description: "UHK Connect, Prestige, Horizon, Rega, Návraty, PhD Seed — alokace, výzvy, přihlášky a podpora.",
+      description: "UHK Connect, Prestige, Horizon, Rega a PhD Seed — alokace, výzvy, přihlášky a podpora.",
       status: "active",
       icon: "🏆",
       stats: ["competitionsTotal", "competitionsActive"]
+    },
+    {
+      slug: "navraty",
+      title: "OP JAK Návraty",
+      description: "Soutěž OP JAK Návraty — alokace, výzvy, přihlášky a podpora.",
+      status: "active",
+      icon: "↩️",
+      stats: ["navratyCompetitionsTotal", "navratyCompetitionsActive"]
     },
     {
       slug: "pcr-vyzkum",
@@ -282,7 +290,10 @@
       return date && date < now && !["odesláno", "uzavřeno", "hotovo", "zrušeno", "archiv"].includes(lower(d.stav));
     }).length;
     const comps = window.kbCompetitions?.getCompetitions?.() || [];
-    const activeComps = comps.filter(c => !["uzavřeno", "archiv"].includes(lower(c.stav))).length;
+    const internalComps = comps.filter((c) => c.program_slug !== "navraty");
+    const navratyComps = comps.filter((c) => c.program_slug === "navraty");
+    const activeComps = internalComps.filter(c => !["uzavřeno", "archiv"].includes(lower(c.stav))).length;
+    const activeNavratyComps = navratyComps.filter(c => !["uzavřeno", "archiv"].includes(lower(c.stav))).length;
     const personCount = window.kbPersons?.getPersons?.().length || 0;
     const pcrTopics = window.kbPcrResearch?.getTopics?.() || [];
     const pcrLinked = pcrTopics.filter((t) => t.gestor_osobni_cislo || window.kbPersonLinks?.resolvePerson?.(t, "gestor")).length;
@@ -302,8 +313,10 @@
       emailsRisks: risks,
       deadlinesTotal: deadlines.length,
       deadlinesOverdue: overdue,
-      competitionsTotal: comps.length,
+      competitionsTotal: internalComps.length,
       competitionsActive: activeComps,
+      navratyCompetitionsTotal: navratyComps.length,
+      navratyCompetitionsActive: activeNavratyComps,
       personsTotal: personCount,
       pcrTopicsTotal: pcrTopics.length,
       pcrTopicsLinked: pcrLinked,
@@ -333,6 +346,8 @@
       deadlinesOverdue: `${value} po termínu`,
       competitionsTotal: `${value} běhů soutěží`,
       competitionsActive: `${value} aktivních běhů`,
+      navratyCompetitionsTotal: `${value} běhů Návraty`,
+      navratyCompetitionsActive: `${value} aktivních běhů`,
       personsTotal: `${value} osob`,
       pcrTopicsTotal: `${value} témat PČR`,
       pcrTopicsLinked: `${value} propojených gestorů`,

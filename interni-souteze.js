@@ -1,14 +1,26 @@
 // Modul Interní soutěže – podmoduly UHK programů, přihlášky, podpora, finance.
 
 (function () {
-  const PROGRAMS = [
+  const INTERNAL_PROGRAMS = [
     { slug: "connect", title: "UHK Connect", icon: "🔗" },
     { slug: "prestige", title: "UHK Prestige", icon: "⭐" },
     { slug: "horizon", title: "UHK Horizon No-Cost Entry", icon: "🌅" },
     { slug: "rega", title: "UHK Rega", icon: "📚" },
-    { slug: "navraty", title: "UHK Návraty", icon: "↩️" },
     { slug: "phd-seed", title: "UHK PhD Seed", icon: "🌱" }
   ];
+  const NAVRATY_PROGRAMS = [{ slug: "navraty", title: "OP JAK Návraty", icon: "↩️" }];
+  const ALL_PROGRAMS = [...INTERNAL_PROGRAMS, ...NAVRATY_PROGRAMS];
+  const PAGE_COPY = {
+    "interni-souteze": {
+      heading: "Interní soutěže",
+      hint: "Programy UHK Connect, Prestige, Horizon, Rega a PhD Seed — běhy, přihlášky, hodnocení a finance. Osoby spravujete v modulu <a href=\"#osoby\" data-goto=\"osoby\">Osoby</a>."
+    },
+    navraty: {
+      heading: "OP JAK Návraty",
+      hint: "Soutěž OP JAK Návraty — běhy, přihlášky, hodnocení a finance. Osoby spravujete v modulu <a href=\"#osoby\" data-goto=\"osoby\">Osoby</a>."
+    }
+  };
+  let PROGRAMS = INTERNAL_PROGRAMS;
 
   const STORAGE_KEY = "kb-dashboard-competitions-v1";
   const YEAR_BUDGET_KEY = "kb-dashboard-competitions-year-budgets";
@@ -36,6 +48,7 @@
   let pendingVyvzaFile = null;
   let removePokynPdf = false;
   let removeVyvzaPdf = false;
+  let moduleWrap = null;
 
   const el = (id) => document.getElementById(id);
   const n = (s) => (s || "").toString().trim();
@@ -43,20 +56,79 @@
   const uuid = () => crypto.randomUUID?.() || `comp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const fmtMoney = (v) => new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(Number(v) || 0);
 
+  function getCompetitionPage() {
+    return window.kbLayout?.getPage?.() === "navraty" ? "navraty" : "interni-souteze";
+  }
+
+  function syncProgramsForPage() {
+    const page = getCompetitionPage();
+    PROGRAMS = page === "navraty" ? NAVRATY_PROGRAMS : INTERNAL_PROGRAMS;
+    if (!PROGRAMS.some((p) => p.slug === activeProgram)) activeProgram = PROGRAMS[0].slug;
+    if (page === "navraty" && activeMainView !== "prehled" && activeMainView !== "navraty") activeMainView = "prehled";
+    if (page === "interni-souteze" && activeMainView === "navraty") activeMainView = "prehled";
+    const compProgram = el("compProgram");
+    if (compProgram) {
+      compProgram.innerHTML = PROGRAMS.map((p) => `<option value="${p.slug}">${html(p.title)}</option>`).join("");
+    }
+  }
+
+  function programSlugsForPage() {
+    return new Set(PROGRAMS.map((p) => p.slug));
+  }
+
+  function competitionsInScope() {
+    const slugs = programSlugsForPage();
+    return competitions.filter((c) => slugs.has(c.program_slug));
+  }
+
+  function getMountRoot() {
+    return getCompetitionPage() === "navraty" ? el("navratySoutezeRoot") : el("interniSoutezeRoot");
+  }
+
+  function updatePageHeader() {
+    const copy = PAGE_COPY[getCompetitionPage()];
+    if (!copy || !moduleWrap) return;
+    const heading = moduleWrap.querySelector("[data-comp-heading]");
+    const hint = moduleWrap.querySelector("[data-comp-hint]");
+    if (heading) heading.textContent = copy.heading;
+    if (hint) hint.innerHTML = copy.hint;
+  }
+
+  function relocateModule() {
+    const mount = getMountRoot();
+    if (!mount || !moduleWrap) return;
+    if (moduleWrap.parentElement !== mount) mount.appendChild(moduleWrap);
+    updatePageHeader();
+  }
+
+  function isCompetitionPageActive() {
+    const page = window.kbLayout?.getPage?.();
+    return page === "interni-souteze" || page === "navraty";
+  }
+
   function parseCompetitionRoute() {
     const raw = (location.hash || "").replace(/^#\/?/, "").trim();
     const parts = raw.split("/").filter(Boolean);
-    if (parts[0] !== "interni-souteze") return { view: "prehled", compId: null };
-    if (parts.length < 2 || parts[1] === "prehled") return { view: "prehled", compId: null };
+    if (parts[0] === "navraty") {
+      if (parts.length < 2 || parts[1] === "prehled") return { page: "navraty", view: "prehled", compId: null };
+      const compId = parts[1];
+      if (getCompetition(compId)?.program_slug === "navraty") return { page: "navraty", view: "navraty", compId };
+      return { page: "navraty", view: "prehled", compId: null };
+    }
+    if (parts[0] !== "interni-souteze") return { page: getCompetitionPage(), view: "prehled", compId: null };
+    if (parts.length < 2 || parts[1] === "prehled") return { page: "interni-souteze", view: "prehled", compId: null };
     const program = parts[1];
     const compId = parts[2] || null;
-    if (PROGRAMS.some((p) => p.slug === program)) return { view: program, compId };
-    return { view: "prehled", compId: null };
+    if (INTERNAL_PROGRAMS.some((p) => p.slug === program)) return { page: "interni-souteze", view: program, compId };
+    return { page: "interni-souteze", view: "prehled", compId: null };
   }
 
   function setCompetitionRoute(view, compId) {
-    let hash = "#interni-souteze";
-    if (view && view !== "prehled") {
+    const page = getCompetitionPage();
+    let hash = page === "navraty" ? "#navraty" : "#interni-souteze";
+    if (page === "navraty") {
+      if (view !== "prehled" && compId) hash += `/${compId}`;
+    } else if (view && view !== "prehled") {
       hash += `/${view}`;
       if (compId) hash += `/${compId}`;
     }
@@ -65,6 +137,7 @@
 
   function applyCompetitionRoute() {
     const route = parseCompetitionRoute();
+    if (route.page !== getCompetitionPage()) return;
     activeMainView = route.view;
     if (route.view !== "prehled") {
       activeProgram = route.view;
@@ -93,9 +166,11 @@
 
   function updateMainViewSubtitle() {
     const sub = el("pageSubtitle");
-    if (!sub || window.kbLayout?.getPage?.() !== "interni-souteze") return;
+    if (!sub || !isCompetitionPageActive()) return;
     if (activeMainView === "prehled") {
-      sub.textContent = "Přehled čerpání alokací — filtry, roční souhrny a přechod do správy soutěží";
+      sub.textContent = getCompetitionPage() === "navraty"
+        ? "Přehled čerpání alokací OP JAK Návraty"
+        : "Přehled čerpání alokací — filtry, roční souhrny a přechod do správy soutěží";
     } else {
       const prog = getProgram(activeMainView);
       sub.textContent = `${prog.title} — běhy, přihlášky, hodnocení a finance`;
@@ -571,7 +646,7 @@
   }
 
   function filteredCompetitionsOverview() {
-    return competitions.filter(c => {
+    return competitionsInScope().filter(c => {
       if (overviewFilterRok && String(c.rok) !== String(overviewFilterRok)) return false;
       if (overviewFilterProgram && c.program_slug !== overviewFilterProgram) return false;
       if (overviewFilterBeh && String(c.beh_cislo) !== String(overviewFilterBeh)) return false;
@@ -581,11 +656,11 @@
   }
 
   function uniqueYears() {
-    return [...new Set(competitions.map(c => c.rok).filter(Boolean))].sort((a, b) => b - a);
+    return [...new Set(competitionsInScope().map(c => c.rok).filter(Boolean))].sort((a, b) => b - a);
   }
 
   function uniqueBeh() {
-    const src = competitions.filter(c => {
+    const src = competitionsInScope().filter(c => {
       if (overviewFilterRok && String(c.rok) !== String(overviewFilterRok)) return false;
       if (overviewFilterProgram && c.program_slug !== overviewFilterProgram) return false;
       return true;
@@ -2268,14 +2343,20 @@
   }
 
   function injectPage() {
-    const root = el("interniSoutezeRoot");
-    if (!root || el("competitionMainTabs")) return;
-    root.innerHTML = `
+    if (el("competitionMainTabs")) {
+      moduleWrap = el("competitionModuleWrap");
+      return;
+    }
+    const mount = getMountRoot();
+    if (!mount) return;
+    moduleWrap = document.createElement("div");
+    moduleWrap.id = "competitionModuleWrap";
+    moduleWrap.innerHTML = `
       <section class="panel">
         <div class="sectionHeader">
           <div>
-            <h2>Interní soutěže</h2>
-            <p class="hint">Programy UHK Connect, Prestige, Horizon, Rega, Návraty a PhD Seed — běhy, přihlášky, hodnocení a finance. Osoby spravujete v modulu <a href="#osoby" data-goto="osoby">Osoby</a>.</p>
+            <h2 data-comp-heading>${html(PAGE_COPY[getCompetitionPage()].heading)}</h2>
+            <p class="hint" data-comp-hint>${PAGE_COPY[getCompetitionPage()].hint}</p>
             ${renderExternalLinks()}
           </div>
           <div class="sectionActions">
@@ -2335,6 +2416,7 @@
         </div>
       </section>
     `;
+    mount.appendChild(moduleWrap);
     el("competitionsReloadBtn").addEventListener("click", loadCompetitions);
     el("newCompetitionBtn").addEventListener("click", () => openCompetitionDialog());
     bindOverviewFilters();
@@ -2617,17 +2699,23 @@
   function init() {
     loadYearBudgets();
     injectStyles();
+    syncProgramsForPage();
     injectPage();
     injectDialogs();
+    relocateModule();
     applyCompetitionRoute();
     setTimeout(loadCompetitions, 150);
     window.addEventListener("hashchange", () => {
-      if (window.kbLayout?.getPage?.() !== "interni-souteze") return;
+      if (!isCompetitionPageActive()) return;
+      syncProgramsForPage();
+      relocateModule();
       applyCompetitionRoute();
       render();
     });
     document.addEventListener("kb:page-changed", async (e) => {
-      if (e.detail?.page !== "interni-souteze") return;
+      if (e.detail?.page !== "interni-souteze" && e.detail?.page !== "navraty") return;
+      syncProgramsForPage();
+      relocateModule();
       applyCompetitionRoute();
       if (!competitions.length && !loading) loadCompetitions();
       else render();
@@ -2636,7 +2724,13 @@
     document.addEventListener("kb:persons-loaded", () => render());
   }
 
-  window.kbCompetitions = { PROGRAMS, loadCompetitions, getCompetitions: () => competitions };
+  window.kbCompetitions = {
+    PROGRAMS: ALL_PROGRAMS,
+    INTERNAL_PROGRAMS,
+    NAVRATY_PROGRAMS,
+    loadCompetitions,
+    getCompetitions: () => competitions
+  };
 
   document.addEventListener("DOMContentLoaded", init);
 })();
