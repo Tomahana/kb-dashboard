@@ -14,7 +14,7 @@
     { id: "navraty", label: "OP JAK Návraty", page: "navraty", status: "active" },
     { id: "temata", label: "Témata", page: "temata", status: "active" },
     { id: "emaily", label: "E-maily / znalostní báze", page: "emaily", status: "active" },
-    { id: "kb-items", label: "KB záznamy (AI agent)", page: "kb-items", status: "active" },
+    { id: "kb-items", label: "KB Notion meeting notes", page: "kb-items", status: "active" },
     { id: "eiz-tokeny", label: "EIZ tokeny / publikace", page: "eiz-tokeny", status: "active" },
     { id: "casopisy", label: "Databáze časopisů / JCR", page: "casopisy", status: "active" },
     { id: "vystupy", label: "Výstupy (Jimp, JSC, B, C)", page: "vystupy", status: "active" },
@@ -307,7 +307,7 @@
     return items.map((item) => chunk(
       `kb-item:${item.id}`,
       "kb-items",
-      "KB záznamy",
+      "KB Notion meeting notes",
       item.title || "(bez názvu)",
       [
         item.item_type,
