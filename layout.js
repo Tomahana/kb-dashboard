@@ -2,7 +2,7 @@
 
 (function () {
   const PAGES = {
-    prehled: { title: "Command Deck", subtitle: "Operativní přehled a moduly OVV" },
+    prehled: { title: "Command Deck", subtitle: "Operativní přehled" },
     emaily: { title: "Znalostní báze z e-mailů", subtitle: "Zachytávání, třídění, klasifikace a práce se záznamy" },
     "kb-items": { title: "KB Notion meeting notes", subtitle: "Notion meeting notes z AI agenta — úkoly, znalosti, rozhodnutí a reference" },
     temata: { title: "Témata", subtitle: "Seskupení e-mailů, AI shrnutí a analýza agend" },
@@ -71,7 +71,11 @@
     }
 
     if (el("pageTitle")) el("pageTitle").textContent = title;
-    if (el("pageSubtitle")) el("pageSubtitle").textContent = subtitle;
+    const subText = el("pageSubtitleText");
+    const subVer = el("pageSubtitleVer");
+    if (subText) subText.textContent = subtitle;
+    if (subVer) subVer.hidden = route.page !== "prehled";
+    if (!subText && el("pageSubtitle")) el("pageSubtitle").textContent = subtitle;
 
     const currentRaw = location.hash.replace(/^#\/?/, "").toLowerCase();
     const hashTarget = route.page === "modul" ? route.moduleSlug : route.page;
@@ -127,37 +131,22 @@
     updateMissionHeader();
   }
 
-  function setPill(el, state, html) {
-    if (!el) return;
-    el.className = "statusPill" + (state ? ` ${state}` : "");
-    el.innerHTML = html;
+  function setPill(node, state, html) {
+    if (!node) return;
+    node.className = "pill" + (state ? ` ${state}` : "");
+    node.innerHTML = html;
   }
 
   async function updateMissionHeader() {
-    const kpis = window.kbModules?.getDashboardKpis?.() || {};
-    const newEl = el("missionNewCount");
-    const riskEl = el("missionRiskCount");
-    const deadlineEl = el("missionDeadlineCount");
-    if (newEl) newEl.textContent = String(kpis.newCount ?? 0);
-    if (riskEl) riskEl.textContent = String(kpis.riskCount ?? 0);
-    if (deadlineEl) deadlineEl.textContent = String(kpis.deadlineCount ?? 0);
-
-    const newPill = el("missionNew");
-    const riskPill = el("missionRisks");
-    const deadlinePill = el("missionDeadlines");
-    if (newPill) newPill.classList.toggle("warn", (kpis.newCount || 0) > 0);
-    if (riskPill) riskPill.classList.toggle("err", (kpis.riskCount || 0) > 0);
-    if (deadlinePill) deadlinePill.classList.toggle("warn", (kpis.deadlineCount || 0) > 0);
-
     try {
       const session = await window.kbAuth?.getSession?.();
       setPill(
         el("missionSupabase"),
         session ? "ok" : "warn",
-        `<span class="dot"></span> Supabase · ${session ? "online" : "offline"}`
+        `<span class="dot ${session ? "dg" : "dy"}"></span> Supabase ${session ? "online" : "offline"}`
       );
     } catch (_) {
-      setPill(el("missionSupabase"), "err", '<span class="dot"></span> Supabase · chyba');
+      setPill(el("missionSupabase"), "err", '<span class="dot dr"></span> Supabase chyba');
     }
 
     let aiReady = false;
@@ -167,9 +156,39 @@
     } catch (_) {}
     setPill(
       el("missionAi"),
-      aiReady ? "ai ok" : "warn",
-      `<span class="dot"></span> AI · ${aiReady ? "ready" : "nenastaveno"}`
+      aiReady ? "ai" : "warn",
+      `<span class="dot ${aiReady ? "db" : "dy"}"></span> AI ${aiReady ? "ready" : "nenastaveno"}`
     );
+
+    const dateEl = el("topbarDate");
+    if (dateEl) {
+      const now = new Date();
+      dateEl.textContent = now.toISOString().slice(0, 10);
+    }
+  }
+
+  function setSidebarOpen(open) {
+    const sidebar = el("sidebar");
+    const btn = el("sidebarToggle");
+    if (!sidebar || !btn) return;
+    sidebar.classList.toggle("open", open);
+    document.body.classList.toggle("sidebar-open", open);
+    btn.textContent = open ? "◀" : "▶";
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    btn.setAttribute("aria-label", open ? "Sbalit navigaci" : "Rozbalit navigaci");
+    try { localStorage.setItem("kb-sidebar-open", open ? "true" : "false"); } catch (_) {}
+  }
+
+  function bindSidebarToggle() {
+    const btn = el("sidebarToggle");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      const sidebar = el("sidebar");
+      setSidebarOpen(!sidebar?.classList.contains("open"));
+    });
+    try {
+      if (localStorage.getItem("kb-sidebar-open") === "true") setSidebarOpen(true);
+    } catch (_) {}
   }
 
   function bindNav() {
@@ -222,20 +241,18 @@
   }
 
   function loadAppVersion() {
-    const apply = (text) => {
+    const apply = (version) => {
       const box = el("appVersion");
       const top = el("topbarVersion");
-      const mission = el("missionVersion");
-      if (box) box.textContent = text;
-      if (top) top.textContent = text;
-      if (mission) mission.textContent = text;
+      const verText = `Verze ${version}`;
+      if (box) box.textContent = verText;
+      if (top) top.textContent = verText;
     };
     fetch(`version.json?_${Date.now()}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!data?.version) return;
-        const date = data.bumpedAt ? ` · ${data.bumpedAt}` : "";
-        apply(`Verze ${data.version}${date}`);
+        apply(data.version);
       })
       .catch(() => {});
   }
@@ -243,6 +260,7 @@
   function init() {
     loadAppVersion();
     bindNav();
+    bindSidebarToggle();
     bindOverviewLinks();
     const route = resolveRoute(location.hash);
     setActivePage(

@@ -1,217 +1,626 @@
-/* UHK Knowledge Command Deck — hybrid contrast theme
-   Dark shell (nav/header) + light work surfaces (cards, forms, tables) */
+/* KB Command Deck — unified dark theme */
 
 :root {
-  /* Dark shell */
-  --shell-bg: #050814;
-  --shell-bg-elevated: #071226;
-  --shell-panel: #0e1a33;
-  --shell-text: #f3f7ff;
-  --shell-muted: #b9c9e8;
-  --shell-line: rgba(86, 240, 255, 0.18);
-  --shell-line-strong: rgba(86, 240, 255, 0.32);
-  --shell-link: #4fdcff;
+  --bg: #0f1117;
+  --surface: #181c27;
+  --surface2: #1e2335;
+  --border: #2a3048;
+  --accent: #4f8ef7;
+  --accent2: #7c5cfc;
+  --green: #22c55e;
+  --yellow: #f59e0b;
+  --red: #ef4444;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --sidebar-w: 52px;
+  --sidebar-open: 224px;
 
-  /* Light work surfaces */
-  --surface: #ffffff;
-  --surface-alt: #f8fbff;
-  --surface-text: #102033;
-  --surface-muted: #4f6b8d;
-  --surface-border: #d7e7f8;
-  --surface-hover: #eef5fc;
-
-  /* Accents (readable on both) */
-  --accent: #0d8aad;
-  --accent-bright: #4fdcff;
-  --accent-secondary: #7c5cbf;
-  --danger: #c92d52;
-  --warning: #c97a12;
-  --ok: #0d8a62;
-  --glow: 0 0 10px rgba(79, 220, 255, 0.28);
-  --glow-active: 0 0 14px rgba(79, 220, 255, 0.35);
-
-  /* Map legacy tokens for module CSS (doc-intelligence etc.) */
-  --bg: var(--shell-bg);
+  /* Legacy tokens for module CSS */
+  --shell-bg: var(--bg);
+  --shell-bg-elevated: var(--surface);
+  --shell-panel: var(--surface2);
+  --shell-text: var(--text);
+  --shell-muted: var(--muted);
+  --shell-line: var(--border);
+  --shell-line-strong: #3a4260;
+  --shell-link: var(--accent);
+  --surface-alt: var(--surface2);
+  --surface-text: var(--text);
+  --surface-muted: var(--muted);
+  --surface-border: var(--border);
+  --surface-hover: #252b3d;
+  --accent-bright: var(--accent);
+  --accent-secondary: var(--accent2);
+  --danger: var(--red);
+  --warning: var(--yellow);
+  --ok: var(--green);
   --panel: var(--surface);
-  --text: var(--surface-text);
-  --muted: var(--surface-muted);
-  --line: var(--surface-border);
-  --soft: #eef5fc;
+  --line: var(--border);
+  --soft: var(--surface2);
   --color-bg: var(--surface);
-  --color-bg-secondary: var(--surface-alt);
-  --color-border: var(--surface-border);
-  --color-text-primary: var(--surface-text);
-  --color-text-secondary: var(--surface-muted);
+  --color-bg-secondary: var(--surface2);
+  --color-border: var(--border);
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--muted);
   --color-accent: var(--accent);
 }
 
 body.command-deck,
 body.app-shell.command-deck {
-  background: var(--shell-bg);
-  color: var(--shell-text);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(86, 240, 255, 0.05), transparent),
-    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(167, 119, 255, 0.03), transparent);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
 }
 
-/* ── Grid layout ───────────────────────────────────────────── */
+/* ── App shell layout ──────────────────────────────────────── */
 .app-shell.command-deck {
-  display: grid;
-  grid-template-columns: 252px 1fr;
-  grid-template-rows: auto 1fr;
-  grid-template-areas: "mission mission" "sidebar main";
+  display: flex;
   min-height: 100vh;
+  height: 100vh;
+  position: relative;
 }
 
-/* ── Mission header (dark) ─────────────────────────────────── */
-.missionHeader {
-  grid-area: mission;
+.command-deck .appMain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ── Collapsible sidebar ───────────────────────────────────── */
+.command-deck .sidebar {
+  width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.22s ease;
+  overflow: hidden;
+  flex-shrink: 0;
+  z-index: 10;
+  padding: 0;
+  height: 100vh;
+  position: relative;
+  top: auto;
+}
+
+.command-deck .sidebar.open {
+  width: var(--sidebar-open);
+}
+
+.sb-logo {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: .65rem 1.25rem;
-  background: linear-gradient(180deg, var(--shell-bg-elevated) 0%, var(--shell-bg) 100%);
-  border-bottom: 1px solid var(--shell-line-strong);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  color: var(--shell-text);
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  min-height: 52px;
+  flex-shrink: 0;
 }
 
-.missionBrand { display: flex; align-items: center; gap: .75rem; }
-
-.missionLogo {
-  width: 2rem; height: 2rem;
-  display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--shell-line-strong);
-  border-radius: 8px;
-  color: var(--accent-bright);
-  font-size: 1rem;
+.sb-logo-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
 }
 
-.missionBrand strong { display: block; font-size: .95rem; letter-spacing: .04em; color: var(--shell-text); }
-.missionBrand span { display: block; font-size: .72rem; color: var(--shell-muted); letter-spacing: .08em; text-transform: uppercase; }
-
-.missionStatus { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-
-.statusPill {
-  display: inline-flex; align-items: center; gap: .35rem;
-  padding: .28rem .65rem; border-radius: 999px;
-  border: 1px solid var(--shell-line);
-  background: rgba(14, 26, 51, 0.85);
-  font-size: .72rem; font-weight: 650; color: var(--shell-muted);
+.sb-logo-text {
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 
-.statusPill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--shell-muted); }
-.statusPill.ok { border-color: rgba(77, 255, 181, 0.4); color: #4dffb5; }
-.statusPill.ok .dot { background: #4dffb5; }
-.statusPill.warn { border-color: rgba(255, 184, 77, 0.4); color: #ffb84d; }
-.statusPill.warn .dot { background: #ffb84d; }
-.statusPill.err { border-color: rgba(255, 79, 109, 0.4); color: #ff4f6d; }
-.statusPill.err .dot { background: #ff4f6d; }
-.statusPill.ai { border-color: rgba(167, 119, 255, 0.4); color: #c4a8ff; }
-.statusPill.ai .dot { background: #a777ff; }
-
-.missionVersion { font-size: .7rem; color: var(--shell-muted); margin-left: .25rem; }
-
-/* ── Sidebar (dark) ────────────────────────────────────────── */
-.command-deck .sidebar {
-  grid-area: sidebar;
-  background: var(--shell-bg-elevated);
-  border-right: 1px solid var(--shell-line);
-  height: calc(100vh - 52px);
-  position: sticky;
-  top: 52px;
-  color: var(--shell-text);
+.command-deck .sidebar.open .sb-logo-text {
+  opacity: 1;
 }
 
-.command-deck .brand { padding-bottom: .5rem; border-bottom: 1px solid var(--shell-line); margin-bottom: .25rem; }
-.command-deck .brand strong { color: var(--accent-bright); font-size: .88rem; letter-spacing: .06em; text-transform: uppercase; }
-.command-deck .brand span { color: var(--shell-muted); font-size: .72rem; }
-.command-deck .sidebarFoot { color: var(--shell-muted); }
-.command-deck .sidebarFoot .hint { color: var(--shell-muted); }
-.command-deck .appVersion { color: var(--shell-muted); }
+.sb-logo-text .t { font-size: 12px; font-weight: 600; color: var(--text); }
+.sb-logo-text .s { font-size: 10px; color: var(--muted); }
 
-.navSector { margin-top: .65rem; }
-.navSectorLabel {
-  display: block; padding: .35rem .75rem .2rem;
-  font-size: .65rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
-  color: rgba(185, 201, 232, 0.7);
+.sidebarToggle {
+  position: absolute;
+  top: 15px;
+  left: calc(var(--sidebar-w) - 1px);
+  width: 20px;
+  height: 22px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 5px 5px 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 9px;
+  transition: left 0.22s ease;
+  z-index: 20;
+  padding: 0;
 }
 
-.command-deck .navItem {
-  color: #c5d4ec;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  font-size: .84rem;
-  font-weight: 600;
-  transition: border-color .15s, background .15s, color .15s, box-shadow .15s;
+.command-deck .sidebar.open ~ .sidebarToggle,
+body.sidebar-open .sidebarToggle {
+  left: calc(var(--sidebar-open) - 1px);
 }
 
-.command-deck .navItem:hover {
-  background: rgba(79, 220, 255, 0.08);
-  color: var(--shell-text);
-  border-color: var(--shell-line);
+.sb-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  display: block;
+  min-height: 0;
 }
 
-.command-deck .navItem.active {
-  background: rgba(79, 220, 255, 0.12);
-  color: var(--accent-bright);
-  border-color: rgba(79, 220, 255, 0.45);
-  box-shadow: inset 3px 0 0 var(--accent-bright), var(--glow-active);
+.sb-section {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 10px 15px 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 
-.command-deck .navItem[data-page="ai-poradce"].active {
-  border-color: rgba(167, 119, 255, 0.45);
-  box-shadow: inset 3px 0 0 #a777ff;
-  color: #c4a8ff;
+.command-deck .sidebar.open .sb-section {
+  opacity: 1;
 }
 
-.command-deck .navBadge { background: #ffb84d; color: #1a1000; font-size: .68rem; }
-.command-deck .navBadgeAi { background: #a777ff; color: #fff; }
-.command-deck .navBadgeOrgan { background: #ff4f6d; color: #fff; }
+.command-deck .navItem.sb-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  margin: 1px 6px;
+  color: var(--muted);
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  box-shadow: none;
+}
 
-/* ── Main area topbar (dark) ───────────────────────────────── */
-.command-deck .appMain { grid-area: main; background: transparent; }
+.command-deck .navItem.sb-item:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
 
+.command-deck .navItem.sb-item.active {
+  background: rgba(79, 142, 247, 0.15);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.command-deck .navItem.sb-item .ic {
+  font-size: 15px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.command-deck .navItem.sb-item .lb {
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.command-deck .sidebar.open .navItem.sb-item .lb {
+  opacity: 1;
+}
+
+.sb-badge {
+  margin-left: auto;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  min-width: auto;
+  height: auto;
+}
+
+.sb-badge.w { background: var(--yellow); color: #000; }
+.command-deck .navBadgeAi.sb-badge { background: var(--accent2); color: #fff; }
+.command-deck .navBadgeOrgan.sb-badge { background: var(--red); color: #fff; }
+.command-deck .navBadgeDeadline.sb-badge { background: var(--accent); color: #fff; }
+
+.sb-div {
+  height: 1px;
+  background: var(--border);
+  margin: 5px 12px;
+}
+
+.command-deck .sidebarFoot {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.command-deck .sidebarFoot .appVersion {
+  font-size: 10px;
+  color: var(--muted);
+  margin: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.command-deck .sidebar.open .sidebarFoot .appVersion {
+  opacity: 1;
+}
+
+/* ── Topbar ────────────────────────────────────────────────── */
 .command-deck .topbar {
-  background: rgba(7, 18, 38, 0.92);
-  border-bottom: 1px solid var(--shell-line);
-  backdrop-filter: blur(8px);
-  color: var(--shell-text);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  position: static;
+  backdrop-filter: none;
 }
 
-.command-deck .pageHead h1 { font-size: 1.2rem; color: var(--shell-text); }
+.command-deck .pageHead h1,
+.command-deck .tb-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+
 .command-deck .pageHead p,
-.command-deck .topbarVersion { color: var(--shell-muted); }
+.command-deck .tb-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
 
-.command-deck .topbar a { color: var(--shell-link); }
+.tb-space { flex: 1; }
 
-/* ── Page content (light work surfaces) ────────────────────── */
+.topbarStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.pill.ok { border-color: rgba(34, 197, 94, 0.4); color: var(--green); }
+.pill.warn { border-color: rgba(245, 158, 11, 0.4); color: var(--yellow); }
+.pill.err { border-color: rgba(239, 68, 68, 0.4); color: var(--red); }
+.pill.ai { border-color: rgba(124, 92, 252, 0.4); color: #a78bfa; }
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dg { background: var(--green); box-shadow: 0 0 5px var(--green); }
+.db { background: var(--accent); }
+.dy { background: var(--yellow); box-shadow: 0 0 5px var(--yellow); }
+.dr { background: var(--red); box-shadow: 0 0 5px var(--red); }
+
+.tb-sub-ver { color: var(--muted); }
+
+.topbarDate {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.command-deck .topbar .button {
+  background: rgba(79, 142, 247, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(79, 142, 247, 0.35);
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+.command-deck .topbar .button.secondary {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+/* ── Pages ─────────────────────────────────────────────────── */
 .command-deck .page {
-  color: var(--surface-text);
+  color: var(--text);
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.command-deck .page.page--deck {
+  display: none;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.command-deck .page.page--deck.active {
+  display: flex;
 }
 
 .command-deck .page h2,
 .command-deck .page h3,
 .command-deck .page h4 {
-  color: var(--surface-text);
+  color: var(--text);
 }
 
 .command-deck .page .hint,
 .command-deck .page .meta,
 .command-deck .page .smallMuted,
 .command-deck .page label {
-  color: var(--surface-muted);
+  color: var(--muted);
 }
 
 .command-deck .page a:not(.button):not(.navItem):not(.moduleCard):not(.commandKpi):not(.kbCard):not(.record):not(.topicCard) {
   color: var(--accent);
 }
 
-/* Panels, cards, metrics */
+/* ── KPI row ───────────────────────────────────────────────── */
+.commandKpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.commandKpi {
+  background: var(--surface);
+  padding: 11px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.12s;
+  border: none;
+  border-radius: 0;
+  color: var(--text);
+}
+
+.commandKpi::before { display: none; }
+
+.commandKpi:hover {
+  background: var(--surface2);
+  transform: none;
+  box-shadow: none;
+}
+
+.commandKpi-em {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.commandKpi-body { min-width: 0; }
+
+.commandKpiVal {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+  display: block;
+}
+
+.commandKpiVal.alert { color: var(--yellow); }
+.commandKpiVal.ok { color: var(--muted); }
+
+.commandKpiLabel {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+  display: block;
+  font-weight: 400;
+}
+
+.commandKpiHint {
+  font-size: 10px;
+  color: var(--accent);
+  margin-top: 1px;
+  display: block;
+}
+
+/* ── Command content / module grid ───────────────────────────── */
+.commandContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.sec-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 12px;
+}
+
+.sec-hdr:first-child { margin-top: 0; }
+
+.sec-eye {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.sec-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.modulesGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.modulesSection { margin-bottom: 0; }
+
+.modulesSectionTitle {
+  display: none;
+}
+
+/* Module cards */
+.moduleCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.12s, box-shadow 0.15s;
+  position: relative;
+  overflow: hidden;
+  display: block;
+  color: var(--text);
+}
+
+.moduleCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 10px 10px 0 0;
+}
+
+.moduleCard[data-sector="operativa"]::before {
+  background: linear-gradient(90deg, #4f8ef7, #60a5fa);
+}
+
+.moduleCard[data-sector="strategie"]::before {
+  background: linear-gradient(90deg, #7c5cfc, #a78bfa);
+}
+
+.moduleCard[data-sector="lide"]::before {
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+
+.moduleCard[data-sector="ai"]::before {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.moduleCard:hover,
+.moduleCard:focus-visible {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  outline: none;
+}
+
+.moduleCardActive { border-left: none; }
+.moduleCardPlanned { opacity: 0.65; }
+
+.moduleCardIcon {
+  font-size: 20px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.moduleCardBody { display: block; }
+
+.moduleCardTitle {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 3px;
+  color: var(--text);
+}
+
+.moduleCardDesc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+
+.moduleCardStats,
+.moduleCardFoot,
+.moduleStatusDot { display: none; }
+
+.moduleCardMeta {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.tag.tb { background: rgba(79, 142, 247, 0.15); color: var(--accent); }
+.tag.ty { background: rgba(245, 158, 11, 0.15); color: var(--yellow); }
+.tag.tg { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+.tag.tp { background: rgba(124, 92, 252, 0.15); color: #a78bfa; }
+.tag.tm { background: rgba(100, 116, 139, 0.15); color: var(--muted); }
+
+.moduleCardCta {
+  font-size: 10px;
+  color: var(--accent);
+  margin-top: 8px;
+  display: block;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.moduleCard:hover .moduleCardCta { opacity: 1; }
+
+.moduleCardBadge {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 8px;
+  display: block;
+}
+
+/* ── Work surfaces (panels, forms, tables) ─────────────────── */
 .command-deck .panel,
 .command-deck .metric,
 .command-deck .record,
@@ -230,52 +639,43 @@ body.app-shell.command-deck {
 .command-deck .deadlinesOverview .metric,
 .command-deck .inboxCards .metric {
   background: var(--surface);
-  border-color: var(--surface-border);
-  color: var(--surface-text);
-  box-shadow: 0 1px 3px rgba(16, 32, 51, 0.06);
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: none;
 }
 
-.command-deck .panel { border-radius: 12px; }
+.command-deck .panel { border-radius: 10px; border: 1px solid var(--border); }
 
-/* Statistics — bold dark numbers */
 .command-deck .metric span,
 .command-deck .overviewMetric span,
 .command-deck .deadlinesOverview span {
-  color: var(--surface-text) !important;
-  font-weight: 800;
+  color: var(--text) !important;
+  font-weight: 700;
 }
 
 .command-deck .metric small,
 .command-deck .overviewMetric small,
 .command-deck .deadlinesOverview small {
-  color: var(--surface-muted) !important;
+  color: var(--muted) !important;
 }
 
-/* Scan filters — light panel */
 .command-deck .scanFilters,
 .command-deck .inboxFilters,
 .command-deck .deadlinesFilters {
-  background: var(--surface-alt) !important;
-  border: 1px solid var(--surface-border) !important;
-  border-radius: 12px;
-  color: var(--surface-text);
+  background: var(--surface2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px;
+  color: var(--text);
 }
 
 .command-deck .scanFilters::before,
 .command-deck .inboxFilters::before {
-  content: "SCAN FILTERS";
-  display: block;
-  font-size: .62rem;
-  letter-spacing: .14em;
   color: var(--accent);
-  margin-bottom: .35rem;
-  font-weight: 700;
 }
 
 .command-deck .scanFilters h2,
 .command-deck .inboxFilters h2 { display: none; }
 
-/* Forms on light surfaces */
 .command-deck .page select,
 .command-deck .page input,
 .command-deck .page textarea,
@@ -283,9 +683,9 @@ body.app-shell.command-deck {
 .command-deck dialog select,
 .command-deck dialog input,
 .command-deck dialog textarea {
-  background: var(--surface);
-  border-color: var(--surface-border);
-  color: var(--surface-text);
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .command-deck .page select:focus,
@@ -296,19 +696,18 @@ body.app-shell.command-deck {
 .command-deck dialog textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(13, 138, 173, 0.15);
+  box-shadow: 0 0 0 2px rgba(79, 142, 247, 0.15);
 }
 
 .command-deck .kb-picker-menu {
   background: var(--surface);
-  border-color: var(--surface-border);
-  color: var(--surface-text);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .command-deck .kb-picker-option:hover { background: var(--surface-hover); }
-.command-deck .kb-picker-option.selected { background: #e8f4fc; color: var(--surface-text); }
+.command-deck .kb-picker-option.selected { background: rgba(79, 142, 247, 0.15); color: var(--text); }
 
-/* Buttons */
 .command-deck .page .button,
 .command-deck dialog .button {
   background: var(--accent);
@@ -318,70 +717,50 @@ body.app-shell.command-deck {
 
 .command-deck .page .button:hover,
 .command-deck dialog .button:hover {
-  background: #0a7694;
-  box-shadow: 0 2px 8px rgba(13, 138, 173, 0.25);
+  background: #3d7ae8;
+  box-shadow: 0 2px 8px rgba(79, 142, 247, 0.25);
 }
 
 .command-deck .page .button.secondary,
 .command-deck dialog .button.secondary {
-  background: var(--surface-alt);
-  color: var(--surface-text);
-  border: 1px solid var(--surface-border);
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .command-deck .page .button.secondary:hover {
   background: var(--surface-hover);
-  border-color: #b8d4ec;
-}
-
-.command-deck .page .button.accent {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  border-color: #3a4260;
 }
 
 .command-deck .page .button.danger {
-  background: #fff0f3;
-  color: var(--danger);
-  border: 1px solid #f5c2cc;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
-.command-deck .topbar .button {
-  background: rgba(79, 220, 255, 0.12);
-  color: var(--accent-bright);
-  border: 1px solid rgba(79, 220, 255, 0.35);
-}
-
-.command-deck .topbar .button.secondary {
-  background: transparent;
-  color: var(--shell-muted);
-  border-color: var(--shell-line);
-}
-
-/* Tables */
 .command-deck .page table,
 .command-deck dialog table {
   background: var(--surface);
-  border: 1px solid var(--surface-border);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  overflow: hidden;
-  color: var(--surface-text);
+  color: var(--text);
 }
 
 .command-deck .page th,
 .command-deck dialog th {
-  background: var(--surface-alt);
-  color: var(--surface-muted);
-  font-size: .72rem;
-  letter-spacing: .06em;
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  border-bottom: 1px solid var(--surface-border);
+  border-bottom: 1px solid var(--border);
 }
 
 .command-deck .page td,
 .command-deck dialog td {
-  border-bottom: 1px solid var(--surface-border);
-  color: var(--surface-text);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
 }
 
 .command-deck .page tr:hover td,
@@ -389,215 +768,73 @@ body.app-shell.command-deck {
   background: var(--surface-hover);
 }
 
-/* Badges */
 .command-deck .page .badge {
-  background: #eef5fc;
+  background: rgba(79, 142, 247, 0.15);
   color: var(--accent);
-  border: 1px solid #cfe3f5;
+  border: 1px solid rgba(79, 142, 247, 0.25);
 }
 
 .command-deck .page .badge.risk,
 .command-deck .page .badge.priority {
-  background: #fff0f3;
-  color: var(--danger);
-  border-color: #f5c2cc;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--red);
+  border-color: rgba(239, 68, 68, 0.25);
 }
 
 .command-deck .page .badge.meeting,
 .command-deck .page .badge.classify {
-  background: #fff8ed;
-  color: var(--warning);
-  border-color: #f5ddb0;
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--yellow);
+  border-color: rgba(245, 158, 11, 0.25);
 }
 
-/* Records / list items */
 .command-deck .record-clickable:hover,
 .command-deck .recordRow:hover,
 .command-deck .kbCard:hover,
 .command-deck .topicCardMain:hover,
 .command-deck .topicChip:hover {
-  border-color: #9ec9e8;
+  border-color: var(--accent);
   background: var(--surface-hover);
-  box-shadow: 0 2px 8px rgba(16, 32, 51, 0.08);
 }
 
-.command-deck .record.needsClassify { border-left-color: var(--warning); }
-.command-deck .record.hasAiProposal { border-left-color: var(--accent-secondary); }
+.command-deck .record.needsClassify { border-left-color: var(--yellow); }
+.command-deck .record.hasAiProposal { border-left-color: var(--accent2); }
 
 .command-deck .groupTitle {
-  background: var(--surface-alt);
+  background: var(--surface2);
   color: var(--accent);
-  border: 1px solid var(--surface-border);
+  border: 1px solid var(--border);
 }
 
 .command-deck .linkish { color: var(--accent); }
 
-/* Dialogs — light for readability */
 .command-deck dialog,
 .command-deck .authCard {
   background: var(--surface);
-  color: var(--surface-text);
-  border: 1px solid var(--surface-border);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .command-deck .iconButton {
-  background: var(--surface-alt);
-  color: var(--surface-text);
+  background: var(--surface2);
+  color: var(--text);
 }
 
 .command-deck .kbItemDetailText {
-  background: var(--surface-alt);
-  border-color: var(--surface-border);
-  color: var(--surface-text);
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text);
 }
 
-.command-deck .kbItemStatus { background: var(--surface-alt); color: var(--surface-muted); }
-.command-deck .topic { background: #e8f4fc; color: var(--accent); }
-
-/* ── Command dashboard KPIs (light cards) ──────────────────── */
-.commandDashboard { display: grid; gap: 1.25rem; }
-
-.commandKpis {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(140px, 1fr));
-  gap: .85rem;
-}
-
-.commandKpi {
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 12px;
-  padding: 1rem 1.1rem;
-  cursor: pointer;
-  transition: border-color .15s, box-shadow .15s, transform .15s;
-  position: relative;
-  overflow: hidden;
-  color: var(--surface-text);
-}
-
-.commandKpi::before {
-  content: "";
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  opacity: .85;
-}
-
-.commandKpi--new::before { background: var(--accent); }
-.commandKpi--risk::before { background: var(--danger); }
-.commandKpi--meeting::before { background: var(--accent-secondary); }
-.commandKpi--deadline::before { background: var(--warning); }
-
-.commandKpi:hover {
-  border-color: #9ec9e8;
-  box-shadow: 0 4px 14px rgba(16, 32, 51, 0.1);
-  transform: translateY(-1px);
-}
-
-.commandKpiVal {
-  display: block;
-  font-size: 2rem;
-  font-weight: 800;
-  line-height: 1.1;
-  color: var(--surface-text);
-}
-
-.commandKpiLabel {
-  display: block;
-  margin-top: .25rem;
-  font-size: .8rem;
-  font-weight: 600;
-  color: var(--surface-muted);
-}
-
-.commandKpiHint {
-  display: block;
-  margin-top: .45rem;
-  font-size: .7rem;
-  color: var(--accent);
-}
-
-/* ── Module cards (light) ──────────────────────────────────── */
-.modulesSection { margin-bottom: 1.35rem; }
-
-.modulesSectionTitle {
-  margin: 0 0 .65rem;
-  font-size: .72rem;
-  font-weight: 800;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-}
-
-.modulesSectionTitle::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, var(--surface-border), transparent);
-}
-
-.modulesGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: .85rem;
-}
-
-.moduleCard {
-  border: 1px solid var(--surface-border);
-  border-radius: 12px;
-  background: var(--surface);
-  padding: 1rem;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  grid-template-rows: auto auto;
-  gap: .5rem .75rem;
-  cursor: pointer;
-  transition: border-color .15s, box-shadow .15s, transform .15s;
-  position: relative;
-  color: var(--surface-text);
-}
-
-.moduleCard:hover,
-.moduleCard:focus-visible {
-  border-color: #9ec9e8;
-  box-shadow: 0 4px 14px rgba(16, 32, 51, 0.1);
-  outline: none;
-  transform: translateY(-1px);
-}
-
-.moduleCardActive { border-left: 3px solid var(--accent); }
-.moduleCardPlanned { opacity: .72; border-left: 3px solid #a8bdd4; }
-
-.moduleCardTitle { margin: 0; font-size: .98rem; font-weight: 700; color: var(--surface-text); }
-.moduleCardDesc { margin: .2rem 0 0; font-size: .82rem; color: var(--surface-muted); line-height: 1.45; }
-
-.moduleStat {
-  font-size: .72rem;
-  font-weight: 700;
-  background: #eef5fc;
-  color: var(--accent);
-  padding: .18rem .45rem;
-  border-radius: 999px;
-  border: 1px solid var(--surface-border);
-}
-
-.moduleStatusDot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); grid-column: 3; grid-row: 1; align-self: start; }
-.moduleCardPlanned .moduleStatusDot { background: #a8bdd4; box-shadow: none; }
-.moduleCardIcon { font-size: 1.6rem; grid-row: 1 / span 2; }
-.moduleCardBody { grid-column: 2; min-width: 0; }
-.moduleCardFoot { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
-.moduleCardCta { font-size: .8rem; font-weight: 700; color: var(--accent); }
-.moduleCardBadge { font-size: .72rem; font-weight: 700; color: var(--surface-muted); background: var(--surface-alt); padding: .2rem .5rem; border-radius: 999px; border: 1px solid var(--surface-border); }
+.command-deck .kbItemStatus { background: var(--surface2); color: var(--muted); }
+.command-deck .topic { background: rgba(79, 142, 247, 0.15); color: var(--accent); }
 
 .modulePlaceholderBox {
-  border: 1px dashed var(--surface-border);
-  border-radius: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
   padding: 1rem;
-  background: var(--surface-alt);
-  color: var(--surface-text);
+  background: var(--surface2);
+  color: var(--text);
 }
 
 /* ── Module-specific overrides ─────────────────────────────── */
@@ -621,8 +858,8 @@ body.app-shell.command-deck {
 .command-deck .page .oe-updated,
 .command-deck .page .oe-inline-select {
   background: var(--surface) !important;
-  border-color: var(--surface-border) !important;
-  color: var(--surface-text) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
 }
 
 .command-deck .page .di-stat-val,
@@ -632,7 +869,7 @@ body.app-shell.command-deck {
 .command-deck .page .oe-stat-val,
 .command-deck .page .oe-card-title,
 .command-deck .page .oe-field-val {
-  color: var(--surface-text) !important;
+  color: var(--text) !important;
 }
 
 .command-deck .page .di-stat-lbl,
@@ -642,23 +879,23 @@ body.app-shell.command-deck {
 .command-deck .page .oe-field-lbl,
 .command-deck .page .oe-card-meta,
 .command-deck .page .oe-updated {
-  color: var(--surface-muted) !important;
+  color: var(--muted) !important;
 }
 
 .command-deck .page .di-table th {
-  background: var(--surface-alt) !important;
-  color: var(--surface-muted) !important;
+  background: var(--surface2) !important;
+  color: var(--muted) !important;
 }
 
 .command-deck .page .di-table td {
-  border-color: var(--surface-border) !important;
-  color: var(--surface-text) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
 }
 
 .command-deck .page .di-panel-head,
 .command-deck .page .di-panel-footer {
   background: var(--surface) !important;
-  border-color: var(--surface-border) !important;
+  border-color: var(--border) !important;
 }
 
 .command-deck .page .competitionCard.active,
@@ -667,23 +904,31 @@ body.app-shell.command-deck {
 .command-deck .page .topicsTab.active,
 .command-deck .page .oe-tab.active {
   border-color: var(--accent) !important;
-  background: #eef5fc !important;
+  background: rgba(79, 142, 247, 0.12) !important;
   color: var(--accent) !important;
-  box-shadow: var(--glow-active);
 }
 
-.command-deck .authOverlay { background: rgba(5, 8, 20, 0.88); }
+.command-deck .authOverlay { background: rgba(15, 17, 23, 0.92); }
 
-/* AI poradce — violet accent on light surface only */
-.command-deck #page-ai-poradce .button.accent,
-.command-deck #page-ai-poradce .modulesSectionTitle {
-  /* keep readable */
-}
+.command-deck #page-ai-poradce a { color: var(--accent2); }
 
-.command-deck #page-ai-poradce a { color: var(--accent-secondary); }
-
+/* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .app-shell.command-deck { grid-template-columns: 1fr; grid-template-areas: "mission" "sidebar" "main"; }
-  .command-deck .sidebar { height: auto; position: static; }
   .commandKpis { grid-template-columns: 1fr 1fr; }
+  .modulesGrid { grid-template-columns: 1fr; }
+  .command-deck .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 100;
+  }
+  .command-deck .sidebar.open { width: var(--sidebar-open); }
+  .command-deck .appMain { margin-left: var(--sidebar-w); }
+  body.sidebar-open .command-deck .appMain { margin-left: var(--sidebar-open); }
+}
+
+@media (max-width: 600px) {
+  .commandKpis { grid-template-columns: 1fr; }
+  .topbarStatus { display: none; }
 }
