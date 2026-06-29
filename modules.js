@@ -24,7 +24,7 @@
     {
       id: "ai",
       title: "AI a data",
-      slugs: ["ai-poradce"]
+      slugs: ["ai-poradce", "nastaveni"]
     }
   ];
 
@@ -96,7 +96,7 @@
       title: "OP JAK Návraty",
       description: "Soutěž OP JAK Návraty — alokace, výzvy, přihlášky a podpora.",
       status: "active",
-      icon: "↩️",
+      icon: "🔄",
       stats: ["navratyCompetitionsTotal", "navratyCompetitionsActive"]
     },
     {
@@ -112,7 +112,7 @@
       title: "AI poradce",
       description: "Dotazy nad daty aplikace — Osoby, Termíny, PČR, soutěže, témata a e-maily. Odpovědi jen z nalezených zdrojů; volitelné AI shrnutí.",
       status: "active",
-      icon: "🤖",
+      icon: "✨",
       stats: []
     },
     {
@@ -120,7 +120,7 @@
       title: "EIZ tokeny",
       description: "Transformační smlouvy — ruční evidence tokenů po letech (2025, 2026…) a import publikací (autor, DOI, APC) navázaných na smlouvu.",
       status: "active",
-      icon: "🪙",
+      icon: "🔑",
       stats: ["eizContractsTotal", "eizPublicationsTotal"]
     },
     {
@@ -182,6 +182,14 @@
       description: "Sledování indikátorů, termínů a odpovědností doktorského studia.",
       status: "planned",
       icon: "🎯"
+    },
+    {
+      slug: "nastaveni",
+      title: "Nastavení",
+      description: "Konfigurace modulů, připojení a synchronizace dat.",
+      status: "active",
+      icon: "⚙️",
+      stats: []
     }
   ];
 
@@ -225,26 +233,39 @@
     const root = el("commandKpis");
     if (!root) return;
     const k = getDashboardKpis();
+    const alertClass = (n) => n > 0 ? "alert" : "ok";
     root.innerHTML = `
-      <article class="commandKpi commandKpi--new" data-goto="emaily" tabindex="0" role="button" aria-label="Nové k roztřídění">
-        <span class="commandKpiVal">${k.newCount}</span>
-        <span class="commandKpiLabel">Nové / k roztřídění</span>
-        <span class="commandKpiHint">Otevřít e-maily →</span>
+      <article class="commandKpi" data-goto="emaily" tabindex="0" role="button" aria-label="Nové k roztřídění">
+        <div class="commandKpi-em" aria-hidden="true">✉️</div>
+        <div class="commandKpi-body">
+          <span class="commandKpiVal ${alertClass(k.newCount)}">${k.newCount}</span>
+          <span class="commandKpiLabel">Nové / k třídění</span>
+          <span class="commandKpiHint">Otevřít e-maily →</span>
+        </div>
       </article>
-      <article class="commandKpi commandKpi--risk" data-goto="emaily" tabindex="0" role="button" aria-label="Rizika a problémy">
-        <span class="commandKpiVal">${k.riskCount}</span>
-        <span class="commandKpiLabel">Rizika / problémy</span>
-        <span class="commandKpiHint">Filtrovat rizika →</span>
+      <article class="commandKpi" data-goto="emaily" tabindex="0" role="button" aria-label="Rizika a problémy">
+        <div class="commandKpi-em" aria-hidden="true">⚠️</div>
+        <div class="commandKpi-body">
+          <span class="commandKpiVal ${alertClass(k.riskCount)}">${k.riskCount}</span>
+          <span class="commandKpiLabel">Rizika / problémy</span>
+          <span class="commandKpiHint">Filtrovat →</span>
+        </div>
       </article>
-      <article class="commandKpi commandKpi--meeting" data-goto="emaily" tabindex="0" role="button" aria-label="K jednání">
-        <span class="commandKpiVal">${k.meetingCount}</span>
-        <span class="commandKpiLabel">K jednání</span>
-        <span class="commandKpiHint">Záznamy k jednání →</span>
+      <article class="commandKpi" data-goto="emaily" tabindex="0" role="button" aria-label="K jednání">
+        <div class="commandKpi-em" aria-hidden="true">📋</div>
+        <div class="commandKpi-body">
+          <span class="commandKpiVal ${alertClass(k.meetingCount)}">${k.meetingCount}</span>
+          <span class="commandKpiLabel">K jednání</span>
+          <span class="commandKpiHint">Záznamy →</span>
+        </div>
       </article>
-      <article class="commandKpi commandKpi--deadline" data-goto="terminy" tabindex="0" role="button" aria-label="Nadcházející termíny">
-        <span class="commandKpiVal">${k.deadlineCount}</span>
-        <span class="commandKpiLabel">Nadcházející termíny</span>
-        <span class="commandKpiHint">Otevřít termíny →</span>
+      <article class="commandKpi" data-goto="terminy" tabindex="0" role="button" aria-label="Nadcházející termíny">
+        <div class="commandKpi-em" aria-hidden="true">📅</div>
+        <div class="commandKpi-body">
+          <span class="commandKpiVal ${alertClass(k.deadlineCount)}">${k.deadlineCount}</span>
+          <span class="commandKpiLabel">Nadcházející termíny</span>
+          <span class="commandKpiHint">Otevřít termíny →</span>
+        </div>
       </article>
     `;
     if (root.__kpiBound) return;
@@ -368,25 +389,49 @@
     return labels[key] || String(value);
   }
 
+  function tagClass(key, value) {
+    const warnKeys = ["emailsNew", "emailsAi", "deadlinesOverdue", "organsPendingAi", "docIntelligenceNew", "kbItemsOpen"];
+    const purpleKeys = ["competitionsTotal", "navratyCompetitionsTotal", "pcrTopicsTotal", "journalRecordsTotal", "journalCategoriesTotal"];
+    const greenKeys = ["personsTotal", "organsTotal", "eizContractsTotal"];
+    if (warnKeys.includes(key) && value > 0) return "ty";
+    if (purpleKeys.includes(key)) return "tp";
+    if (greenKeys.includes(key)) return "tg";
+    return "tb";
+  }
+
   function renderModuleCard(mod, stats) {
     const active = mod.status === "active";
     const sector = getModuleSector(mod.slug);
-    const statHtml = (mod.stats || [])
-      .map(key => stats[key] > 0 ? `<span class="moduleStat">${html(statLabel(key, stats[key]))}</span>` : "")
+    let tags = (mod.stats || [])
+      .map(key => {
+        const val = stats[key];
+        if (val === undefined || val === null) return "";
+        if (val === 0 && !["emailsTotal", "deadlinesTotal", "kbItemsTotal"].includes(key)) return "";
+        return `<span class="tag ${tagClass(key, val)}">${html(statLabel(key, val))}</span>`;
+      })
       .filter(Boolean)
       .join("");
+    if (mod.slug === "ai-poradce") {
+      let aiReady = false;
+      try {
+        const raw = JSON.parse(localStorage.getItem("kb-dashboard-ai-settings-v1") || "{}");
+        aiReady = !!(raw.apiKey || "").trim();
+      } catch (_) {}
+      tags = `<span class="tag ty">${aiReady ? "AI ready" : "AI nenastaveno"}</span>`;
+    } else if (mod.slug === "nastaveni") {
+      const ver = document.getElementById("topbarVersion")?.textContent?.replace(/^Verze\s+/, "v") || "v3.132";
+      tags = `<span class="tag ty">${html(ver)}</span>`;
+    }
+    const metaHtml = tags
+      ? `<div class="moduleCardMeta">${tags}</div>`
+      : (active ? `<div class="moduleCardMeta"><span class="tag tg">Aktivní</span></div>` : "");
     return `
       <article class="moduleCard ${active ? "moduleCardActive" : "moduleCardPlanned"}" data-module-slug="${html(mod.slug)}" data-sector="${html(sector)}" tabindex="0" role="button" aria-label="${html(mod.title)}">
         <div class="moduleCardIcon" aria-hidden="true">${mod.icon}</div>
-        <div class="moduleCardBody">
-          <h3 class="moduleCardTitle">${html(mod.title)}</h3>
-          <p class="moduleCardDesc">${html(mod.description)}</p>
-          ${statHtml ? `<div class="moduleCardStats">${statHtml}</div>` : ""}
-        </div>
-        <span class="moduleStatusDot" title="${active ? "Aktivní" : "Připravujeme"}"></span>
-        <div class="moduleCardFoot">
-          ${active ? `<span class="moduleCardCta">Otevřít modul →</span>` : `<span class="moduleCardBadge">Připravujeme</span>`}
-        </div>
+        <h3 class="moduleCardTitle">${html(mod.title)}</h3>
+        <p class="moduleCardDesc">${html(mod.description)}</p>
+        ${metaHtml}
+        ${active ? `<span class="moduleCardCta">Otevřít modul →</span>` : `<span class="moduleCardBadge">Připravujeme</span>`}
       </article>
     `;
   }
@@ -401,7 +446,7 @@
       if (!mods.length) return "";
       return `
         <div class="modulesSection">
-          <h3 class="modulesSectionTitle">${html(sector.title)}</h3>
+          <div class="sec-hdr"><span class="sec-eye">${html(sector.title)}</span><div class="sec-line"></div></div>
           <div class="modulesGrid">${mods.map((m) => renderModuleCard(m, stats)).join("")}</div>
         </div>
       `;

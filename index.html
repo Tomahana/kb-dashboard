@@ -5,104 +5,86 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>KB Dashboard – OVV Command Deck</title>
   <link rel="icon" href="kb-dashboard-favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=3.131" />
-  <link rel="stylesheet" href="command-deck.css?v=3.131" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=3.132" />
+  <link rel="stylesheet" href="command-deck.css?v=3.132" />
 </head>
 <body class="app-shell command-deck">
-  <header class="missionHeader" aria-label="Mission control status">
-    <div class="missionBrand">
-      <span class="missionLogo" aria-hidden="true">◈</span>
-      <div>
-        <strong>KB Dashboard</strong>
-        <span>OVV Command Deck</span>
+  <nav id="sidebar" class="sidebar sectorNav" aria-label="Hlavní navigace">
+    <div class="sb-logo">
+      <div class="sb-logo-icon" aria-hidden="true">KB</div>
+      <div class="sb-logo-text">
+        <div class="t">Command Deck</div>
+        <div class="s">OVV Knowledge Base</div>
       </div>
     </div>
-    <div class="missionStatus">
-      <div class="statusPill" id="missionSupabase"><span class="dot"></span> Supabase</div>
-      <div class="statusPill" id="missionAi"><span class="dot"></span> AI</div>
-      <div class="statusPill" id="missionNew"><span class="dot"></span> Nové <strong id="missionNewCount">0</strong></div>
-      <div class="statusPill" id="missionRisks"><span class="dot"></span> Rizika <strong id="missionRiskCount">0</strong></div>
-      <div class="statusPill" id="missionDeadlines"><span class="dot"></span> Termíny <strong id="missionDeadlineCount">0</strong></div>
-      <span class="missionVersion" id="missionVersion"></span>
+    <div class="sb-nav sidebarNav">
+      <a href="#prehled" class="navItem sb-item" data-page="prehled"><span class="ic" aria-hidden="true">⬡</span><span class="lb">Přehled</span></a>
+      <div class="sb-div"></div>
+      <div class="sb-section">Operativa</div>
+      <a href="#emaily" class="navItem sb-item" data-page="emaily">
+        <span class="ic" aria-hidden="true">✉️</span><span class="lb">E-maily</span>
+        <span id="navBadgeNew" class="sb-badge w navBadge" hidden></span>
+        <span id="navBadgeAi" class="sb-badge navBadge navBadgeAi" hidden></span>
+      </a>
+      <a href="#kb-items" class="navItem sb-item" data-page="kb-items"><span class="ic" aria-hidden="true">🧠</span><span class="lb">Meeting notes</span></a>
+      <a href="#terminy" class="navItem sb-item" data-page="terminy">
+        <span class="ic" aria-hidden="true">📅</span><span class="lb">Termíny</span>
+        <span id="navBadgeDeadlines" class="sb-badge navBadge navBadgeDeadline" hidden></span>
+      </a>
+      <a href="#podklady" class="navItem sb-item" data-page="podklady"><span class="ic" aria-hidden="true">📋</span><span class="lb">Podklady k jednáním</span></a>
+      <a href="#doc-intelligence" class="navItem sb-item" data-page="doc-intelligence"><span class="ic" aria-hidden="true">📄</span><span class="lb">Dokumenty</span></a>
+      <a href="#outlook-emaily" class="navItem sb-item" data-page="outlook-emaily"><span class="ic" aria-hidden="true">📧</span><span class="lb">Outlook emaily</span></a>
+      <a href="#temata" class="navItem sb-item" data-page="temata"><span class="ic" aria-hidden="true">🏷️</span><span class="lb">Témata</span></a>
+      <div class="sb-div"></div>
+      <div class="sb-section">Strategie</div>
+      <a href="#interni-souteze" class="navItem sb-item" data-page="interni-souteze"><span class="ic" aria-hidden="true">🏆</span><span class="lb">Interní soutěže</span></a>
+      <a href="#navraty" class="navItem sb-item" data-page="navraty"><span class="ic" aria-hidden="true">🔄</span><span class="lb">OP JAK Návraty</span></a>
+      <a href="#pcr-vyzkum" class="navItem sb-item" data-page="pcr-vyzkum"><span class="ic" aria-hidden="true">🛡️</span><span class="lb">Výzkumné směry PČR</span></a>
+      <a href="#casopisy" class="navItem sb-item" data-page="casopisy"><span class="ic" aria-hidden="true">📚</span><span class="lb">Databáze časopisů</span></a>
+      <a href="#vystupy" class="navItem sb-item" data-page="vystupy"><span class="ic" aria-hidden="true">📊</span><span class="lb">Výstupy</span></a>
+      <div class="sb-div"></div>
+      <div class="sb-section">Lidé a orgány</div>
+      <a href="#osoby" class="navItem sb-item" data-page="osoby"><span class="ic" aria-hidden="true">👤</span><span class="lb">Osoby</span></a>
+      <a href="#rady-organy" class="navItem sb-item" data-page="rady-organy">
+        <span class="ic" aria-hidden="true">🏛️</span><span class="lb">Rady a orgány</span>
+        <span id="navBadgeOrgans" class="sb-badge navBadge navBadgeOrgan" hidden></span>
+      </a>
+      <a href="#eiz-tokeny" class="navItem sb-item" data-page="eiz-tokeny"><span class="ic" aria-hidden="true">🔑</span><span class="lb">EIZ tokeny</span></a>
+      <div class="sb-div"></div>
+      <div class="sb-section">AI a data</div>
+      <a href="#ai-poradce" class="navItem sb-item" data-page="ai-poradce"><span class="ic" aria-hidden="true">✨</span><span class="lb">AI poradce</span></a>
+      <a href="#nastaveni" class="navItem sb-item" data-page="nastaveni"><span class="ic" aria-hidden="true">⚙️</span><span class="lb">Nastavení</span></a>
     </div>
-  </header>
-
-  <aside class="sidebar sectorNav">
-    <div class="brand">
-      <strong>Sektory</strong>
-      <span>Znalostní báze OVV</span>
-    </div>
-    <nav class="sidebarNav" aria-label="Navigace sektory">
-      <a href="#prehled" class="navItem" data-page="prehled">◈ Přehled</a>
-
-      <div class="navSector">
-        <span class="navSectorLabel">Operativa</span>
-        <a href="#emaily" class="navItem" data-page="emaily">
-          E-maily
-          <span id="navBadgeNew" class="navBadge" hidden></span>
-          <span id="navBadgeAi" class="navBadge navBadgeAi" hidden></span>
-        </a>
-        <a href="#kb-items" class="navItem" data-page="kb-items">KB Notion meeting notes</a>
-        <a href="#terminy" class="navItem" data-page="terminy">
-          Termíny
-          <span id="navBadgeDeadlines" class="navBadge navBadgeDeadline" hidden></span>
-        </a>
-        <a href="#podklady" class="navItem" data-page="podklady">📋 Podklady k jednáním</a>
-        <a href="#doc-intelligence" class="navItem" data-page="doc-intelligence">Dokumenty</a>
-        <a href="#outlook-emaily" class="navItem" data-page="outlook-emaily">📧 Outlook emaily</a>
-        <a href="#temata" class="navItem" data-page="temata">Témata</a>
-      </div>
-
-      <div class="navSector">
-        <span class="navSectorLabel">Strategie</span>
-        <a href="#interni-souteze" class="navItem" data-page="interni-souteze">Interní soutěže</a>
-        <a href="#navraty" class="navItem" data-page="navraty">OP JAK Návraty</a>
-        <a href="#pcr-vyzkum" class="navItem" data-page="pcr-vyzkum">Výzkumné směry PČR</a>
-        <a href="#casopisy" class="navItem" data-page="casopisy">Databáze časopisů</a>
-        <a href="#vystupy" class="navItem" data-page="vystupy">Výstupy</a>
-      </div>
-
-      <div class="navSector">
-        <span class="navSectorLabel">Lidé a orgány</span>
-        <a href="#osoby" class="navItem" data-page="osoby">Osoby</a>
-        <a href="#rady-organy" class="navItem" data-page="rady-organy">
-          Rady a orgány
-          <span id="navBadgeOrgans" class="navBadge navBadgeOrgan" hidden></span>
-        </a>
-        <a href="#eiz-tokeny" class="navItem" data-page="eiz-tokeny">EIZ tokeny</a>
-      </div>
-
-      <div class="navSector">
-        <span class="navSectorLabel">AI a data</span>
-        <a href="#ai-poradce" class="navItem" data-page="ai-poradce">AI poradce</a>
-        <a href="#nastaveni" class="navItem" data-page="nastaveni">Nastavení</a>
-      </div>
-    </nav>
     <div class="sidebarFoot">
-      <p class="hint">Mission control · interní nástroj OVV</p>
-      <p class="appVersion" id="appVersion">Verze 3.131</p>
+      <p class="appVersion" id="appVersion">Verze 3.132</p>
     </div>
-  </aside>
+  </nav>
 
-  <div class="appMain">
+  <button type="button" id="sidebarToggle" class="sidebarToggle" aria-label="Rozbalit navigaci" aria-expanded="false">▶</button>
+
+  <div class="appMain" id="main">
     <header class="topbar">
       <div class="pageHead">
-        <h1 id="pageTitle">Přehled</h1>
-        <p id="pageSubtitle">Moduly a oblasti práce OVV</p>
-        <p id="topbarVersion" class="topbarVersion" aria-label="Verze aplikace"></p>
+        <h1 id="pageTitle" class="tb-title">Command Deck</h1>
+        <p id="pageSubtitle" class="tb-sub"><span id="pageSubtitleText">Operativní přehled</span><span id="pageSubtitleVer" class="tb-sub-ver"> · <span id="topbarVersion" aria-label="Verze aplikace">Verze 3.132</span></span></p>
+      </div>
+      <div class="tb-space"></div>
+      <div class="topbarStatus" aria-label="Stav systému">
+        <div class="pill" id="missionSupabase"><span class="dot dg"></span> Supabase</div>
+        <div class="pill" id="missionAi"><span class="dot db"></span> AI</div>
+        <span class="topbarDate" id="topbarDate"></span>
       </div>
       <div id="topbarActions" class="actions pageActions"></div>
     </header>
 
     <!-- PŘEHLED / COMMAND DASHBOARD -->
-    <section id="page-prehled" class="page active">
-      <div class="commandDashboard">
-        <div class="commandKpis" id="commandKpis" aria-label="Operativní přehled"></div>
-        <section class="panel">
-          <h2>Moduly podle sektorů</h2>
-          <p class="hint">Vyberte oblast práce. Plánované moduly jsou označeny jako připravujeme.</p>
-          <div id="modulesGrid"></div>
-        </section>
+    <section id="page-prehled" class="page page--deck active">
+      <div class="commandKpis" id="commandKpis" aria-label="Operativní přehled"></div>
+      <div class="commandContent">
+        <div id="modulesGrid"></div>
       </div>
     </section>
 
@@ -948,51 +930,51 @@
   </datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=3.131"></script>
-  <script src="auth.js?v=3.131"></script>
-  <script src="form-pickers.js?v=3.131"></script>
-  <script src="layout.js?v=3.131"></script>
-  <script src="modules.js?v=3.131"></script>
-  <script src="app.js?v=3.131"></script>
-  <script src="enhancements.js?v=3.131"></script>
-  <script src="supabase-loader.js?v=3.131"></script>
-  <script src="supabase-kb-capture.js?v=3.131"></script>
-  <script src="kb-capture.js?v=3.131"></script>
-  <script src="ai-classify.js?v=3.131"></script>
-  <script src="task-export.js?v=3.131"></script>
-  <script src="notion.js?v=3.131"></script>
-  <script src="supabase-topics.js?v=3.131"></script>
-  <script src="topics.js?v=3.131"></script>
-  <script src="record-click-fix.js?v=3.131"></script>
-  <script src="supabase-persons.js?v=3.131"></script>
-  <script src="persons.js?v=3.131"></script>
-  <script src="person-links.js?v=3.131"></script>
-  <script src="supabase-competitions.js?v=3.131"></script>
-  <script src="interni-souteze.js?v=3.131"></script>
-  <script src="supabase-deadlines.js?v=3.131"></script>
-  <script src="deadlines.js?v=3.131"></script>
-  <script src="supabase-podklady.js?v=3.131"></script>
-  <script src="podklady.js?v=3.131"></script>
-  <script src="supabase-pcr-research.js?v=3.131"></script>
-  <script src="pcr-research-analysis.js?v=3.131"></script>
-  <script src="pcr-research.js?v=3.131"></script>
-  <script src="ai-advisor-knowledge.js?v=3.131"></script>
-  <script src="ai-advisor.js?v=3.131"></script>
-  <script src="supabase-eiz-tokens.js?v=3.131"></script>
-  <script src="eiz-tokens.js?v=3.131"></script>
+  <script src="supabase-config.js?v=3.132"></script>
+  <script src="auth.js?v=3.132"></script>
+  <script src="form-pickers.js?v=3.132"></script>
+  <script src="layout.js?v=3.132"></script>
+  <script src="modules.js?v=3.132"></script>
+  <script src="app.js?v=3.132"></script>
+  <script src="enhancements.js?v=3.132"></script>
+  <script src="supabase-loader.js?v=3.132"></script>
+  <script src="supabase-kb-capture.js?v=3.132"></script>
+  <script src="kb-capture.js?v=3.132"></script>
+  <script src="ai-classify.js?v=3.132"></script>
+  <script src="task-export.js?v=3.132"></script>
+  <script src="notion.js?v=3.132"></script>
+  <script src="supabase-topics.js?v=3.132"></script>
+  <script src="topics.js?v=3.132"></script>
+  <script src="record-click-fix.js?v=3.132"></script>
+  <script src="supabase-persons.js?v=3.132"></script>
+  <script src="persons.js?v=3.132"></script>
+  <script src="person-links.js?v=3.132"></script>
+  <script src="supabase-competitions.js?v=3.132"></script>
+  <script src="interni-souteze.js?v=3.132"></script>
+  <script src="supabase-deadlines.js?v=3.132"></script>
+  <script src="deadlines.js?v=3.132"></script>
+  <script src="supabase-podklady.js?v=3.132"></script>
+  <script src="podklady.js?v=3.132"></script>
+  <script src="supabase-pcr-research.js?v=3.132"></script>
+  <script src="pcr-research-analysis.js?v=3.132"></script>
+  <script src="pcr-research.js?v=3.132"></script>
+  <script src="ai-advisor-knowledge.js?v=3.132"></script>
+  <script src="ai-advisor.js?v=3.132"></script>
+  <script src="supabase-eiz-tokens.js?v=3.132"></script>
+  <script src="eiz-tokens.js?v=3.132"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="supabase-journal-db.js?v=3.131"></script>
-  <script src="journal-db-analysis.js?v=3.131"></script>
-  <script src="journal-db.js?v=3.131"></script>
-  <script src="supabase-vystupy.js?v=3.131"></script>
-  <script src="vystupy-analysis.js?v=3.131"></script>
-  <script src="vystupy.js?v=3.131"></script>
-  <script src="supabase-rady-organy.js?v=3.131"></script>
-  <script src="rady-organy.js?v=3.131"></script>
-  <script src="supabase-doc-intelligence.js?v=3.131"></script>
-  <script src="doc-intelligence.js?v=3.131"></script>
-  <script src="supabase-outlook-emails.js?v=3.131"></script>
-  <script src="outlook-emails.js?v=3.131"></script>
-  <script type="module" src="js/kb-items.js?v=3.131"></script>
+  <script src="supabase-journal-db.js?v=3.132"></script>
+  <script src="journal-db-analysis.js?v=3.132"></script>
+  <script src="journal-db.js?v=3.132"></script>
+  <script src="supabase-vystupy.js?v=3.132"></script>
+  <script src="vystupy-analysis.js?v=3.132"></script>
+  <script src="vystupy.js?v=3.132"></script>
+  <script src="supabase-rady-organy.js?v=3.132"></script>
+  <script src="rady-organy.js?v=3.132"></script>
+  <script src="supabase-doc-intelligence.js?v=3.132"></script>
+  <script src="doc-intelligence.js?v=3.132"></script>
+  <script src="supabase-outlook-emails.js?v=3.132"></script>
+  <script src="outlook-emails.js?v=3.132"></script>
+  <script type="module" src="js/kb-items.js?v=3.132"></script>
 </body>
 </html>
