@@ -1,0 +1,63 @@
+{
+  "workplaces": [
+    {
+      "kod": "FIM",
+      "nazev": "Fakulta informatiky a managementu",
+      "typ": "fakulta",
+      "zkr_fak": "FIM",
+      "url": "https://www.uhk.cz/cs/fakulta-informatiky-a-managementu"
+    },
+    {
+      "kod": "FF",
+      "nazev": "Filozofická fakulta",
+      "typ": "fakulta",
+      "zkr_fak": "FF",
+      "url": "https://www.uhk.cz/cs/filozoficka-fakulta"
+    },
+    {
+      "kod": "PdF",
+      "nazev": "Pedagogická fakulta",
+      "typ": "fakulta",
+      "zkr_fak": "PdF",
+      "url": "https://www.uhk.cz/cs/pedagogicka-fakulta"
+    },
+    {
+      "kod": "PřF",
+      "nazev": "Přírodovědecká fakulta",
+      "typ": "fakulta",
+      "zkr_fak": "PřF",
+      "url": "https://www.uhk.cz/cs/prirodovedecka-fakulta"
+    },
+    {
+      "kod": "FZS",
+      "nazev": "Fakulta zdravotnických studií",
+      "typ": "fakulta",
+      "zkr_fak": "FZS",
+      "url": "https://www.uhk.cz/cs/fakulta-zdravotnickych-studii"
+    },
+    {
+      "kod": "KIT-FIM",
+      "nazev": "Katedra informačních technologií",
+      "typ": "katedra",
+      "zkr_fak": "FIM",
+      "parent_kod": "FIM",
+      "url": "https://www.uhk.cz/cs/fakulta-informatiky-a-managementu/katedra-informacnich-technologii"
+    },
+    {
+      "kod": "KIKM-FIM",
+      "nazev": "Katedra informatiky a kvantitativních metod",
+      "typ": "katedra",
+      "zkr_fak": "FIM",
+      "parent_kod": "FIM",
+      "url": "https://www.uhk.cz/cs/fakulta-informatiky-a-managementu/katedra-informatiky-a-kvantitativnich-metod"
+    },
+    {
+      "kod": "KM-FIM",
+      "nazev": "Katedra managementu",
+      "typ": "katedra",
+      "zkr_fak": "FIM",
+      "parent_kod": "FIM",
+      "url": "https://www.uhk.cz/cs/fakulta-informatiky-a-managementu/katedra-managementu"
+    }
+  ]
+}
