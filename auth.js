@@ -76,10 +76,12 @@
     if (!user) {
       node.textContent = "";
       node.hidden = true;
+      window.kbLayout?.updateSidebarUser?.(null);
       return;
     }
     node.textContent = user.email || "Přihlášen";
     node.hidden = false;
+    window.kbLayout?.updateSidebarUser?.(user);
   }
 
   function touchActivity() {

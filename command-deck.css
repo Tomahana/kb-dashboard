@@ -12,8 +12,7 @@
   --red: #ef4444;
   --text: #e2e8f0;
   --muted: #64748b;
-  --sidebar-w: 52px;
-  --sidebar-open: 224px;
+  --sidebar-w: 230px;
 
   /* Legacy tokens for module CSS */
   --shell-bg: var(--bg);
@@ -71,25 +70,17 @@ body.app-shell.command-deck {
   min-width: 0;
 }
 
-/* ── Collapsible sidebar ───────────────────────────────────── */
+/* ── Sidebar (fixed + accordion) ─────────────────────────────── */
 .command-deck .sidebar {
   width: var(--sidebar-w);
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  transition: width 0.22s ease;
-  overflow: hidden;
   flex-shrink: 0;
-  z-index: 10;
   padding: 0;
   height: 100vh;
-  position: relative;
-  top: auto;
-}
-
-.command-deck .sidebar.open {
-  width: var(--sidebar-open);
+  overflow: hidden;
 }
 
 .sb-logo {
@@ -110,51 +101,14 @@ body.app-shell.command-deck {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
 }
 
-.sb-logo-text {
-  white-space: nowrap;
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.command-deck .sidebar.open .sb-logo-text {
-  opacity: 1;
-}
-
 .sb-logo-text .t { font-size: 12px; font-weight: 600; color: var(--text); }
 .sb-logo-text .s { font-size: 10px; color: var(--muted); }
-
-.sidebarToggle {
-  position: absolute;
-  top: 15px;
-  left: calc(var(--sidebar-w) - 1px);
-  width: 20px;
-  height: 22px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-left: none;
-  border-radius: 0 5px 5px 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  font-size: 9px;
-  transition: left 0.22s ease;
-  z-index: 20;
-  padding: 0;
-}
-
-.command-deck .sidebar.open ~ .sidebarToggle,
-body.sidebar-open .sidebarToggle {
-  left: calc(var(--sidebar-open) - 1px);
-}
 
 .sb-nav {
   flex: 1;
@@ -166,69 +120,129 @@ body.sidebar-open .sidebarToggle {
   min-height: 0;
 }
 
-.sb-section {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 10px 15px 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.command-deck .sidebar.open .sb-section {
-  opacity: 1;
-}
-
-.command-deck .navItem.sb-item {
+/* Flat top-level item (Přehled) */
+.command-deck .navItem.sb-item-flat {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 14px;
+  padding: 8px 14px;
   cursor: pointer;
   border-radius: 6px;
-  margin: 1px 6px;
-  color: var(--muted);
-  transition: background 0.12s, color 0.12s;
-  white-space: nowrap;
-  overflow: hidden;
+  margin: 1px 8px;
+  color: var(--text);
+  transition: background 0.12s;
   text-decoration: none;
-  font-size: 12px;
-  font-weight: 500;
   border: none;
   box-shadow: none;
+  font-weight: 500;
 }
 
-.command-deck .navItem.sb-item:hover {
+.command-deck .navItem.sb-item-flat:hover { background: var(--surface2); }
+
+.command-deck .navItem.sb-item-flat.active {
+  background: rgba(79, 142, 247, 0.15);
+  color: var(--accent);
+}
+
+.command-deck .navItem.sb-item-flat .ic {
+  font-size: 15px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.command-deck .navItem.sb-item-flat .lb { font-size: 12px; }
+
+/* Accordion groups */
+.sb-group { margin: 2px 8px; }
+
+.sb-group-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 6px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.12s;
+  user-select: none;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+}
+
+.sb-group-head:hover { background: var(--surface2); }
+
+.sb-group-head .ic {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.sb-group-head .lb {
+  font-size: 12.5px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.sb-group-head .count {
+  font-size: 10px;
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.sb-group-head .chev {
+  font-size: 9px;
+  color: var(--muted);
+  transition: transform 0.18s;
+}
+
+.sb-group.open .chev { transform: rotate(90deg); }
+
+.sb-group-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.22s ease;
+}
+
+.sb-group.open .sb-group-body { max-height: 400px; }
+
+.command-deck .navItem.sb-sub {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px 7px 30px;
+  cursor: pointer;
+  border-radius: 6px;
+  color: var(--muted);
+  transition: background 0.12s, color 0.12s;
+  text-decoration: none;
+  border: none;
+  box-shadow: none;
+  font-weight: 400;
+}
+
+.command-deck .navItem.sb-sub:hover {
   background: var(--surface2);
   color: var(--text);
 }
 
-.command-deck .navItem.sb-item.active {
-  background: rgba(79, 142, 247, 0.15);
+.command-deck .navItem.sb-sub.active {
+  background: rgba(79, 142, 247, 0.12);
   color: var(--accent);
-  box-shadow: none;
 }
 
-.command-deck .navItem.sb-item .ic {
-  font-size: 15px;
-  flex-shrink: 0;
-  width: 20px;
+.command-deck .navItem.sb-sub .ic {
+  font-size: 13px;
+  width: 16px;
   text-align: center;
+  flex-shrink: 0;
 }
 
-.command-deck .navItem.sb-item .lb {
-  font-size: 12px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.command-deck .sidebar.open .navItem.sb-item .lb {
-  opacity: 1;
-}
+.command-deck .navItem.sb-sub .lb { font-size: 11.5px; }
 
 .sb-badge {
   margin-left: auto;
@@ -248,28 +262,48 @@ body.sidebar-open .sidebarToggle {
 .command-deck .navBadgeOrgan.sb-badge { background: var(--red); color: #fff; }
 .command-deck .navBadgeDeadline.sb-badge { background: var(--accent); color: #fff; }
 
-.sb-div {
-  height: 1px;
-  background: var(--border);
-  margin: 5px 12px;
-}
-
-.command-deck .sidebarFoot {
-  padding: 10px 14px;
+.sb-foot {
   border-top: 1px solid var(--border);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
 }
 
-.command-deck .sidebarFoot .appVersion {
-  font-size: 10px;
-  color: var(--muted);
-  margin: 0;
-  opacity: 0;
-  transition: opacity 0.15s;
+.sb-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+  color: var(--text);
 }
 
-.command-deck .sidebar.open .sidebarFoot .appVersion {
-  opacity: 1;
+.sb-foot-email {
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ── Topbar ────────────────────────────────────────────────── */
@@ -916,16 +950,6 @@ body.sidebar-open .sidebarToggle {
 @media (max-width: 900px) {
   .commandKpis { grid-template-columns: 1fr 1fr; }
   .modulesGrid { grid-template-columns: 1fr; }
-  .command-deck .sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    height: 100vh;
-    z-index: 100;
-  }
-  .command-deck .sidebar.open { width: var(--sidebar-open); }
-  .command-deck .appMain { margin-left: var(--sidebar-w); }
-  body.sidebar-open .command-deck .appMain { margin-left: var(--sidebar-open); }
 }
 
 @media (max-width: 600px) {

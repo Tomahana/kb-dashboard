@@ -25,6 +25,27 @@
 
   const DEFAULT_PAGE = "prehled";
 
+  const PAGE_GROUP = {
+    prehled: null,
+    emaily: "g-op",
+    "kb-items": "g-op",
+    terminy: "g-op",
+    podklady: "g-op",
+    "doc-intelligence": "g-op",
+    "outlook-emaily": "g-op",
+    temata: "g-op",
+    "interni-souteze": "g-str",
+    navraty: "g-str",
+    "pcr-vyzkum": "g-str",
+    casopisy: "g-str",
+    vystupy: "g-str",
+    osoby: "g-lide",
+    "rady-organy": "g-lide",
+    "eiz-tokeny": "g-lide",
+    "ai-poradce": "g-ai",
+    nastaveni: "g-ai"
+  };
+
   function el(id) {
     return document.getElementById(id);
   }
@@ -58,6 +79,8 @@
       if (active) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
     });
+
+    syncNavGroup(route.page, route.moduleSlug);
 
     let title = PAGES[route.page]?.title || "KB Dashboard";
     let subtitle = PAGES[route.page]?.subtitle || "";
@@ -131,6 +154,70 @@
     updateMissionHeader();
   }
 
+  function initialsFromEmail(email) {
+    const local = (email || "").split("@")[0] || "";
+    const parts = local.split(/[._-]+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
+    return local.slice(0, 2).toUpperCase() || "—";
+  }
+
+  function updateSidebarUser(user) {
+    const emailEl = el("sidebarUserEmail");
+    const avatarEl = el("sidebarAvatar");
+    if (!emailEl || !avatarEl) return;
+    if (!user?.email) {
+      emailEl.textContent = "Nepřihlášen";
+      avatarEl.textContent = "—";
+      return;
+    }
+    emailEl.textContent = user.email;
+    avatarEl.textContent = initialsFromEmail(user.email);
+  }
+
+  function setGroupOpen(groupId, open, persist = true) {
+    const group = groupId ? el(groupId) : null;
+    if (!group) return;
+    group.classList.toggle("open", open);
+    const head = group.querySelector(".sb-group-head");
+    if (head) head.setAttribute("aria-expanded", open ? "true" : "false");
+    if (persist) {
+      try { localStorage.setItem(`kb-nav-group-${groupId}`, open ? "open" : "closed"); } catch (_) {}
+    }
+  }
+
+  function syncNavGroup(page, moduleSlug) {
+    let groupId = PAGE_GROUP[page] || null;
+    if (page === "modul" && moduleSlug && window.kbModules?.getModule) {
+      const mod = window.kbModules.getModule(moduleSlug);
+      if (mod) {
+        const sector = window.kbModules.MODULE_SECTORS?.find((s) => s.slugs.includes(mod.slug));
+        const map = { operativa: "g-op", strategie: "g-str", lide: "g-lide", ai: "g-ai" };
+        groupId = map[sector?.id] || null;
+      }
+    }
+    if (groupId) setGroupOpen(groupId, true, false);
+  }
+
+  function bindAccordionGroups() {
+    document.querySelectorAll(".sb-group").forEach((group) => {
+      const groupId = group.id;
+      const head = group.querySelector(".sb-group-head");
+      if (!head) return;
+
+      try {
+        const saved = localStorage.getItem(`kb-nav-group-${groupId}`);
+        if (saved === "open") setGroupOpen(groupId, true, false);
+        else if (saved === "closed") setGroupOpen(groupId, false, false);
+      } catch (_) {}
+
+      head.addEventListener("click", () => {
+        const willOpen = !group.classList.contains("open");
+        setGroupOpen(groupId, willOpen);
+      });
+    });
+  }
+
   function setPill(node, state, html) {
     if (!node) return;
     node.className = "pill" + (state ? ` ${state}` : "");
@@ -140,6 +227,7 @@
   async function updateMissionHeader() {
     try {
       const session = await window.kbAuth?.getSession?.();
+      updateSidebarUser(session?.user || null);
       setPill(
         el("missionSupabase"),
         session ? "ok" : "warn",
@@ -165,30 +253,6 @@
       const now = new Date();
       dateEl.textContent = now.toISOString().slice(0, 10);
     }
-  }
-
-  function setSidebarOpen(open) {
-    const sidebar = el("sidebar");
-    const btn = el("sidebarToggle");
-    if (!sidebar || !btn) return;
-    sidebar.classList.toggle("open", open);
-    document.body.classList.toggle("sidebar-open", open);
-    btn.textContent = open ? "◀" : "▶";
-    btn.setAttribute("aria-expanded", open ? "true" : "false");
-    btn.setAttribute("aria-label", open ? "Sbalit navigaci" : "Rozbalit navigaci");
-    try { localStorage.setItem("kb-sidebar-open", open ? "true" : "false"); } catch (_) {}
-  }
-
-  function bindSidebarToggle() {
-    const btn = el("sidebarToggle");
-    if (!btn) return;
-    btn.addEventListener("click", () => {
-      const sidebar = el("sidebar");
-      setSidebarOpen(!sidebar?.classList.contains("open"));
-    });
-    try {
-      if (localStorage.getItem("kb-sidebar-open") === "true") setSidebarOpen(true);
-    } catch (_) {}
   }
 
   function bindNav() {
@@ -260,7 +324,7 @@
   function init() {
     loadAppVersion();
     bindNav();
-    bindSidebarToggle();
+    bindAccordionGroups();
     bindOverviewLinks();
     const route = resolveRoute(location.hash);
     setActivePage(
@@ -280,9 +344,10 @@
       if (window.kbPickers?.closeOpenMenu) window.kbPickers.closeOpenMenu();
     });
     document.addEventListener("kb:ui-ready", () => mountTopbarActions());
+    document.addEventListener("kb:auth-ready", (e) => updateSidebarUser(e.detail?.user));
   }
 
-  window.kbLayout = { setActivePage, updateBadges, updateMissionHeader, getPage, resolveRoute, mountTopbarActions };
+  window.kbLayout = { setActivePage, updateBadges, updateMissionHeader, getPage, resolveRoute, mountTopbarActions, updateSidebarUser };
 
   document.addEventListener("DOMContentLoaded", init);
 })();
