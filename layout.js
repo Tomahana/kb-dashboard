@@ -16,6 +16,7 @@
     "eiz-tokeny": { title: "EIZ tokeny", subtitle: "Transformační smlouvy, roční tokeny a publikace z APC" },
     casopisy: { title: "Databáze časopisů", subtitle: "JCR exporty, AIS pořadí v oborech, decily a nejlepší výsledky" },
     vystupy: { title: "Výstupy", subtitle: "Publikační výstupy Jimp, JSC, B a C — samostatné tabulky pro DKRVO, PPK a analýzy" },
+    "modul-dkrvo": { title: "DKRVO", subtitle: "Pracoviště, kódy, členové z webu a roční výkaz výzkumu" },
     "rady-organy": { title: "Rady a orgány", subtitle: "Vědecká rada, Správní rada, AS, MPK, Etická komise, Rada pro komercializaci — členové a AI kontrola změn" },
     "doc-intelligence": { title: "Dokumenty", subtitle: "AI analýza dokumentů — filtrování, priority, poznámky a ClickUp" },
     "outlook-emaily": { title: "Outlook emaily", subtitle: "AI analýza e-mailů z Outlooku — složky, priority, úkoly a termíny" },
@@ -39,6 +40,7 @@
     "pcr-vyzkum": "g-str",
     casopisy: "g-str",
     vystupy: "g-str",
+    "modul-dkrvo": "g-str",
     osoby: "g-lide",
     "rady-organy": "g-lide",
     "eiz-tokeny": "g-lide",
@@ -53,6 +55,7 @@
   function resolveRoute(hash) {
     const raw = (hash || "").replace(/^#\/?/, "").trim().toLowerCase();
     if (raw === "analyza") return { page: "temata", moduleSlug: null, topicsTab: "analysis" };
+    if (raw === "modul-dkrvo") return { page: "modul-dkrvo", moduleSlug: null };
     if (PAGES[raw]) return { page: raw, moduleSlug: null };
     if (/^interni-souteze(\/|$)/.test(raw)) return { page: "interni-souteze", moduleSlug: null };
     if (/^navraty(\/|$)/.test(raw)) return { page: "navraty", moduleSlug: null };

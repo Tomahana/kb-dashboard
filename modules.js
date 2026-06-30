@@ -158,9 +158,10 @@
     {
       slug: "modul-dkrvo",
       title: "DKRVO",
-      description: "Roční výkaz výzkumu, sběr dat a odeslání na MŠMT.",
-      status: "planned",
-      icon: "📋"
+      description: "Roční výkaz výzkumu — evidence pracovišť a kódů, členové z webu UHK, sběr dat a odeslání na MŠMT.",
+      status: "active",
+      icon: "📋",
+      stats: ["workplacesTotal", "workplacesWithMembers"]
     },
     {
       slug: "modul-vyrocni-zpravy",
@@ -324,6 +325,7 @@
     const journalCategories = window.kbJournalDb?.getCategories?.() || [];
     const vystupyItems = window.kbVystupy?.getVystupy?.() || [];
     const organList = window.kbRadyOrgany?.getOrgans?.() || [];
+    const workplaceList = window.kbDkrvo?.getWorkplaces?.() || [];
     const kbItems = window.kbItems?.getItems?.() || [];
     const diStats = window.kbDocIntelligence?.stats || {};
 
@@ -350,6 +352,8 @@
       vystupyJsc: vystupyItems.filter((v) => v.typ_vystupu === "JSC").length,
       organsTotal: organList.length,
       organsPendingAi: window.kbRadyOrgany?.pendingChecksCount?.() || 0,
+      workplacesTotal: workplaceList.length,
+      workplacesWithMembers: workplaceList.filter((w) => (w.members || []).length > 0).length,
       kbItemsTotal: kbItems.length,
       kbItemsOpen: window.kbItems?.getOpenCount?.() ?? kbItems.filter((i) => !["done", "archived", "closed"].includes((i.status || "").toLowerCase())).length,
       docIntelligenceTotal: diStats.total || 0,
@@ -381,6 +385,8 @@
       vystupyJsc: `${value} JSC`,
       organsTotal: `${value} orgánů`,
       organsPendingAi: `${value} AI ke kontrole`,
+      workplacesTotal: `${value} pracovišť`,
+      workplacesWithMembers: `${value} s členy`,
       kbItemsTotal: `${value} meeting notes`,
       kbItemsOpen: `${value} otevřených notes`,
       docIntelligenceTotal: `${value} dokumentů`,
@@ -392,7 +398,7 @@
   function tagClass(key, value) {
     const warnKeys = ["emailsNew", "emailsAi", "deadlinesOverdue", "organsPendingAi", "docIntelligenceNew", "kbItemsOpen"];
     const purpleKeys = ["competitionsTotal", "navratyCompetitionsTotal", "pcrTopicsTotal", "journalRecordsTotal", "journalCategoriesTotal"];
-    const greenKeys = ["personsTotal", "organsTotal", "eizContractsTotal"];
+    const greenKeys = ["personsTotal", "organsTotal", "workplacesTotal", "eizContractsTotal"];
     if (warnKeys.includes(key) && value > 0) return "ty";
     if (purpleKeys.includes(key)) return "tp";
     if (greenKeys.includes(key)) return "tg";
@@ -529,6 +535,7 @@
     document.addEventListener("kb:journal-db-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:vystupy-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:rady-organy-loaded", () => setTimeout(renderModulesGrid, 60));
+    document.addEventListener("kb:dkrvo-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:kb-items-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:doc-intelligence-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("input", () => setTimeout(renderModulesGrid, 120));

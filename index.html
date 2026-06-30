@@ -52,7 +52,7 @@
         <button type="button" class="sb-group-head" aria-expanded="false" aria-controls="g-str-body">
           <span class="ic" aria-hidden="true">🎯</span>
           <span class="lb">Strategie</span>
-          <span class="count">5</span>
+          <span class="count">6</span>
           <span class="chev" aria-hidden="true">▶</span>
         </button>
         <div class="sb-group-body" id="g-str-body">
@@ -61,6 +61,7 @@
           <a href="#pcr-vyzkum" class="navItem sb-sub" data-page="pcr-vyzkum"><span class="ic" aria-hidden="true">🛡️</span><span class="lb">Výzkumné směry PČR</span></a>
           <a href="#casopisy" class="navItem sb-sub" data-page="casopisy"><span class="ic" aria-hidden="true">📚</span><span class="lb">Databáze časopisů</span></a>
           <a href="#vystupy" class="navItem sb-sub" data-page="vystupy"><span class="ic" aria-hidden="true">📊</span><span class="lb">Výstupy</span></a>
+          <a href="#modul-dkrvo" class="navItem sb-sub" data-page="modul-dkrvo"><span class="ic" aria-hidden="true">📋</span><span class="lb">DKRVO</span></a>
         </div>
       </div>
 
@@ -383,6 +384,11 @@
       <div id="radyOrganyPageRoot"></div>
     </section>
 
+    <!-- DKRVO -->
+    <section id="page-modul-dkrvo" class="page">
+      <div id="dkrvoPageRoot"></div>
+    </section>
+
     <!-- DOCUMENT INTELLIGENCE -->
     <section id="page-doc-intelligence" class="page">
       <div id="docIntelligencePageRoot"></div>
@@ -447,6 +453,10 @@
       <section class="panel">
         <h2>Rady a orgány</h2>
         <p class="hint">Spusťte <code>supabase/rady-organy-schema.sql</code>. Edge funkce <code>uhk-page-fetch</code> pro stažení stránek uhk.cz.</p>
+      </section>
+      <section class="panel">
+        <h2>DKRVO — pracoviště</h2>
+        <p class="hint">Spusťte <code>supabase/pracoviste-schema.sql</code> (po <code>persons-schema.sql</code>), poté <code>security-rls.sql</code>. Edge funkce <code>uhk-page-fetch</code> pro stažení stránek uhk.cz a AI extrakci členů pracoviště.</p>
       </section>
       <section class="panel">
         <h2>KB Notion meeting notes</h2>
@@ -840,6 +850,104 @@
     </form>
   </dialog>
 
+  <dialog id="dkrvoWorkplaceDialog">
+    <form id="dkrvoWorkplaceForm" method="dialog">
+      <div class="dialogHead">
+        <div>
+          <h2 id="dkrvoWorkplaceDialogTitle">Pracoviště</h2>
+          <p class="hint">Kód pracoviště pro DKRVO / IS VaVaI a odkaz na web.</p>
+        </div>
+        <button class="iconButton" value="cancel">×</button>
+      </div>
+      <input type="hidden" id="dkrvoWorkplaceEditId" />
+      <div class="grid2">
+        <label>Kód DKRVO *
+          <input id="dkrvoWorkplaceKod" type="text" required placeholder="FIM, KIT-FIM, …" />
+        </label>
+        <label>Typ
+          <select id="dkrvoWorkplaceTyp">
+            <option value="fakulta">Fakulta</option>
+            <option value="katedra" selected>Katedra</option>
+            <option value="ustav">Ústav</option>
+            <option value="jine">Jiné</option>
+          </select>
+        </label>
+      </div>
+      <label>Název *
+        <input id="dkrvoWorkplaceNazev" type="text" required placeholder="Katedra informačních technologií" />
+      </label>
+      <div class="grid2">
+        <label>Zkratka fakulty
+          <input id="dkrvoWorkplaceZkrFak" type="text" placeholder="FIM, FF, …" />
+        </label>
+        <label>Pořadí
+          <input id="dkrvoWorkplacePoradi" type="number" min="0" value="0" />
+        </label>
+      </div>
+      <label>Nadřazené pracoviště
+        <select id="dkrvoWorkplaceParent"></select>
+      </label>
+      <label>URL stránky
+        <input id="dkrvoWorkplaceUrl" type="url" placeholder="https://www.uhk.cz/..." />
+      </label>
+      <div class="dialogActions">
+        <button type="button" id="dkrvoWorkplaceDeleteBtn" class="button danger" hidden>Smazat</button>
+        <button value="cancel" class="button secondary">Zavřít</button>
+        <button type="submit" class="button accent">Uložit</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dkrvoMemberDialog">
+    <form id="dkrvoMemberForm" method="dialog">
+      <div class="dialogHead">
+        <div>
+          <h2 id="dkrvoMemberDialogTitle">Člen pracoviště</h2>
+          <p class="hint">Evidence člena s poznámkou a volitelným propojením na modul Osoby.</p>
+        </div>
+        <button class="iconButton" value="cancel">×</button>
+      </div>
+      <input type="hidden" id="dkrvoMemberEditId" />
+      <input type="hidden" id="dkrvoMemberWorkplaceId" />
+      <div class="grid2">
+        <label>Tituly
+          <input id="dkrvoMemberTituly" type="text" placeholder="doc., Ing., …" />
+        </label>
+        <label>Jméno a příjmení *
+          <input id="dkrvoMemberJmeno" type="text" required placeholder="Jan Novák" />
+        </label>
+      </div>
+      <label>Funkce
+        <input id="dkrvoMemberFunkce" type="text" placeholder="vedoucí katedry, akademický pracovník, …" />
+      </label>
+      <label>E-mail
+        <input id="dkrvoMemberEmail" type="email" placeholder="jan.novak@uhk.cz" />
+      </label>
+      <label>Osoba z evidence (volitelné)
+        <div class="personSelectRow">
+          <select id="dkrvoMemberPersonId"></select>
+          <button type="button" id="dkrvoMemberNewPersonBtn" class="button small secondary">+ Osoba</button>
+        </div>
+      </label>
+      <label>Poznámka
+        <textarea id="dkrvoMemberPoznamka" rows="4" placeholder="Vaše poznámky k této osobě…"></textarea>
+      </label>
+      <div class="grid2">
+        <label>Pořadí
+          <input id="dkrvoMemberPoradi" type="number" min="0" value="1" />
+        </label>
+        <label class="checkboxLabel">
+          <input id="dkrvoMemberAktivni" type="checkbox" checked /> Aktivní člen
+        </label>
+      </div>
+      <div class="dialogActions">
+        <button type="button" id="dkrvoMemberDeleteBtn" class="button danger" hidden>Smazat</button>
+        <button value="cancel" class="button secondary">Zavřít</button>
+        <button type="submit" class="button accent">Uložit</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="aiDialog">
     <form method="dialog">
       <div class="dialogHeader">
@@ -1007,6 +1115,8 @@
   <script src="vystupy.js?v=3.134"></script>
   <script src="supabase-rady-organy.js?v=3.134"></script>
   <script src="rady-organy.js?v=3.134"></script>
+  <script src="supabase-pracoviste.js?v=3.134"></script>
+  <script src="dkrvo.js?v=3.134"></script>
   <script src="supabase-doc-intelligence.js?v=3.134"></script>
   <script src="doc-intelligence.js?v=3.134"></script>
   <script src="supabase-outlook-emails.js?v=3.134"></script>

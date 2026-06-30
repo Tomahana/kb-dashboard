@@ -44,7 +44,8 @@
     { module: "vystupy", table: "kb_vystupy_c", role: "autor" },
     { module: "emaily", table: "kb_records", role: "odesilatel" },
     { module: "emaily", table: "kb_records", role: "odpovedna_osoba" },
-    { module: "rady-organy", table: "kb_organ_members", role: "clen" }
+    { module: "rady-organy", table: "kb_organ_members", role: "clen" },
+    { module: "modul-dkrvo", table: "kb_workplace_members", role: "clen" }
   ];
 
   function n(s) {
