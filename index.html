@@ -21,55 +21,91 @@
       </div>
     </div>
     <div class="sb-nav sidebarNav">
-      <a href="#prehled" class="navItem sb-item" data-page="prehled"><span class="ic" aria-hidden="true">⬡</span><span class="lb">Přehled</span></a>
-      <div class="sb-div"></div>
-      <div class="sb-section">Operativa</div>
-      <a href="#emaily" class="navItem sb-item" data-page="emaily">
-        <span class="ic" aria-hidden="true">✉️</span><span class="lb">E-maily</span>
-        <span id="navBadgeNew" class="sb-badge w navBadge" hidden></span>
-        <span id="navBadgeAi" class="sb-badge navBadge navBadgeAi" hidden></span>
-      </a>
-      <a href="#kb-items" class="navItem sb-item" data-page="kb-items"><span class="ic" aria-hidden="true">🧠</span><span class="lb">Meeting notes</span></a>
-      <a href="#terminy" class="navItem sb-item" data-page="terminy">
-        <span class="ic" aria-hidden="true">📅</span><span class="lb">Termíny</span>
-        <span id="navBadgeDeadlines" class="sb-badge navBadge navBadgeDeadline" hidden></span>
-      </a>
-      <a href="#podklady" class="navItem sb-item" data-page="podklady"><span class="ic" aria-hidden="true">📋</span><span class="lb">Podklady k jednáním</span></a>
-      <a href="#doc-intelligence" class="navItem sb-item" data-page="doc-intelligence"><span class="ic" aria-hidden="true">📄</span><span class="lb">Dokumenty</span></a>
-      <a href="#outlook-emaily" class="navItem sb-item" data-page="outlook-emaily"><span class="ic" aria-hidden="true">📧</span><span class="lb">Outlook emaily</span></a>
-      <a href="#temata" class="navItem sb-item" data-page="temata"><span class="ic" aria-hidden="true">🏷️</span><span class="lb">Témata</span></a>
-      <div class="sb-div"></div>
-      <div class="sb-section">Strategie</div>
-      <a href="#interni-souteze" class="navItem sb-item" data-page="interni-souteze"><span class="ic" aria-hidden="true">🏆</span><span class="lb">Interní soutěže</span></a>
-      <a href="#navraty" class="navItem sb-item" data-page="navraty"><span class="ic" aria-hidden="true">🔄</span><span class="lb">OP JAK Návraty</span></a>
-      <a href="#pcr-vyzkum" class="navItem sb-item" data-page="pcr-vyzkum"><span class="ic" aria-hidden="true">🛡️</span><span class="lb">Výzkumné směry PČR</span></a>
-      <a href="#casopisy" class="navItem sb-item" data-page="casopisy"><span class="ic" aria-hidden="true">📚</span><span class="lb">Databáze časopisů</span></a>
-      <a href="#vystupy" class="navItem sb-item" data-page="vystupy"><span class="ic" aria-hidden="true">📊</span><span class="lb">Výstupy</span></a>
-      <div class="sb-div"></div>
-      <div class="sb-section">Lidé a orgány</div>
-      <a href="#osoby" class="navItem sb-item" data-page="osoby"><span class="ic" aria-hidden="true">👤</span><span class="lb">Osoby</span></a>
-      <a href="#rady-organy" class="navItem sb-item" data-page="rady-organy">
-        <span class="ic" aria-hidden="true">🏛️</span><span class="lb">Rady a orgány</span>
-        <span id="navBadgeOrgans" class="sb-badge navBadge navBadgeOrgan" hidden></span>
-      </a>
-      <a href="#eiz-tokeny" class="navItem sb-item" data-page="eiz-tokeny"><span class="ic" aria-hidden="true">🔑</span><span class="lb">EIZ tokeny</span></a>
-      <div class="sb-div"></div>
-      <div class="sb-section">AI a data</div>
-      <a href="#ai-poradce" class="navItem sb-item" data-page="ai-poradce"><span class="ic" aria-hidden="true">✨</span><span class="lb">AI poradce</span></a>
-      <a href="#nastaveni" class="navItem sb-item" data-page="nastaveni"><span class="ic" aria-hidden="true">⚙️</span><span class="lb">Nastavení</span></a>
+      <a href="#prehled" class="navItem sb-item-flat" data-page="prehled"><span class="ic" aria-hidden="true">⬡</span><span class="lb">Přehled</span></a>
+
+      <div class="sb-group open" id="g-op" data-group="operativa">
+        <button type="button" class="sb-group-head" aria-expanded="true" aria-controls="g-op-body">
+          <span class="ic" aria-hidden="true">📂</span>
+          <span class="lb">Operativa</span>
+          <span class="count">7</span>
+          <span class="chev" aria-hidden="true">▶</span>
+        </button>
+        <div class="sb-group-body" id="g-op-body">
+          <a href="#emaily" class="navItem sb-sub" data-page="emaily">
+            <span class="ic" aria-hidden="true">✉️</span><span class="lb">E-maily</span>
+            <span id="navBadgeNew" class="sb-badge w navBadge" hidden></span>
+            <span id="navBadgeAi" class="sb-badge navBadge navBadgeAi" hidden></span>
+          </a>
+          <a href="#kb-items" class="navItem sb-sub" data-page="kb-items"><span class="ic" aria-hidden="true">🧠</span><span class="lb">Meeting notes</span></a>
+          <a href="#terminy" class="navItem sb-sub" data-page="terminy">
+            <span class="ic" aria-hidden="true">📅</span><span class="lb">Termíny</span>
+            <span id="navBadgeDeadlines" class="sb-badge navBadge navBadgeDeadline" hidden></span>
+          </a>
+          <a href="#podklady" class="navItem sb-sub" data-page="podklady"><span class="ic" aria-hidden="true">📋</span><span class="lb">Podklady k jednáním</span></a>
+          <a href="#doc-intelligence" class="navItem sb-sub" data-page="doc-intelligence"><span class="ic" aria-hidden="true">📄</span><span class="lb">Dokumenty</span></a>
+          <a href="#outlook-emaily" class="navItem sb-sub" data-page="outlook-emaily"><span class="ic" aria-hidden="true">📧</span><span class="lb">Outlook emaily</span></a>
+          <a href="#temata" class="navItem sb-sub" data-page="temata"><span class="ic" aria-hidden="true">🏷️</span><span class="lb">Témata</span></a>
+        </div>
+      </div>
+
+      <div class="sb-group" id="g-str" data-group="strategie">
+        <button type="button" class="sb-group-head" aria-expanded="false" aria-controls="g-str-body">
+          <span class="ic" aria-hidden="true">🎯</span>
+          <span class="lb">Strategie</span>
+          <span class="count">5</span>
+          <span class="chev" aria-hidden="true">▶</span>
+        </button>
+        <div class="sb-group-body" id="g-str-body">
+          <a href="#interni-souteze" class="navItem sb-sub" data-page="interni-souteze"><span class="ic" aria-hidden="true">🏆</span><span class="lb">Interní soutěže</span></a>
+          <a href="#navraty" class="navItem sb-sub" data-page="navraty"><span class="ic" aria-hidden="true">🔄</span><span class="lb">OP JAK Návraty</span></a>
+          <a href="#pcr-vyzkum" class="navItem sb-sub" data-page="pcr-vyzkum"><span class="ic" aria-hidden="true">🛡️</span><span class="lb">Výzkumné směry PČR</span></a>
+          <a href="#casopisy" class="navItem sb-sub" data-page="casopisy"><span class="ic" aria-hidden="true">📚</span><span class="lb">Databáze časopisů</span></a>
+          <a href="#vystupy" class="navItem sb-sub" data-page="vystupy"><span class="ic" aria-hidden="true">📊</span><span class="lb">Výstupy</span></a>
+        </div>
+      </div>
+
+      <div class="sb-group" id="g-lide" data-group="lide">
+        <button type="button" class="sb-group-head" aria-expanded="false" aria-controls="g-lide-body">
+          <span class="ic" aria-hidden="true">👥</span>
+          <span class="lb">Lidé a orgány</span>
+          <span class="count">3</span>
+          <span class="chev" aria-hidden="true">▶</span>
+        </button>
+        <div class="sb-group-body" id="g-lide-body">
+          <a href="#osoby" class="navItem sb-sub" data-page="osoby"><span class="ic" aria-hidden="true">👤</span><span class="lb">Osoby</span></a>
+          <a href="#rady-organy" class="navItem sb-sub" data-page="rady-organy">
+            <span class="ic" aria-hidden="true">🏛️</span><span class="lb">Rady a orgány</span>
+            <span id="navBadgeOrgans" class="sb-badge navBadge navBadgeOrgan" hidden></span>
+          </a>
+          <a href="#eiz-tokeny" class="navItem sb-sub" data-page="eiz-tokeny"><span class="ic" aria-hidden="true">🔑</span><span class="lb">EIZ tokeny</span></a>
+        </div>
+      </div>
+
+      <div class="sb-group" id="g-ai" data-group="ai">
+        <button type="button" class="sb-group-head" aria-expanded="false" aria-controls="g-ai-body">
+          <span class="ic" aria-hidden="true">✨</span>
+          <span class="lb">AI a data</span>
+          <span class="count">2</span>
+          <span class="chev" aria-hidden="true">▶</span>
+        </button>
+        <div class="sb-group-body" id="g-ai-body">
+          <a href="#ai-poradce" class="navItem sb-sub" data-page="ai-poradce"><span class="ic" aria-hidden="true">✨</span><span class="lb">AI poradce</span></a>
+          <a href="#nastaveni" class="navItem sb-sub" data-page="nastaveni"><span class="ic" aria-hidden="true">⚙️</span><span class="lb">Nastavení</span></a>
+        </div>
+      </div>
     </div>
-    <div class="sidebarFoot">
-      <p class="appVersion" id="appVersion">Verze 3.133</p>
+    <div class="sb-foot sidebarFoot">
+      <div class="sb-avatar" id="sidebarAvatar" aria-hidden="true">—</div>
+      <div class="sb-foot-email" id="sidebarUserEmail">Nepřihlášen</div>
+      <span class="appVersion visuallyHidden" id="appVersion" aria-hidden="true">Verze 3.133</span>
     </div>
   </nav>
-
-  <button type="button" id="sidebarToggle" class="sidebarToggle" aria-label="Rozbalit navigaci" aria-expanded="false">▶</button>
 
   <div class="appMain" id="main">
     <header class="topbar">
       <div class="pageHead">
         <h1 id="pageTitle" class="tb-title">Command Deck</h1>
-        <p id="pageSubtitle" class="tb-sub"><span id="pageSubtitleText">Operativní přehled</span><span id="pageSubtitleVer" class="tb-sub-ver"> · <span id="topbarVersion" aria-label="Verze aplikace">Verze 3.132</span></span></p>
+        <p id="pageSubtitle" class="tb-sub"><span id="pageSubtitleText">Operativní přehled</span><span id="pageSubtitleVer" class="tb-sub-ver"> · <span id="topbarVersion" aria-label="Verze aplikace">Verze 3.133</span></span></p>
       </div>
       <div class="tb-space"></div>
       <div class="topbarStatus" aria-label="Stav systému">
