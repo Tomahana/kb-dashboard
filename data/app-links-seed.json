@@ -1,0 +1,130 @@
+{
+  "kategorie": [
+    { "id": "iris", "nazev": "IRIS", "poradi": 1 },
+    { "id": "vyzkum", "nazev": "Výzkum a evidence", "poradi": 2 },
+    { "id": "uhk", "nazev": "UHK", "poradi": 3 },
+    { "id": "nastroje", "nazev": "Nástroje a integrace", "poradi": 4 }
+  ],
+  "odkazy": [
+    {
+      "id": "iris-proverky",
+      "nazev": "IRIS prověrky",
+      "url": "http://localhost:3000/",
+      "kategorie": "iris",
+      "popis": "Prověrky spoluprací a souvisejících agend",
+      "ikona": "🔍",
+      "poradi": 1,
+      "zakladni": true
+    },
+    {
+      "id": "iris-aplikace",
+      "nazev": "IRIS aplikace",
+      "url": "https://iris-uhk.vercel.app/admin",
+      "kategorie": "iris",
+      "popis": "Administrace a správa systému IRIS",
+      "ikona": "🛡️",
+      "poradi": 2,
+      "zakladni": true
+    },
+    {
+      "id": "is-vavai",
+      "nazev": "IS VaVaI",
+      "url": "https://www.isvavai.cz/",
+      "kategorie": "vyzkum",
+      "popis": "Informační systém výzkumu, vývoje a inovací — projekty, výstupy, DKRVO",
+      "ikona": "📊",
+      "poradi": 1,
+      "zakladni": true
+    },
+    {
+      "id": "rvvi",
+      "nazev": "Registr výzkumných organizací",
+      "url": "https://www.rvvi.cz/",
+      "kategorie": "vyzkum",
+      "popis": "Evidence výzkumných organizací a jejich údajů",
+      "ikona": "🏛️",
+      "poradi": 2,
+      "zakladni": true
+    },
+    {
+      "id": "sfgp",
+      "nazev": "SFGP",
+      "url": "https://www.sfgp.cz/",
+      "kategorie": "vyzkum",
+      "popis": "Státní fond podpory výzkumu — grantové programy a výzvy",
+      "ikona": "💰",
+      "poradi": 3,
+      "zakladni": true
+    },
+    {
+      "id": "msmt-vyzkum",
+      "nazev": "MŠMT — Výzkum a vývoj",
+      "url": "https://www.msmt.cz/vyzkum-a-vyvoj",
+      "kategorie": "vyzkum",
+      "popis": "Portál ministerstva — legislativa, výzvy a informace o výzkumu",
+      "ikona": "📋",
+      "poradi": 4,
+      "zakladni": false
+    },
+    {
+      "id": "uhk-vava",
+      "nazev": "UHK — Věda a výzkum",
+      "url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum",
+      "kategorie": "uhk",
+      "popis": "Celouniverzitní sekce vědy a výzkumu na webu UHK",
+      "ikona": "🎓",
+      "poradi": 1,
+      "zakladni": true
+    },
+    {
+      "id": "iga-epz",
+      "nazev": "IGA EPZ",
+      "url": "https://iga.uhk.cz/simplifyworks/epz/projects",
+      "kategorie": "uhk",
+      "popis": "Evidence projektů interních grantových agentur UHK",
+      "ikona": "📁",
+      "poradi": 2,
+      "zakladni": true
+    },
+    {
+      "id": "uhk-interni-souteze",
+      "nazev": "UHK — Interní soutěže",
+      "url": "https://www.uhk.cz/cs/univerzita-hradec-kralove/veda-a-vyzkum/programy-projekty-a-souteze/interni-celouniverzitni-projekty",
+      "kategorie": "uhk",
+      "popis": "Přehled interních celouniverzitních projektů a soutěží",
+      "ikona": "🏆",
+      "poradi": 3,
+      "zakladni": false
+    },
+    {
+      "id": "clickup",
+      "nazev": "ClickUp",
+      "url": "https://app.clickup.com/",
+      "kategorie": "nastroje",
+      "popis": "Správa úkolů a projektů — export z modulů KB Dashboardu",
+      "ikona": "✅",
+      "poradi": 1,
+      "zakladni": false
+    },
+    {
+      "id": "notion",
+      "nazev": "Notion",
+      "url": "https://www.notion.so/",
+      "kategorie": "nastroje",
+      "popis": "Meeting notes a znalostní báze — propojení s KB Dashboardem",
+      "ikona": "📝",
+      "poradi": 2,
+      "zakladni": false
+    },
+    {
+      "id": "ms-todo",
+      "nazev": "Microsoft To Do",
+      "url": "https://to-do.office.com/tasks/inbox",
+      "kategorie": "nastroje",
+      "popis": "Osobní úkoly — export z e-mailů a dokumentů",
+      "ikona": "☑️",
+      "poradi": 3,
+      "zakladni": false
+    }
+  ]
+}

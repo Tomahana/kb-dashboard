@@ -20,6 +20,7 @@
     "rady-organy": { title: "Rady a orgány", subtitle: "Vědecká rada, Správní rada, AS, MPK, Etická komise, Rada pro komercializaci — členové a AI kontrola změn" },
     "doc-intelligence": { title: "Dokumenty", subtitle: "AI analýza dokumentů — filtrování, priority, poznámky a ClickUp" },
     "outlook-emaily": { title: "Outlook emaily", subtitle: "AI analýza e-mailů z Outlooku — složky, priority, úkoly a termíny" },
+    "odkazy-aplikaci": { title: "Odkazy na aplikace", subtitle: "IRIS, IS VaVaI, systémy UHK a další nezbytné nástroje" },
     nastaveni: { title: "Nastavení", subtitle: "Supabase, AI, import a export" },
     modul: { title: "Modul", subtitle: "Oblast v přípravě" }
   };
@@ -34,6 +35,7 @@
     podklady: "g-op",
     "doc-intelligence": "g-op",
     "outlook-emaily": "g-op",
+    "odkazy-aplikaci": "g-op",
     temata: "g-op",
     "interni-souteze": "g-str",
     navraty: "g-str",
