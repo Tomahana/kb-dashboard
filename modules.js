@@ -5,7 +5,7 @@
     {
       id: "operativa",
       title: "Operativa",
-      slugs: ["emaily", "kb-items", "terminy", "doc-intelligence", "temata"]
+      slugs: ["emaily", "kb-items", "terminy", "doc-intelligence", "temata", "odkazy-aplikaci"]
     },
     {
       id: "strategie",
@@ -60,6 +60,14 @@
       status: "active",
       icon: "🏷️",
       stats: ["emailsRisks"]
+    },
+    {
+      slug: "odkazy-aplikaci",
+      title: "Odkazy na aplikace",
+      description: "Rychlý přístup k IRIS, IS VaVaI, systémům UHK a dalším nezbytným nástrojům OVV.",
+      status: "active",
+      icon: "🔗",
+      stats: []
     },
     {
       slug: "modul-ppk",
