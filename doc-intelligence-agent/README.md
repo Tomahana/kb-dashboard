@@ -18,19 +18,27 @@ cp .env.example .env       # doplňte API klíče
 python doc_agent.py
 ```
 
+Na Windows bez vyskakování okna terminálu (doporučeno pro plánovač úloh):
+
+```bat
+wscript.exe run_hidden.vbs
+```
+
 ## Automatizace (Windows)
 
-Spusťte jednou jako administrátor:
+Spusťte jednou jako administrátor — agent poběží **na pozadí** (žádné okno terminálu přes ostatní aplikace):
 
 ```bat
 install_scheduler.bat
 ```
 
+Pokud už máte starší úlohu s `python.exe`, přeinstalujte ji stejným příkazem (`/F` přepíše nastavení).
+
 ## Cowork / ruční spuštění
 
 ```bash
 cd doc-intelligence-agent
-venv/Scripts/python.exe doc_agent.py
+wscript.exe run_hidden.vbs
 ```
 
 Logy: `logs/agent.log`
