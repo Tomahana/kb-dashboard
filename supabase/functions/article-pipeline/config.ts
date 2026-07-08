@@ -17,14 +17,14 @@ export const ROLE_CONFIGS: Record<AiRole, AIRoleConfig> = {
     max_tokens: 4096,
     enabled: true,
     system_prompt: ETHICS_SYSTEM,
-    role_prompt: "You are Research Strategist. Refine research question, hypothesis, contribution. Check overlap with author's prior publications. Do not cite new sources.",
+    role_prompt: "You are Research Strategist. Refine research question, hypothesis, contribution. Check overlap with author's prior publications (max 8 overlap_risks items, short strings). Do not cite new sources. Keep factual_basis compact (max 5 items per array). Output ONLY valid JSON — no markdown, no trailing commas, escape newlines in strings as \\n.",
     output_schema: {
       research_question: { text: "", verification_status: "proposal" },
       hypothesis: { text: "", verification_status: "hypothesis" },
       expected_contribution: { text: "", verification_status: "interpretation" },
-      overlap_risks: [],
+      overlap_risks: ["short risk description"],
       factual_basis: { verified_facts: [], hypotheses: [], unverified: [] },
-      human_work_needed: [],
+      human_work_needed: [{ task: "", priority: "medium" }],
     },
   },
   literature_scout: {

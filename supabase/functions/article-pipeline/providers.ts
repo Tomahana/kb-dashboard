@@ -6,13 +6,77 @@ export type LlmResult = {
   tokens_out?: number;
 };
 
-function extractJson(text: string): string {
+function stripCodeFences(text: string): string {
   const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) return fenced[1].trim();
+  return trimmed;
+}
+
+function extractJson(text: string): string {
+  const trimmed = stripCodeFences(text);
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) return trimmed;
   const start = trimmed.indexOf("{");
   const end = trimmed.lastIndexOf("}");
   if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
   throw new Error("AI odpověď neobsahuje JSON.");
+}
+
+/** Opravy běžných chyb v LLM JSON (trailing commas, smart quotes, řídicí znaky). */
+export function repairJson(text: string): string {
+  let s = extractJson(text);
+  s = s.replace(/^\uFEFF/, "");
+  s = s.replace(/[\u201c\u201d\u201e\u201f]/g, '"');
+  s = s.replace(/[\u2018\u2019]/g, "'");
+  // Trailing commas před ] nebo }
+  s = s.replace(/,\s*([}\]])/g, "$1");
+  return s.trim();
+}
+
+/** Pokus o uzavření useknutého JSON (např. při dosažení max_tokens). */
+export function salvageTruncatedJson(text: string): string | null {
+  let s = repairJson(text);
+  const stack: string[] = [];
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inString) {
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (c === "\\") {
+        escape = true;
+        continue;
+      }
+      if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      continue;
+    }
+    if (c === "{") stack.push("}");
+    else if (c === "[") stack.push("]");
+    else if ((c === "}" || c === "]") && stack.length && stack[stack.length - 1] === c) {
+      stack.pop();
+    }
+  }
+
+  if (!stack.length) return null;
+
+  // Odstranit nedokončený prvek na konci pole/objektu
+  s = s.replace(/,\s*"[^"\\]*(?:\\.[^"\\]*)*"\s*:\s*"[^"\\]*(?:\\.[^"\\]*)*$/s, "");
+  s = s.replace(/,\s*"[^"\\]*(?:\\.[^"\\]*)*"\s*:\s*[^,}\]]*$/s, "");
+  s = s.replace(/,\s*"[^"\\]*(?:\\.[^"\\]*)*"?\s*$/s, "");
+  s = s.replace(/,\s*\{[^}]*$/s, "");
+  s = s.replace(/,\s*\[[^\]]*$/s, "");
+  s = s.replace(/,\s*$/s, "");
+
+  while (stack.length) s += stack.pop();
+  return s;
 }
 
 export async function callLlm(
@@ -111,13 +175,34 @@ export async function callLlm(
   throw new Error(`Nepodporovaný provider: ${provider}`);
 }
 
-export function parseJsonOutput(text: string): Record<string, unknown> {
-  const raw = extractJson(text);
-  const parsed = JSON.parse(raw);
+function assertJsonObject(parsed: unknown): Record<string, unknown> {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("JSON musí být objekt.");
   }
   return parsed as Record<string, unknown>;
+}
+
+export function parseJsonOutput(text: string): Record<string, unknown> {
+  const attempts = [
+    () => JSON.parse(extractJson(text)),
+    () => JSON.parse(repairJson(text)),
+    () => {
+      const salvaged = salvageTruncatedJson(text);
+      if (!salvaged) throw new Error("Nelze opravit useknutý JSON.");
+      return JSON.parse(salvaged);
+    },
+  ];
+
+  let lastErr: Error | null = null;
+  for (const attempt of attempts) {
+    try {
+      return assertJsonObject(attempt());
+    } catch (err) {
+      lastErr = err as Error;
+    }
+  }
+
+  throw new Error(`Neplatný JSON z AI: ${lastErr?.message || "parse error"}`);
 }
 
 export function buildMarkdownFromSections(sections: Record<string, string>, title: string): string {

@@ -64,13 +64,35 @@ async function loadContext(
   };
 }
 
+function publicationsForRole(role: AiRole, ctx: ProjectContext): Record<string, unknown>[] {
+  const all = ctx.publications || [];
+  if (role !== "research_strategist" && role !== "integrity_reviewer") {
+    return all.slice(0, 40);
+  }
+  const relatedIds = new Set(
+    ((ctx.topic?.related_publication_ids as string[]) || []).filter(Boolean),
+  );
+  const related = relatedIds.size
+    ? all.filter((p) => relatedIds.has(String(p.id)))
+    : all.slice(0, 12);
+  return related.map((p) => ({
+    id: p.id,
+    title: p.title,
+    year: p.year,
+    journal_or_publisher: p.journal_or_publisher,
+    doi: p.doi,
+    main_findings: typeof p.main_findings === "string" ? String(p.main_findings).slice(0, 400) : p.main_findings,
+    methodology: typeof p.methodology === "string" ? String(p.methodology).slice(0, 300) : p.methodology,
+  }));
+}
+
 function buildUserPrompt(role: AiRole, ctx: ProjectContext, priorOutputs: Record<string, unknown>): string {
   const payload = {
     role,
     project: ctx.project,
     topic: ctx.topic,
     target_journal: ctx.journal,
-    author_publications: ctx.publications,
+    author_publications: publicationsForRole(role, ctx),
     verified_literature: (ctx.literature || []).filter((l) => l.verified),
     unverified_literature: (ctx.literature || []).filter((l) => !l.verified),
     prior_ai_outputs: priorOutputs,
@@ -260,7 +282,14 @@ export async function runSingleStep(
 
   try {
     const llm = await callLlm(cfg.provider, apiKey, cfg.model, cfg.system_prompt, userPrompt, cfg.temperature, cfg.max_tokens);
-    const parsed = parseJsonOutput(llm.text);
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = parseJsonOutput(llm.text);
+    } catch (parseErr) {
+      const repairPrompt = `${userPrompt}\n\nPŘEDCHOZÍ ODPOVĚĎ NEBYLA VALIDNÍ JSON (${(parseErr as Error).message}). Vrať POUZE opravený kompaktní JSON objekt podle schématu — bez markdown, bez trailing čárek.`;
+      const retry = await callLlm(cfg.provider, apiKey, cfg.model, cfg.system_prompt, repairPrompt, 0, cfg.max_tokens);
+      parsed = parseJsonOutput(retry.text || llm.text);
+    }
     await applyRoleResult(supabase, role, ctx, parsed, cfg.model);
     if (runId && log) {
       await appendLog(supabase, runId, log, {
