@@ -387,6 +387,7 @@
     "eiz-tokeny": buildEizChunks,
     casopisy: buildJournalChunks,
     vystupy: buildVystupyChunks,
+    "article-factory": buildArticleFactoryChunks,
     "rady-organy": buildOrganChunks
   };
 

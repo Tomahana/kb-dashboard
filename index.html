@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=3.137" />
-  <link rel="stylesheet" href="command-deck.css?v=3.137" />
+  <link rel="stylesheet" href="styles.css?v=3.139" />
+  <link rel="stylesheet" href="command-deck.css?v=3.139" />
 </head>
 <body class="app-shell command-deck">
   <nav id="sidebar" class="sidebar sectorNav" aria-label="Hlavní navigace">
@@ -415,7 +415,7 @@
       <section class="panel">
         <h2>Migrace z Microsoft Lists</h2>
         <p class="hint">Pokud máte export ze seznamu (ZIP/CSV z <code>vyzkum_*.zip</code>), nejdříve v Supabase SQL Editoru spusťte <code>supabase/kb-records-schema.sql</code>, poté <code>supabase/security-rls.sql</code>.</p>
-        <p class="hint">Import dat z počítače: <code>SUPABASE_SERVICE_ROLE_KEY=&lt;service_role&gt; node scripts/import-list-export.mjs cesta/k/exportu.zip</code> (Service Role klíč: Supabase → Settings → API). V aplikaci pak stačí přihlášení — data se načtou automaticky.</p>
+        <p class="hint">Import exportu z terminálu (volitelné, jednorázově): <code>SUPABASE_SERVICE_ROLE_KEY=&lt;service_role&gt; node scripts/import-list-export.mjs cesta/k/exportu.zip</code>. Pro běžný provoz z lokálních souborů terminál nepotřebujete — viz <strong>Zachytávání znalostí</strong> níže.</p>
       </section>
       <section class="panel">
         <h2>Data a připojení</h2>
@@ -437,7 +437,8 @@
       <section class="panel">
         <h2>Zachytávání znalostí</h2>
         <p class="hint">Pro ukládání nových e-mailů, poznámek a příloh spusťte <code>supabase/kb-capture-schema.sql</code> a <code>supabase/kb-capture-storage.sql</code>, poté <code>supabase/security-rls.sql</code>. Chyba MIME u příloh <strong>.msg</strong>: spusťte také <code>supabase/kb-capture-storage-migrate-msg.sql</code>.</p>
-        <p class="hint">V aplikaci použijte tlačítko <strong>Zachytit znalost</strong> (vložení textu, <strong>.msg</strong>, .eml, hromadný import z Outlook txt, přílohy, AI klasifikace, témata). Pro automatické přeposílání e-mailů nasaďte edge funkci <code>kb-ingest</code> a propojte ji s Power Automate (viz <code>supabase/functions/kb-ingest/index.ts</code>).</p>
+        <p class="hint"><strong>Lokální soubory (.msg, .eml, .txt)</strong> importujte přímo v prohlížeči — tlačítko <strong>Zachytit znalost</strong> → režim <strong>Hromadný import</strong>. Nepotřebujete terminál ani skripty; zprávy se parsují v prohlížeči a ukládají do Supabase.</p>
+        <p class="hint">Jednotlivé e-maily: vložení textu, přílohy, AI klasifikace, témata. Automatické přeposílání: edge funkce <code>kb-ingest</code> + Power Automate (viz <code>supabase/functions/kb-ingest/index.ts</code>).</p>
       </section>
       <section class="panel">
         <h2>Témata v Supabase</h2>
@@ -488,7 +489,7 @@
       </section>
       <section class="panel">
         <h2>Document Intelligence</h2>
-        <p class="hint">Modul čte tabulku <code>doc_intelligence</code> v Supabase. <strong>SQL Editor:</strong> spusťte <code>supabase/doc-intelligence-schema.sql</code> a <code>supabase/doc-intelligence-topics-migrate.sql</code> — <em>ne</em> soubor <code>supabase-doc-intelligence.js</code> (ten je JavaScript pro dashboard, ne SQL). V <code>supabase-config.js</code> nastavte <code>DOC_SUPABASE</code> a <code>clickupConfig.token</code>. Python agent: <code>doc-intelligence-agent/</code>.</p>
+        <p class="hint">Modul čte tabulku <code>doc_intelligence</code> v Supabase. <strong>SQL Editor:</strong> spusťte <code>supabase/doc-intelligence-schema.sql</code> a <code>supabase/doc-intelligence-topics-migrate.sql</code> — <em>ne</em> soubor <code>supabase-doc-intelligence.js</code> (ten je JavaScript pro dashboard, ne SQL). V <code>supabase-config.js</code> nastavte <code>DOC_SUPABASE</code> a <code>clickupConfig.token</code>. Python agent: <code>doc-intelligence-agent/</code> — plánovač úloh spouštějte přes <code>install_scheduler.bat</code> (běží na pozadí bez okna terminálu).</p>
       </section>
     </section>
   </div>
@@ -1085,57 +1086,57 @@
   </datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=3.137"></script>
-  <script src="auth.js?v=3.137"></script>
-  <script src="form-pickers.js?v=3.137"></script>
-  <script src="layout.js?v=3.137"></script>
-  <script src="modules.js?v=3.137"></script>
-  <script src="app.js?v=3.137"></script>
-  <script src="enhancements.js?v=3.137"></script>
-  <script src="supabase-loader.js?v=3.137"></script>
-  <script src="supabase-kb-capture.js?v=3.137"></script>
-  <script src="kb-capture.js?v=3.137"></script>
-  <script src="ai-classify.js?v=3.137"></script>
-  <script src="task-export.js?v=3.137"></script>
-  <script src="notion.js?v=3.137"></script>
-  <script src="supabase-topics.js?v=3.137"></script>
-  <script src="topics.js?v=3.137"></script>
-  <script src="record-click-fix.js?v=3.137"></script>
-  <script src="supabase-persons.js?v=3.137"></script>
-  <script src="persons.js?v=3.137"></script>
-  <script src="person-links.js?v=3.137"></script>
-  <script src="supabase-competitions.js?v=3.137"></script>
-  <script src="interni-souteze.js?v=3.137"></script>
-  <script src="supabase-deadlines.js?v=3.137"></script>
-  <script src="deadlines.js?v=3.137"></script>
-  <script src="supabase-podklady.js?v=3.137"></script>
-  <script src="podklady.js?v=3.137"></script>
-  <script src="supabase-pcr-research.js?v=3.137"></script>
-  <script src="pcr-research-analysis.js?v=3.137"></script>
-  <script src="pcr-research.js?v=3.137"></script>
-  <script src="ai-advisor-knowledge.js?v=3.137"></script>
-  <script src="ai-advisor.js?v=3.137"></script>
-  <script src="supabase-eiz-tokens.js?v=3.137"></script>
-  <script src="eiz-tokens.js?v=3.137"></script>
+  <script src="supabase-config.js?v=3.139"></script>
+  <script src="auth.js?v=3.139"></script>
+  <script src="form-pickers.js?v=3.139"></script>
+  <script src="layout.js?v=3.139"></script>
+  <script src="modules.js?v=3.139"></script>
+  <script src="app.js?v=3.139"></script>
+  <script src="enhancements.js?v=3.139"></script>
+  <script src="supabase-loader.js?v=3.139"></script>
+  <script src="supabase-kb-capture.js?v=3.139"></script>
+  <script src="kb-capture.js?v=3.139"></script>
+  <script src="ai-classify.js?v=3.139"></script>
+  <script src="task-export.js?v=3.139"></script>
+  <script src="notion.js?v=3.139"></script>
+  <script src="supabase-topics.js?v=3.139"></script>
+  <script src="topics.js?v=3.139"></script>
+  <script src="record-click-fix.js?v=3.139"></script>
+  <script src="supabase-persons.js?v=3.139"></script>
+  <script src="persons.js?v=3.139"></script>
+  <script src="person-links.js?v=3.139"></script>
+  <script src="supabase-competitions.js?v=3.139"></script>
+  <script src="interni-souteze.js?v=3.139"></script>
+  <script src="supabase-deadlines.js?v=3.139"></script>
+  <script src="deadlines.js?v=3.139"></script>
+  <script src="supabase-podklady.js?v=3.139"></script>
+  <script src="podklady.js?v=3.139"></script>
+  <script src="supabase-pcr-research.js?v=3.139"></script>
+  <script src="pcr-research-analysis.js?v=3.139"></script>
+  <script src="pcr-research.js?v=3.139"></script>
+  <script src="ai-advisor-knowledge.js?v=3.139"></script>
+  <script src="ai-advisor.js?v=3.139"></script>
+  <script src="supabase-eiz-tokens.js?v=3.139"></script>
+  <script src="eiz-tokens.js?v=3.139"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="supabase-journal-db.js?v=3.137"></script>
-  <script src="journal-db-analysis.js?v=3.137"></script>
-  <script src="journal-db.js?v=3.137"></script>
-  <script src="supabase-vystupy.js?v=3.137"></script>
-  <script src="vystupy-analysis.js?v=3.137"></script>
-  <script src="vystupy.js?v=3.138"></script>
-  <script src="supabase-article-factory.js?v=3.138"></script>
-  <script src="article-factory-pipeline.js?v=3.138"></script>
-  <script src="article-factory.js?v=3.138"></script>
-  <script src="supabase-rady-organy.js?v=3.137"></script>
-  <script src="rady-organy.js?v=3.137"></script>
-  <script src="supabase-pracoviste.js?v=3.137"></script>
-  <script src="dkrvo.js?v=3.137"></script>
-  <script src="supabase-doc-intelligence.js?v=3.137"></script>
-  <script src="doc-intelligence.js?v=3.137"></script>
-  <script src="supabase-outlook-emails.js?v=3.137"></script>
-  <script src="outlook-emails.js?v=3.137"></script>
-  <script src="app-links.js?v=3.137"></script>
-  <script type="module" src="js/kb-items.js?v=3.137"></script>
+  <script src="supabase-journal-db.js?v=3.140"></script>
+  <script src="journal-db-analysis.js?v=3.140"></script>
+  <script src="journal-db.js?v=3.140"></script>
+  <script src="supabase-vystupy.js?v=3.140"></script>
+  <script src="vystupy-analysis.js?v=3.140"></script>
+  <script src="vystupy.js?v=3.140"></script>
+  <script src="supabase-article-factory.js?v=3.140"></script>
+  <script src="article-factory-pipeline.js?v=3.140"></script>
+  <script src="article-factory.js?v=3.140"></script>
+  <script src="supabase-rady-organy.js?v=3.140"></script>
+  <script src="rady-organy.js?v=3.140"></script>
+  <script src="supabase-pracoviste.js?v=3.140"></script>
+  <script src="dkrvo.js?v=3.140"></script>
+  <script src="supabase-doc-intelligence.js?v=3.140"></script>
+  <script src="doc-intelligence.js?v=3.140"></script>
+  <script src="supabase-outlook-emails.js?v=3.140"></script>
+  <script src="outlook-emails.js?v=3.140"></script>
+  <script src="app-links.js?v=3.140"></script>
+  <script type="module" src="js/kb-items.js?v=3.140"></script>
 </body>
 </html>

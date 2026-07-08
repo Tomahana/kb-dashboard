@@ -270,6 +270,19 @@
     node.classList.toggle("captureStatusError", !!isError);
   }
 
+  function showCaptureToast(text, isError = false) {
+    let toast = el("captureToast");
+    if (!toast) {
+      document.body.insertAdjacentHTML("beforeend", `<div id="captureToast" class="captureToast" role="status" aria-live="polite" hidden></div>`);
+      toast = el("captureToast");
+    }
+    toast.textContent = text;
+    toast.classList.toggle("captureToastError", !!isError);
+    toast.hidden = false;
+    clearTimeout(showCaptureToast._timer);
+    showCaptureToast._timer = setTimeout(() => { toast.hidden = true; }, isError ? 8000 : 5000);
+  }
+
   function renderAttachmentList() {
     const box = el("captureAttachmentList");
     if (!box) return;
@@ -553,11 +566,11 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
 
       const summary = `Import dokončen: ${saved} záznamů uloženo${failed ? `, ${failed} selhalo` : ""}.`;
       setStatus(summary, failed > 0);
-      alert(summary);
+      showCaptureToast(summary, failed > 0);
     } catch (err) {
       console.error(err);
       setStatus(err.message || String(err), true);
-      alert("Hromadný import selhal: " + (err.message || err));
+      showCaptureToast("Hromadný import selhal: " + (err.message || err), true);
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = prevText || "Importovat vše"; }
     }
@@ -618,12 +631,12 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
       if (typeof window.openRecord === "function") window.openRecord(kbId);
 
       if (!el("captureStatus")?.classList.contains("captureStatusError")) {
-        alert(`Záznam uložen${autoAi ? " a klasifikován AI" : ""}${autoTopics ? " (témata navržena)" : ""}.`);
+        showCaptureToast(`Záznam uložen${autoAi ? " a klasifikován AI" : ""}${autoTopics ? " (témata navržena)" : ""}.`);
       }
     } catch (err) {
       console.error(err);
       setStatus(err.message || String(err), true);
-      alert("Uložení selhalo: " + (err.message || err));
+      showCaptureToast("Uložení selhalo: " + (err.message || err), true);
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = prevText || "Uložit a klasifikovat"; }
     }
@@ -762,6 +775,15 @@ Vyber 0–3 nejvhodnější témata. Nevymýšlej nová ID.`;
       .captureOptions { display: flex; flex-direction: column; gap: .35rem; margin: .5rem 0; }
       .captureBulkFields { margin: .5rem 0; display: flex; flex-direction: column; gap: .65rem; }
       .captureStatusError { color: #b42318; }
+      .captureToast {
+        position: fixed; right: 1rem; bottom: 1rem; z-index: 1200;
+        max-width: min(420px, calc(100vw - 2rem));
+        padding: .75rem 1rem; border-radius: 10px;
+        background: #1f2937; color: #f9fafb; font-size: .9rem; line-height: 1.4;
+        box-shadow: 0 8px 24px rgba(0,0,0,.18);
+        pointer-events: none;
+      }
+      .captureToastError { background: #7f1d1d; }
     `;
     document.head.appendChild(style);
   }
