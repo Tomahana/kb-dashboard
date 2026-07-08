@@ -1248,44 +1248,276 @@
   }
 
   function injectStyles() {
-    if (el("articleFactoryStyles")) return;
+    const existing = el("articleFactoryStyles");
+    if (existing?.dataset?.theme === "dark-v2") return;
+    if (existing) existing.remove();
     const style = document.createElement("style");
     style.id = "articleFactoryStyles";
+    style.dataset.theme = "dark-v2";
     style.textContent = `
-      .afModule { padding: 0 0 2rem; }
-      .afTabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 1rem; }
-      .afTab { border: 1px solid var(--border, #ddd); background: var(--surface, #fff); padding: 0.4rem 0.75rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
-      .afTab.active { background: var(--accent, #2563eb); color: #fff; border-color: var(--accent, #2563eb); }
-      .afToolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; align-items: center; }
-      .afSearch { flex: 1; min-width: 180px; padding: 0.45rem 0.6rem; border-radius: 8px; border: 1px solid var(--border, #ddd); }
-      .afTableWrap { overflow-x: auto; border: 1px solid var(--border, #ddd); border-radius: 10px; }
-      .afTable { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-      .afTable th, .afTable td { padding: 0.5rem 0.65rem; text-align: left; border-bottom: 1px solid var(--border, #eee); vertical-align: top; }
-      .afTable th { background: var(--surface-2, #f8fafc); font-weight: 600; }
-      .afEmpty { color: #64748b; text-align: center; padding: 1.5rem !important; }
-      .afActions { white-space: nowrap; }
-      .afTag { font-size: 0.7rem; background: #e0e7ff; color: #3730a3; padding: 0.1rem 0.35rem; border-radius: 4px; margin-left: 0.25rem; }
-      .afPriority { font-weight: 700; color: #7c3aed; }
-      .afStatus { font-size: 0.8rem; padding: 0.15rem 0.45rem; border-radius: 999px; background: #f1f5f9; }
-      .afStatus-selected { background: #dbeafe; color: #1d4ed8; }
-      .afStatus-in_progress { background: #fef3c7; color: #b45309; }
-      .afPlaceholder { padding: 1rem; background: var(--surface-2, #f8fafc); border-radius: 10px; border: 1px dashed var(--border, #cbd5e1); }
-      .afPre { font-size: 0.75rem; overflow: auto; max-height: 280px; background: #0f172a; color: #e2e8f0; padding: 0.75rem; border-radius: 8px; }
-      .afError { color: #b91c1c; }
-      .articleFactoryStatusError { color: #b91c1c; }
-      .afDialog { border: none; border-radius: 12px; padding: 0; max-width: 560px; width: calc(100% - 2rem); }
-      .afDialogForm { padding: 1.25rem; display: flex; flex-direction: column; gap: 0.55rem; }
-      .afDialogForm label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; }
-      .afDialogForm input, .afDialogForm textarea, .afDialogForm select { padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; }
-      .afDialogActions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
-      .btn.small { font-size: 0.8rem; padding: 0.25rem 0.5rem; }
-      .btn.danger { color: #b91c1c; border-color: #fecaca; }
-      .afRowSelected { background: #eff6ff; }
-      .afSection { margin: 0.5rem 0; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.5rem; }
-      .afSectionBody { white-space: pre-wrap; font-size: 0.9rem; margin-top: 0.5rem; }
-      .afReviewCard { border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; }
-      .afChecklist { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.75rem 0; }
-      .afCheckItem { font-size: 0.9rem; }
+      #page-article-factory .afModule {
+        padding: 0 0 2rem;
+        color: var(--text, #e2e8f0);
+      }
+      #page-article-factory .afModule .hint {
+        color: var(--muted, #94a3b8);
+      }
+      #page-article-factory .afTabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-bottom: 1rem;
+      }
+      #page-article-factory .afTab {
+        border: 1px solid var(--border, #2a3048);
+        background: var(--surface2, #1e2335);
+        color: var(--text, #e2e8f0);
+        padding: 0.4rem 0.75rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: background 0.12s, border-color 0.12s, color 0.12s;
+      }
+      #page-article-factory .afTab:hover {
+        background: var(--surface-hover, #252b3d);
+        border-color: var(--shell-line-strong, #3a4260);
+      }
+      #page-article-factory .afTab.active {
+        background: var(--accent, #4f8ef7);
+        color: #fff;
+        border-color: var(--accent, #4f8ef7);
+      }
+      #page-article-factory .afToolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        align-items: center;
+      }
+      #page-article-factory .afSearch {
+        flex: 1;
+        min-width: 180px;
+        padding: 0.45rem 0.6rem;
+        border-radius: 8px;
+        border: 1px solid var(--border, #2a3048);
+        background: var(--surface2, #1e2335);
+        color: var(--text, #e2e8f0);
+      }
+      #page-article-factory .afSearch::placeholder {
+        color: var(--muted, #64748b);
+      }
+      #page-article-factory .afTableWrap {
+        overflow-x: auto;
+        border: 1px solid var(--border, #2a3048);
+        border-radius: 10px;
+        background: var(--surface, #181c27);
+      }
+      #page-article-factory .afTable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+        color: var(--text, #e2e8f0);
+      }
+      #page-article-factory .afTable th,
+      #page-article-factory .afTable td {
+        padding: 0.5rem 0.65rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border, #2a3048);
+        vertical-align: top;
+      }
+      #page-article-factory .afTable th {
+        background: var(--surface2, #1e2335);
+        color: var(--muted, #94a3b8);
+        font-weight: 600;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      #page-article-factory .afTable tbody tr:hover {
+        background: rgba(79, 142, 247, 0.06);
+      }
+      #page-article-factory .afEmpty {
+        color: var(--muted, #94a3b8);
+        text-align: center;
+        padding: 1.5rem !important;
+      }
+      #page-article-factory .afActions { white-space: nowrap; }
+      #page-article-factory .afTag {
+        font-size: 0.7rem;
+        background: rgba(79, 142, 247, 0.18);
+        color: #93c5fd;
+        padding: 0.1rem 0.35rem;
+        border-radius: 4px;
+        margin-left: 0.25rem;
+      }
+      #page-article-factory .afPriority { font-weight: 700; color: #a78bfa; }
+      #page-article-factory .afStatus {
+        font-size: 0.8rem;
+        padding: 0.15rem 0.45rem;
+        border-radius: 999px;
+        background: var(--surface2, #1e2335);
+        color: var(--text, #e2e8f0);
+        border: 1px solid var(--border, #2a3048);
+      }
+      #page-article-factory .afStatus-selected {
+        background: rgba(79, 142, 247, 0.2);
+        color: #93c5fd;
+        border-color: rgba(79, 142, 247, 0.35);
+      }
+      #page-article-factory .afStatus-in_progress {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fcd34d;
+        border-color: rgba(245, 158, 11, 0.35);
+      }
+      #page-article-factory .afPlaceholder {
+        padding: 1rem;
+        background: var(--surface2, #1e2335);
+        color: var(--text, #e2e8f0);
+        border-radius: 10px;
+        border: 1px dashed var(--border, #2a3048);
+      }
+      #page-article-factory .afPre {
+        font-size: 0.75rem;
+        overflow: auto;
+        max-height: 280px;
+        background: #0f172a;
+        color: #e2e8f0;
+        padding: 0.75rem;
+        border-radius: 8px;
+        border: 1px solid var(--border, #2a3048);
+      }
+      #page-article-factory .afError,
+      #page-article-factory .articleFactoryStatusError {
+        color: #f87171;
+      }
+      #page-article-factory .afDialog {
+        border: 1px solid var(--border, #2a3048);
+        border-radius: 12px;
+        padding: 0;
+        max-width: 560px;
+        width: calc(100% - 2rem);
+        background: var(--surface, #181c27);
+        color: var(--text, #e2e8f0);
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+      }
+      #page-article-factory .afDialog::backdrop {
+        background: rgba(0, 0, 0, 0.65);
+      }
+      #page-article-factory .afDialogForm {
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+      }
+      #page-article-factory .afDialogForm h3 {
+        color: var(--text, #e2e8f0);
+        margin: 0 0 0.25rem;
+      }
+      #page-article-factory .afDialogForm label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        font-size: 0.85rem;
+        color: var(--muted, #94a3b8);
+      }
+      #page-article-factory .afDialogForm input,
+      #page-article-factory .afDialogForm textarea,
+      #page-article-factory .afDialogForm select {
+        padding: 0.4rem 0.5rem;
+        border-radius: 6px;
+        border: 1px solid var(--border, #2a3048);
+        background: var(--surface2, #1e2335);
+        color: var(--text, #e2e8f0);
+      }
+      #page-article-factory .afDialogActions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+      }
+      #page-article-factory .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 0.45rem 0.85rem;
+        border-radius: 8px;
+        border: 1px solid var(--border, #2a3048);
+        background: var(--surface2, #1e2335);
+        color: var(--text, #e2e8f0);
+        font-size: 0.85rem;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.12s, border-color 0.12s;
+      }
+      #page-article-factory .btn:hover {
+        background: var(--surface-hover, #252b3d);
+        border-color: var(--shell-line-strong, #3a4260);
+      }
+      #page-article-factory .btn.primary {
+        background: var(--accent, #4f8ef7);
+        border-color: var(--accent, #4f8ef7);
+        color: #fff;
+      }
+      #page-article-factory .btn.primary:hover {
+        background: #3d7ae8;
+        border-color: #3d7ae8;
+      }
+      #page-article-factory .btn.secondary {
+        background: var(--surface2, #1e2335);
+        color: var(--text, #e2e8f0);
+      }
+      #page-article-factory .btn.small {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.5rem;
+      }
+      #page-article-factory .btn.danger {
+        color: #fca5a5;
+        border-color: rgba(239, 68, 68, 0.35);
+        background: rgba(239, 68, 68, 0.1);
+      }
+      #page-article-factory .btn.danger:hover {
+        background: rgba(239, 68, 68, 0.18);
+      }
+      #page-article-factory label.btn input[type="file"] {
+        display: none;
+      }
+      #page-article-factory .afRowSelected {
+        background: rgba(79, 142, 247, 0.12);
+      }
+      #page-article-factory .afSection {
+        margin: 0.5rem 0;
+        border: 1px solid var(--border, #2a3048);
+        border-radius: 8px;
+        padding: 0.5rem;
+        background: var(--surface2, #1e2335);
+      }
+      #page-article-factory .afSectionBody {
+        white-space: pre-wrap;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+        color: var(--text, #e2e8f0);
+      }
+      #page-article-factory .afReviewCard {
+        border: 1px solid var(--border, #2a3048);
+        border-radius: 8px;
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        background: var(--surface2, #1e2335);
+      }
+      #page-article-factory .afChecklist {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        margin: 0.75rem 0;
+      }
+      #page-article-factory .afCheckItem {
+        font-size: 0.9rem;
+        color: var(--text, #e2e8f0);
+      }
+      #page-article-factory #articleFactoryStatus {
+        color: var(--muted, #94a3b8);
+      }
     `;
     document.head.appendChild(style);
   }
