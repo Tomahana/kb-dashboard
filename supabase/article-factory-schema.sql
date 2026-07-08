@@ -158,7 +158,7 @@ create table if not exists public.kb_article_versions (
   discussion text,
   conclusion text,
   limitations text,
-  references jsonb not null default '[]'::jsonb,
+  "references" jsonb not null default '[]'::jsonb,
   full_text_markdown text,
   factual_basis jsonb not null default '{"verified_facts":[],"interpretations":[],"hypotheses":[],"proposals":[],"unverified":[]}'::jsonb,
   human_work_needed jsonb not null default '[]'::jsonb,
@@ -170,6 +170,7 @@ create table if not exists public.kb_article_versions (
 );
 
 comment on column public.kb_article_versions.factual_basis is 'Povinný rozklad: verified_facts, interpretations, hypotheses, proposals, unverified';
+comment on column public.kb_article_versions."references" is 'Bibliografické položky (JSON pole) — sloupec v uvozovkách kvůli rezervovanému slovu';
 comment on column public.kb_article_versions.is_draft is 'AI verze vždy draft; finální až po human_reviewed_at na projektu';
 
 -- FK current_version_id (po vytvoření tabulky verzí)
