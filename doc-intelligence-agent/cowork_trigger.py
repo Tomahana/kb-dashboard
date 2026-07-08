@@ -6,19 +6,27 @@ import sys
 from pathlib import Path
 
 AGENT_DIR = Path(__file__).resolve().parent
-PYTHON = AGENT_DIR / "venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+if sys.platform == "win32":
+    PYTHON = AGENT_DIR / "venv" / "Scripts" / "pythonw.exe"
+    if not PYTHON.is_file():
+        PYTHON = AGENT_DIR / "venv" / "Scripts" / "python.exe"
+else:
+    PYTHON = AGENT_DIR / "venv" / "bin" / "python"
 AGENT = AGENT_DIR / "doc_agent.py"
 LOG = AGENT_DIR / "logs" / "agent.log"
 
 print("Spouštím Document Intelligence Agent...")
 
-result = subprocess.run(
-    [str(PYTHON), str(AGENT)],
-    capture_output=True,
-    text=True,
-    cwd=str(AGENT_DIR),
-    encoding="utf-8",
-)
+run_kwargs = {
+    "capture_output": True,
+    "text": True,
+    "cwd": str(AGENT_DIR),
+    "encoding": "utf-8",
+}
+if sys.platform == "win32":
+    run_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+result = subprocess.run([str(PYTHON), str(AGENT)], **run_kwargs)
 
 LOG.parent.mkdir(parents=True, exist_ok=True)
 with open(LOG, "a", encoding="utf-8") as f:
