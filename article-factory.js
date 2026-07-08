@@ -287,42 +287,6 @@
     render();
   }
 
-  async function syncFromVystupy() {
-    const vystupy = (window.kbVystupy?.getVystupy?.() || [])
-      .filter((v) => v.typ_vystupu === "Jimp" || v.typ_vystupu === "JSC");
-    if (!vystupy.length) {
-      setStatus("Modul Výstupy nemá žádné články Jimp/JSC k synchronizaci.", true);
-      return;
-    }
-    const existingKeys = new Set(publications.map((p) => l(p.source_key)));
-    const existingVystupIds = new Set(publications.filter((p) => p.vystup_id).map((p) => p.vystup_id));
-    let added = 0;
-    let skipped = 0;
-    for (const v of vystupy) {
-      if (existingVystupIds.has(v.id)) { skipped += 1; continue; }
-      const item = {
-        title: v.nazev || "Bez názvu",
-        authors: v.autor || "",
-        authors_osobni_cislo: v.autor_osobni_cislo || null,
-        year: v.rok || null,
-        journal_or_publisher: v.casopis || "",
-        doi: v.doi || "",
-        issn: v.issn || "",
-        vystup_id: v.id,
-        vystup_type: v.typ_vystupu,
-        notes: v.poznamka || "",
-        imported_at: new Date().toISOString(),
-        source_key: `vystup:${v.typ_vystupu}:${v.id}`
-      };
-      if (existingKeys.has(l(item.source_key))) { skipped += 1; continue; }
-      await savePublication({ ...item, id: uuid(), __existing: false });
-      existingKeys.add(l(item.source_key));
-      added += 1;
-    }
-    setStatus(`Sync z Výstupů: ${added} nových, ${skipped} přeskočeno (duplicita).`);
-    await loadData();
-  }
-
   async function importFile(file, type) {
     const text = await file.text();
     const rows = rowsFromDelimitedText(text, type === "publications"
@@ -522,7 +486,6 @@
     return `
       <div class="afToolbar">
         <button type="button" class="btn primary" data-af-new-pub>+ Publikace</button>
-        <button type="button" class="btn" data-af-sync-vystupy>Sync z Výstupů</button>
         <label class="btn">Import TSV<input type="file" accept=".tsv,.csv,.txt" hidden data-af-import-pub></label>
       </div>
       <div class="afTableWrap">
@@ -578,7 +541,6 @@
       <div class="afToolbar">
         <button type="button" class="btn primary" data-af-new-journal>+ Časopis</button>
         <label class="btn">Import TSV<input type="file" accept=".tsv,.csv,.txt" hidden data-af-import-journal></label>
-        <a href="#casopisy" class="btn">Databáze časopisů (JCR)</a>
       </div>
       <div class="afTableWrap">
         <table class="afTable">
@@ -682,8 +644,6 @@
 
     root.querySelector("[data-af-reload]")?.addEventListener("click", () => loadData());
     root.querySelector("[data-af-pipeline-ping]")?.addEventListener("click", () => checkPipeline());
-    root.querySelector("[data-af-sync-vystupy]")?.addEventListener("click", () => syncFromVystupy());
-
     root.querySelector("[data-af-new-pub]")?.addEventListener("click", () => {
       editingPublication = {};
       render();
