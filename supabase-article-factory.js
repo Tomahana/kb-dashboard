@@ -470,6 +470,63 @@
     if (error) throw error;
   }
 
+  async function createPipelineRun({ projectId, topicId }) {
+    const supa = getClient();
+    const month = new Date();
+    const monthStr = `${month.getUTCFullYear()}-${String(month.getUTCMonth() + 1).padStart(2, "0")}-01`;
+    const { data, error } = await supa
+      .from("kb_article_pipeline_runs")
+      .insert({
+        month: monthStr,
+        article_project_id: projectId,
+        selected_topic_id: topicId || null,
+        status: "running",
+        current_step: "research_strategist",
+        summary: "Pipeline spuštěna",
+        run_log: [{ at: new Date().toISOString(), step: "system", level: "info", message: "Pipeline start (client)" }]
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function updatePipelineRun(runId, patch) {
+    const supa = getClient();
+    const { data, error } = await supa
+      .from("kb_article_pipeline_runs")
+      .update(patch)
+      .eq("id", runId)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function markStalePipelineRuns(projectId, maxAgeMinutes = 12) {
+    const supa = getClient();
+    const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000).toISOString();
+    const { data: stale, error: selErr } = await supa
+      .from("kb_article_pipeline_runs")
+      .select("id, created_at, summary")
+      .eq("article_project_id", projectId)
+      .eq("status", "running")
+      .lt("created_at", cutoff);
+    if (selErr) throw selErr;
+    if (!stale?.length) return 0;
+    const { error: updErr } = await supa
+      .from("kb_article_pipeline_runs")
+      .update({
+        status: "failed",
+        summary: "Přerušeno (timeout Edge Function) — použijte Pokračovat pipeline.",
+        completed_at: new Date().toISOString(),
+        current_step: null
+      })
+      .in("id", stale.map((r) => r.id));
+    if (updErr) throw updErr;
+    return stale.length;
+  }
+
   async function uploadAttachment(file, publicationId) {
     const supa = getClient();
     const safeName = (file.name || "attachment").replace(/[^\w.\-]+/g, "_");
@@ -515,6 +572,9 @@
     upsertProject,
     deleteProject,
     markHumanReviewed,
+    createPipelineRun,
+    updatePipelineRun,
+    markStalePipelineRuns,
     uploadAttachment,
     loadLocal,
     saveLocal,
