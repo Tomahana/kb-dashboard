@@ -651,8 +651,9 @@
       <div class="afToolbar">
         <button type="button" class="btn primary" data-af-new-pub>+ Publikace</button>
         <button type="button" class="btn" data-af-sync-vystupy>Sync z Výstupů</button>
-        <label class="btn">Import TSV<input type="file" accept=".tsv,.csv,.txt" hidden data-af-import-pub></label>
+        <label class="btn">Import TSV/CSV<input type="file" accept=".tsv,.csv,.txt" hidden data-af-import-pub></label>
       </div>
+      <p class="hint">Import: TSV nebo CSV se sloupci <code>Název</code>, <code>Autoři</code>, <code>Rok</code>, <code>Časopis</code>, <code>DOI</code>, <code>Metodologie</code>, <code>Hlavní zjištění</code> (volitelně <code>Abstrakt</code>, <code>Klíčová slova</code>, <code>Poznámka</code>). Autoři oddělte středníkem. Vzor: <code>data/article-publications-import.template.tsv</code> nebo prázdná šablona <code>data/article-publications-import.blank.tsv</code>.</p>
       <div class="afTableWrap">
         <table class="afTable">
           <thead><tr><th>Rok</th><th>Název</th><th>Autoři</th><th>Časopis</th><th>DOI</th><th></th></tr></thead>
