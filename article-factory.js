@@ -153,6 +153,27 @@
     return topics.find((t) => t.id === id)?.title || "—";
   }
 
+  function projectForTopic(topicId) {
+    return projects.find((p) => p.topic_id === topicId) || null;
+  }
+
+  function gotoProjectsView() {
+    activeView = "projects";
+    render();
+  }
+
+  function openNewProjectFromTopic(topicId) {
+    const topic = topics.find((t) => t.id === topicId);
+    editingProject = {
+      topic_id: topic?.id || "",
+      working_title: topic?.working_title || topic?.title || "",
+      revision_checklist: window.kbArticleFactoryTypes?.REVISION_CHECKLIST?.map((c) => ({ ...c, checked: false }))
+    };
+    activeView = "projects";
+    render();
+    el("afProjectDialog")?.showModal();
+  }
+
   function journalTitle(id) {
     return journals.find((j) => j.id === id)?.journal_title || "—";
   }
@@ -1024,6 +1045,9 @@
         <td><span class="afStatus afStatus-${html(t.status)}">${statusLabel(t.status)}</span></td>
         <td>${(t.related_publication_ids || []).length}</td>
         <td class="afActions">
+          ${projectForTopic(t.id)
+            ? `<span class="afTag">projekt</span>`
+            : `<button type="button" class="btn small primary" data-af-new-project-from-topic="${html(t.id)}">→ Projekt</button>`}
           <button type="button" class="btn small" data-af-edit-topic="${html(t.id)}">Upravit</button>
           <button type="button" class="btn small danger" data-af-del-topic="${html(t.id)}">Smazat</button>
         </td>
@@ -1124,10 +1148,18 @@
     const project = getSelectedProject();
     const ps = pipelineStatus || {};
     const runs = pipelineRuns.filter((r) => r.article_project_id === project?.id).slice(-3);
+    const noProjects = !projects.length;
     return `
       <div class="afPlaceholder">
         <p><strong>AI publikační pipeline</strong> — 8 rolí, výstup vždy jako draft.</p>
-        ${project ? `<p>Aktivní projekt: <strong>${html(project.working_title)}</strong> (${html(project.status)})</p>` : `<p class="afError">Nejdříve vytvořte a vyberte projekt.</p>`}
+        ${noProjects ? `
+          <div class="afCallout">
+            <p><strong>Zatím nemáte žádný projekt</strong></p>
+            <p class="hint">Projekt propojí <strong>téma</strong> s <strong>cílovým časopisem</strong> (např. ESWA). Vytvořte ho v záložce <strong>Projekty</strong> nebo u tématu tlačítkem <strong>→ Projekt</strong>.</p>
+            <button type="button" class="btn primary" data-af-goto-projects>+ Vytvořit projekt</button>
+          </div>` : ""}
+        ${!noProjects && project ? `<p>Aktivní projekt: <strong>${html(project.working_title)}</strong> (${html(project.status)})</p>` : ""}
+        ${!noProjects && !project ? `<p class="afError">Vyberte projekt v seznamu níže nebo v záložce Projekty.</p>` : ""}
         <div class="afToolbar">
           <select data-af-project-select class="afSearch">${projects.map((p) => `<option value="${html(p.id)}" ${p.id === selectedProjectId ? "selected" : ""}>${html(p.working_title)}</option>`).join("")}</select>
           <button type="button" class="btn" data-af-pipeline-ping>Test Edge Function</button>
@@ -1368,9 +1400,11 @@
         el("afTopicInlineForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
-    root.querySelector("[data-af-goto-projects]")?.addEventListener("click", () => {
-      activeView = "projects";
-      render();
+    root.querySelectorAll("[data-af-goto-projects]").forEach((btn) => {
+      btn.addEventListener("click", () => gotoProjectsView());
+    });
+    root.querySelectorAll("[data-af-new-project-from-topic]").forEach((btn) => {
+      btn.addEventListener("click", () => openNewProjectFromTopic(btn.dataset.afNewProjectFromTopic));
     });
     root.querySelector("#afTopicInlineForm form")?.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -1434,11 +1468,11 @@
 
   function injectStyles() {
     const existing = el("articleFactoryStyles");
-    if (existing?.dataset?.theme === "dark-v3") return;
+    if (existing?.dataset?.theme === "dark-v4") return;
     if (existing) existing.remove();
     const style = document.createElement("style");
     style.id = "articleFactoryStyles";
-    style.dataset.theme = "dark-v3";
+    style.dataset.theme = "dark-v4";
     style.textContent = `
       #page-article-factory .afModule {
         padding: 0 0 2rem;
@@ -1572,11 +1606,31 @@
         border-color: rgba(245, 158, 11, 0.35);
       }
       #page-article-factory .afPlaceholder {
-        padding: 1rem;
+        padding: 1rem 1.15rem;
         background: var(--surface2, #1e2335);
         color: var(--text, #e2e8f0);
         border-radius: 10px;
         border: 1px dashed var(--border, #2a3048);
+      }
+      #page-article-factory .afPlaceholder p,
+      #page-article-factory .afPlaceholder h3,
+      #page-article-factory .afPlaceholder h4,
+      #page-article-factory .afPlaceholder li,
+      #page-article-factory .afPlaceholder strong {
+        color: var(--text, #e2e8f0);
+      }
+      #page-article-factory .afPlaceholder .hint {
+        color: var(--muted, #94a3b8);
+      }
+      #page-article-factory .afCallout {
+        margin: 0.75rem 0 1rem;
+        padding: 0.85rem 1rem;
+        border-radius: 8px;
+        background: rgba(79, 142, 247, 0.1);
+        border: 1px solid rgba(79, 142, 247, 0.28);
+      }
+      #page-article-factory .afCallout .hint {
+        margin: 0.35rem 0 0.75rem;
       }
       #page-article-factory .afPre {
         font-size: 0.75rem;
