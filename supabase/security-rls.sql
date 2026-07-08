@@ -371,7 +371,103 @@ grant insert on public.kb_records to authenticated;
 grant insert, update on public.kb_record_bodies to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 11) Ověření
+-- 12) Article Factory (kb_article_*)
+-- ---------------------------------------------------------------------------
+alter table if exists public.kb_article_publications enable row level security;
+alter table if exists public.kb_article_topics enable row level security;
+alter table if exists public.kb_article_topic_publications enable row level security;
+alter table if exists public.kb_article_target_journals enable row level security;
+alter table if exists public.kb_article_projects enable row level security;
+alter table if exists public.kb_article_versions enable row level security;
+alter table if exists public.kb_article_ai_role_reviews enable row level security;
+alter table if exists public.kb_article_literature_sources enable row level security;
+alter table if exists public.kb_article_pipeline_runs enable row level security;
+
+drop policy if exists "kb_article_publications authenticated read" on public.kb_article_publications;
+drop policy if exists "kb_article_publications authenticated write" on public.kb_article_publications;
+create policy "kb_article_publications authenticated read"
+  on public.kb_article_publications for select to authenticated using (true);
+create policy "kb_article_publications authenticated write"
+  on public.kb_article_publications for all to authenticated using (true) with check (true);
+
+drop policy if exists "kb_article_topics authenticated read" on public.kb_article_topics;
+drop policy if exists "kb_article_topics authenticated write" on public.kb_article_topics;
+create policy "kb_article_topics authenticated read"
+  on public.kb_article_topics for select to authenticated using (true);
+create policy "kb_article_topics authenticated write"
+  on public.kb_article_topics for all to authenticated using (true) with check (true);
+
+drop policy if exists "kb_article_topic_publications authenticated read" on public.kb_article_topic_publications;
+drop policy if exists "kb_article_topic_publications authenticated write" on public.kb_article_topic_publications;
+create policy "kb_article_topic_publications authenticated read"
+  on public.kb_article_topic_publications for select to authenticated using (true);
+create policy "kb_article_topic_publications authenticated write"
+  on public.kb_article_topic_publications for all to authenticated using (true) with check (true);
+
+drop policy if exists "kb_article_target_journals authenticated read" on public.kb_article_target_journals;
+drop policy if exists "kb_article_target_journals authenticated write" on public.kb_article_target_journals;
+create policy "kb_article_target_journals authenticated read"
+  on public.kb_article_target_journals for select to authenticated using (true);
+create policy "kb_article_target_journals authenticated write"
+  on public.kb_article_target_journals for all to authenticated using (true) with check (true);
+
+drop policy if exists "kb_article_projects authenticated read" on public.kb_article_projects;
+drop policy if exists "kb_article_projects authenticated write" on public.kb_article_projects;
+create policy "kb_article_projects authenticated read"
+  on public.kb_article_projects for select to authenticated using (true);
+create policy "kb_article_projects authenticated write"
+  on public.kb_article_projects for all to authenticated using (true) with check (true);
+
+drop policy if exists "kb_article_versions authenticated read" on public.kb_article_versions;
+drop policy if exists "kb_article_versions authenticated write" on public.kb_article_versions;
+create policy "kb_article_versions authenticated read"
+  on public.kb_article_versions for select to authenticated using (true);
+create policy "kb_article_versions authenticated write"
+  on public.kb_article_versions for all to authenticated using (true) with check (true);
+
+drop policy if exists "kb_article_ai_role_reviews authenticated read" on public.kb_article_ai_role_reviews;
+drop policy if exists "kb_article_ai_role_reviews authenticated write" on public.kb_article_ai_role_reviews;
+create policy "kb_article_ai_role_reviews authenticated read"
+  on public.kb_article_ai_role_reviews for select to authenticated using (true);
+create policy "kb_article_ai_role_reviews authenticated write"
+  on public.kb_article_ai_role_reviews for all to authenticated using (true) with check (true);
+
+drop policy if exists "kb_article_literature_sources authenticated read" on public.kb_article_literature_sources;
+drop policy if exists "kb_article_literature_sources authenticated write" on public.kb_article_literature_sources;
+create policy "kb_article_literature_sources authenticated read"
+  on public.kb_article_literature_sources for select to authenticated using (true);
+create policy "kb_article_literature_sources authenticated write"
+  on public.kb_article_literature_sources for all to authenticated using (true) with check (true);
+
+drop policy if exists "kb_article_pipeline_runs authenticated read" on public.kb_article_pipeline_runs;
+drop policy if exists "kb_article_pipeline_runs authenticated write" on public.kb_article_pipeline_runs;
+create policy "kb_article_pipeline_runs authenticated read"
+  on public.kb_article_pipeline_runs for select to authenticated using (true);
+create policy "kb_article_pipeline_runs authenticated write"
+  on public.kb_article_pipeline_runs for all to authenticated using (true) with check (true);
+
+revoke all on public.kb_article_publications from anon;
+revoke all on public.kb_article_topics from anon;
+revoke all on public.kb_article_topic_publications from anon;
+revoke all on public.kb_article_target_journals from anon;
+revoke all on public.kb_article_projects from anon;
+revoke all on public.kb_article_versions from anon;
+revoke all on public.kb_article_ai_role_reviews from anon;
+revoke all on public.kb_article_literature_sources from anon;
+revoke all on public.kb_article_pipeline_runs from anon;
+
+grant select, insert, update, delete on public.kb_article_publications to authenticated;
+grant select, insert, update, delete on public.kb_article_topics to authenticated;
+grant select, insert, update, delete on public.kb_article_topic_publications to authenticated;
+grant select, insert, update, delete on public.kb_article_target_journals to authenticated;
+grant select, insert, update, delete on public.kb_article_projects to authenticated;
+grant select, insert, update, delete on public.kb_article_versions to authenticated;
+grant select, insert, update, delete on public.kb_article_ai_role_reviews to authenticated;
+grant select, insert, update, delete on public.kb_article_literature_sources to authenticated;
+grant select, insert, update, delete on public.kb_article_pipeline_runs to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 13) Ověření
 -- ---------------------------------------------------------------------------
 select schemaname, tablename, policyname, roles, cmd
 from pg_policies
@@ -385,6 +481,9 @@ where schemaname = 'public'
     'kb_competition_horizon', 'kb_competition_horizon_applications', 'kb_competition_horizon_supported',
     'kb_pcr_research_topics', 'kb_ai_advisor_saved',
     'kb_eiz_contracts', 'kb_eiz_contract_years', 'kb_eiz_publications',
-    'kb_journal_records', 'kb_record_attachments'
+    'kb_journal_records', 'kb_record_attachments',
+    'kb_article_publications', 'kb_article_topics', 'kb_article_topic_publications',
+    'kb_article_target_journals', 'kb_article_projects', 'kb_article_versions',
+    'kb_article_ai_role_reviews', 'kb_article_literature_sources', 'kb_article_pipeline_runs'
   )
 order by tablename, policyname;

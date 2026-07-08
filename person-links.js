@@ -25,6 +25,10 @@
       cisloField: "autor_osobni_cislo",
       labelField: "autor"
     },
+    authors: {
+      cisloField: "authors_osobni_cislo",
+      labelField: "authors"
+    },
     clen: {
       cisloField: "osobni_cislo",
       labelField: "jmeno",
@@ -42,6 +46,7 @@
     { module: "vystupy", table: "kb_vystupy_jsc", role: "autor" },
     { module: "vystupy", table: "kb_vystupy_b", role: "autor" },
     { module: "vystupy", table: "kb_vystupy_c", role: "autor" },
+    { module: "article-factory", table: "kb_article_publications", role: "authors" },
     { module: "emaily", table: "kb_records", role: "odesilatel" },
     { module: "emaily", table: "kb_records", role: "odpovedna_osoba" },
     { module: "rady-organy", table: "kb_organ_members", role: "clen" },
