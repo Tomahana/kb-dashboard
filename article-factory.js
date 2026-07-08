@@ -560,30 +560,38 @@
     render();
   }
 
-  async function saveTopic(item) {
+  async function saveTopic(item, options = {}) {
     if (!n(item.title)) {
-      setStatus("Název tématu je povinný.", true);
+      if (!options.silent) setStatus("Název tématu je povinný.", true);
       return false;
     }
     item.source_key = item.source_key || makeTopicSourceKey(item);
     item.priority = Number(item.priority) || 3;
     if (!TOPIC_STATUSES.includes(item.status)) item.status = "idea";
-    if (useSupabase && await ensureAuth()) {
-      const saved = await window.kbSupabaseArticleFactory.upsertTopic(item);
-      const idx = topics.findIndex((t) => t.id === saved.id);
-      if (idx >= 0) topics[idx] = saved;
-      else topics.push(saved);
-    } else {
-      if (!item.id) item.id = uuid();
-      item.__existing = true;
-      const idx = topics.findIndex((t) => t.id === item.id);
-      if (idx >= 0) topics[idx] = item;
-      else topics.push(item);
+    try {
+      if (useSupabase && await ensureAuth()) {
+        const saved = await window.kbSupabaseArticleFactory.upsertTopic(item);
+        const idx = topics.findIndex((t) => t.id === saved.id);
+        if (idx >= 0) topics[idx] = saved;
+        else topics.push(saved);
+      } else {
+        if (!item.id) item.id = uuid();
+        item.__existing = true;
+        const idx = topics.findIndex((t) => t.id === item.id);
+        if (idx >= 0) topics[idx] = item;
+        else topics.push(item);
+      }
+      persistLocal();
+      if (!options.silent) {
+        setStatus("Téma uloženo.");
+        render();
+      }
+      return true;
+    } catch (err) {
+      console.error(err);
+      if (!options.silent) setStatus(`Uložení tématu selhalo: ${err.message || err}`, true);
+      return false;
     }
-    persistLocal();
-    setStatus("Téma uloženo.");
-    render();
-    return true;
   }
 
   async function saveJournal(item) {
@@ -719,8 +727,20 @@
     await loadData();
   }
 
+  function detectTopicFormCsv(text) {
+    const sample = text.slice(0, 4000).toLowerCase();
+    return sample.includes("nové téma") || sample.includes("nove tema")
+      ? sample.includes("popis") && (sample.includes("název") || sample.includes("nazev"))
+      : false;
+  }
+
   async function importFile(file, type) {
     const text = await file.text();
+    if (type === "publications" && detectTopicFormCsv(text)) {
+      setStatus("Tento soubor je pro záložku Témata článků (má sloupce Nové téma / Popis). Přepínám import témat…", true);
+      type = "topics";
+      activeView = "topics";
+    }
     let rows;
     if (type === "journals" && detectJcrJournalExport(text)) {
       rows = rowsFromJcrJournalExport(text);
@@ -737,7 +757,9 @@
     }
     let count = 0;
     let skipped = 0;
+    const errors = [];
     for (const row of rows) {
+      try {
       if (type === "publications" && !n(row.title)) { skipped += 1; continue; }
       if (type === "topics") {
         const topicRow = finalizeTopicImportRow(row);
@@ -749,9 +771,12 @@
           ...topicRow
         };
         item.source_key = makeTopicSourceKey(item);
-        const saved = await saveTopic(item);
+        const saved = await saveTopic(item, { silent: true });
         if (saved) count += 1;
-        else skipped += 1;
+        else {
+          skipped += 1;
+          errors.push(topicRow.title.slice(0, 80));
+        }
         continue;
       }
       if (type === "journals" && !n(row.journal_title)) { skipped += 1; continue; }
@@ -769,10 +794,22 @@
         await saveJournal(item);
       }
       count += 1;
+      } catch (err) {
+        skipped += 1;
+        errors.push(err.message || String(err));
+        console.error("Import row failed:", err);
+      }
     }
+    if (type === "topics") activeView = "topics";
+    const errMsg = errors.length ? ` Chyby: ${errors.slice(0, 2).join(" | ")}` : "";
     const skipMsg = skipped ? `, ${skipped} přeskočeno` : "";
-    setStatus(`Import dokončen: ${count} záznamů${skipMsg}.`);
-    await loadData();
+    setStatus(
+      count
+        ? `Import dokončen: ${count} záznamů${skipMsg}.${type === "topics" ? " Záložka Témata článků." : ""}`
+        : `Import selhal: 0 záznamů${skipMsg}.${errMsg || " Zkontrolujte formát souboru a záložku."}`,
+      !count
+    );
+    await loadData({ force: true });
   }
 
   async function deleteItem(type, id) {

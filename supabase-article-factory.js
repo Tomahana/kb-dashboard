@@ -426,9 +426,13 @@
     if (pubIds.length) {
       const links = pubIds.map((publication_id) => ({ topic_id: saved.id, publication_id }));
       const { error: linkErr } = await supa.from("kb_article_topic_publications").insert(links);
-      if (linkErr) throw linkErr;
+      if (linkErr) {
+        console.warn("Topic publication links skipped:", linkErr.message);
+      } else {
+        saved.related_publication_ids = pubIds;
+      }
     }
-    saved.related_publication_ids = pubIds;
+    if (!saved.related_publication_ids) saved.related_publication_ids = pubIds;
     return saved;
   }
 
