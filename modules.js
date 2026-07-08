@@ -137,7 +137,7 @@
       description: "Publikační pipeline — evidence publikací, témat a cílových Q1 časopisů. Příprava rukopisů s AI podporou a povinnou lidskou revizí.",
       status: "active",
       icon: "✍️",
-      stats: ["articleFactoryPublications", "articleFactoryTopics", "articleFactoryJournals"]
+      stats: ["articleFactoryPublications", "articleFactoryTopics", "articleFactoryProjects"]
     },
     {
       slug: "rady-organy",
@@ -348,6 +348,7 @@
       articleFactoryPublications: afPublications.length,
       articleFactoryTopics: afTopics.length,
       articleFactoryJournals: afJournals.length,
+      articleFactoryProjects: (window.kbArticleFactory?.getProjects?.() || []).length,
       organsTotal: organList.length,
       organsPendingAi: window.kbRadyOrgany?.pendingChecksCount?.() || 0,
       workplacesTotal: workplaceList.length,
@@ -379,6 +380,7 @@
       articleFactoryPublications: `${value} publikací`,
       articleFactoryTopics: `${value} témat`,
       articleFactoryJournals: `${value} cílových časopisů`,
+      articleFactoryProjects: `${value} projektů`,
       organsTotal: `${value} orgánů`,
       organsPendingAi: `${value} AI ke kontrole`,
       workplacesTotal: `${value} pracovišť`,

@@ -1,7 +1,7 @@
 // Supabase persistence for Article Factory (kb_article_*).
 
 (function () {
-  const STORAGE_KEY = "kb-dashboard-article-factory-v1";
+  const STORAGE_KEY = "kb-dashboard-article-factory-v2";
 
   const PUBLICATION_FIELDS = [
     "source_key", "title", "authors", "authors_osobni_cislo", "year",
@@ -21,10 +21,18 @@
     "last_verified_at", "journal_record_id"
   ];
 
+  const PROJECT_FIELDS = [
+    "topic_id", "working_title", "target_journal_id", "target_wos_category", "article_type",
+    "research_question", "hypothesis_or_objective", "methodology", "expected_contribution",
+    "status", "current_version_id", "human_owner", "human_owner_osobni_cislo",
+    "deadline_internal", "deadline_submission", "is_ai_assisted", "human_reviewed_at", "revision_checklist"
+  ];
+
   const TABLES = [
     "kb_article_publications",
     "kb_article_topics",
-    "kb_article_target_journals"
+    "kb_article_target_journals",
+    "kb_article_projects"
   ];
 
   let client = null;
@@ -85,6 +93,91 @@
     if (!item.title) item.title = "Bez názvu";
     if (!item.status) item.status = "idea";
     return item;
+  }
+
+  function mapProject(row) {
+    const item = {
+      id: row.id,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      __source: "supabase",
+      __existing: true,
+      revision_checklist: Array.isArray(row.revision_checklist) ? row.revision_checklist : []
+    };
+    PROJECT_FIELDS.forEach((field) => {
+      item[field] = row[field] ?? (field === "is_ai_assisted" ? true : field === "revision_checklist" ? [] : "");
+    });
+    if (!item.status) item.status = "planning";
+    return item;
+  }
+
+  function mapVersion(row) {
+    return {
+      id: row.id,
+      article_project_id: row.article_project_id,
+      version_number: row.version_number,
+      title: row.title || "",
+      abstract: row.abstract || "",
+      keywords: row.keywords || "",
+      introduction: row.introduction || "",
+      literature_review: row.literature_review || "",
+      methodology: row.methodology || "",
+      results_or_expected_results: row.results_or_expected_results || "",
+      discussion: row.discussion || "",
+      conclusion: row.conclusion || "",
+      limitations: row.limitations || "",
+      references: Array.isArray(row.references) ? row.references : [],
+      full_text_markdown: row.full_text_markdown || "",
+      factual_basis: row.factual_basis || window.kbArticleFactoryTypes?.EMPTY_FACTUAL_BASIS || {},
+      human_work_needed: Array.isArray(row.human_work_needed) ? row.human_work_needed : [],
+      reviewer_notes: Array.isArray(row.reviewer_notes) ? row.reviewer_notes : [],
+      is_draft: row.is_draft !== false,
+      created_by_role: row.created_by_role || "human",
+      model_used: row.model_used || "",
+      created_at: row.created_at
+    };
+  }
+
+  function mapReview(row) {
+    return {
+      id: row.id,
+      article_project_id: row.article_project_id,
+      article_version_id: row.article_version_id,
+      ai_role: row.ai_role,
+      model_used: row.model_used,
+      strengths: row.strengths || "",
+      weaknesses: row.weaknesses || "",
+      factual_risks: row.factual_risks || "",
+      methodological_risks: row.methodological_risks || "",
+      literature_gaps: row.literature_gaps || "",
+      journal_fit_assessment: row.journal_fit_assessment || "",
+      recommendations: row.recommendations || [],
+      raw_output: row.raw_output,
+      created_at: row.created_at
+    };
+  }
+
+  function toProjectPayload(item) {
+    const payload = {
+      id: item.id,
+      working_title: item.working_title || null,
+      status: item.status || "planning",
+      updated_at: new Date().toISOString()
+    };
+    PROJECT_FIELDS.forEach((field) => {
+      if (field === "working_title" || field === "status") return;
+      const value = item[field];
+      if (field === "revision_checklist") {
+        payload.revision_checklist = Array.isArray(value) ? value : [];
+        return;
+      }
+      if (field === "is_ai_assisted") {
+        payload.is_ai_assisted = value !== false;
+        return;
+      }
+      payload[field] = value === "" || value == null ? null : value;
+    });
+    return payload;
   }
 
   function mapJournal(row) {
@@ -217,21 +310,41 @@
     return map;
   }
 
-  async function loadAll() {
-    const [pubRows, topicRows, journalRows, linkMap] = await Promise.all([
-      loadTablePaged("kb_article_publications", "year"),
-      loadTablePaged("kb_article_topics", "priority"),
-      loadTablePaged("kb_article_target_journals", "journal_title"),
-      loadTopicPublicationLinks()
+  async function loadProjectBundle() {
+    const [projectRows, versionRows, reviewRows, runRows] = await Promise.all([
+      loadTablePaged("kb_article_projects", "updated_at"),
+      loadTablePaged("kb_article_versions", "version_number"),
+      loadTablePaged("kb_article_ai_role_reviews", "created_at"),
+      loadTablePaged("kb_article_pipeline_runs", "created_at")
     ]);
-    const publications = pubRows.map(mapPublication);
-    const topics = topicRows.map((row) => {
-      const t = mapTopic(row);
-      t.related_publication_ids = linkMap[t.id] || [];
-      return t;
-    });
-    const journals = journalRows.map(mapJournal);
-    return { publications, topics, journals };
+    const projects = projectRows.map(mapProject);
+    const versions = versionRows.map(mapVersion);
+    const reviews = reviewRows.map(mapReview);
+    const pipelineRuns = runRows || [];
+    return { projects, versions, reviews, pipelineRuns };
+  }
+
+  async function loadAll() {
+    const [base, bundle] = await Promise.all([
+      (async () => {
+        const [pubRows, topicRows, journalRows, linkMap] = await Promise.all([
+          loadTablePaged("kb_article_publications", "year"),
+          loadTablePaged("kb_article_topics", "priority"),
+          loadTablePaged("kb_article_target_journals", "journal_title"),
+          loadTopicPublicationLinks()
+        ]);
+        const publications = pubRows.map(mapPublication);
+        const topics = topicRows.map((row) => {
+          const t = mapTopic(row);
+          t.related_publication_ids = linkMap[t.id] || [];
+          return t;
+        });
+        const journals = journalRows.map(mapJournal);
+        return { publications, topics, journals };
+      })(),
+      loadProjectBundle()
+    ]);
+    return { ...base, ...bundle };
   }
 
   async function upsertPublication(item) {
@@ -245,6 +358,41 @@
       .single();
     if (error) throw error;
     return mapPublication(data);
+  }
+
+  async function upsertProject(item) {
+    const supa = getClient();
+    const payload = toProjectPayload(item);
+    if (!item.__existing) payload.created_at = item.created_at || new Date().toISOString();
+    const { data, error } = await supa
+      .from("kb_article_projects")
+      .upsert(payload)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return mapProject(data);
+  }
+
+  async function deleteProject(id) {
+    const supa = getClient();
+    const { error } = await supa.from("kb_article_projects").delete().eq("id", id);
+    if (error) throw error;
+  }
+
+  async function markHumanReviewed(projectId) {
+    const supa = getClient();
+    const { data, error } = await supa
+      .from("kb_article_projects")
+      .update({
+        human_reviewed_at: new Date().toISOString(),
+        status: "ready_for_submission",
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", projectId)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return mapProject(data);
   }
 
   async function upsertPublicationsBatch(items, onProgress) {
@@ -278,9 +426,13 @@
     if (pubIds.length) {
       const links = pubIds.map((publication_id) => ({ topic_id: saved.id, publication_id }));
       const { error: linkErr } = await supa.from("kb_article_topic_publications").insert(links);
-      if (linkErr) throw linkErr;
+      if (linkErr) {
+        console.warn("Topic publication links skipped:", linkErr.message);
+      } else {
+        saved.related_publication_ids = pubIds;
+      }
     }
-    saved.related_publication_ids = pubIds;
+    if (!saved.related_publication_ids) saved.related_publication_ids = pubIds;
     return saved;
   }
 
@@ -333,10 +485,14 @@
       return {
         publications: Array.isArray(parsed.publications) ? parsed.publications : [],
         topics: Array.isArray(parsed.topics) ? parsed.topics : [],
-        journals: Array.isArray(parsed.journals) ? parsed.journals : []
+        journals: Array.isArray(parsed.journals) ? parsed.journals : [],
+        projects: Array.isArray(parsed.projects) ? parsed.projects : [],
+        versions: Array.isArray(parsed.versions) ? parsed.versions : [],
+        reviews: Array.isArray(parsed.reviews) ? parsed.reviews : [],
+        pipelineRuns: Array.isArray(parsed.pipelineRuns) ? parsed.pipelineRuns : []
       };
     } catch (_) {
-      return { publications: [], topics: [], journals: [] };
+      return { publications: [], topics: [], journals: [], projects: [], versions: [], reviews: [], pipelineRuns: [] };
     }
   }
 
@@ -356,6 +512,9 @@
     upsertJournal,
     upsertJournalsBatch,
     deleteJournal,
+    upsertProject,
+    deleteProject,
+    markHumanReviewed,
     uploadAttachment,
     loadLocal,
     saveLocal,
