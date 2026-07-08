@@ -53,15 +53,13 @@
         <button type="button" class="sb-group-head" aria-expanded="false" aria-controls="g-str-body">
           <span class="ic" aria-hidden="true">🎯</span>
           <span class="lb">Strategie</span>
-          <span class="count">7</span>
+          <span class="count">5</span>
           <span class="chev" aria-hidden="true">▶</span>
         </button>
         <div class="sb-group-body" id="g-str-body">
           <a href="#interni-souteze" class="navItem sb-sub" data-page="interni-souteze"><span class="ic" aria-hidden="true">🏆</span><span class="lb">Interní soutěže</span></a>
           <a href="#navraty" class="navItem sb-sub" data-page="navraty"><span class="ic" aria-hidden="true">🔄</span><span class="lb">OP JAK Návraty</span></a>
           <a href="#pcr-vyzkum" class="navItem sb-sub" data-page="pcr-vyzkum"><span class="ic" aria-hidden="true">🛡️</span><span class="lb">Výzkumné směry PČR</span></a>
-          <a href="#casopisy" class="navItem sb-sub" data-page="casopisy"><span class="ic" aria-hidden="true">📚</span><span class="lb">Databáze časopisů</span></a>
-          <a href="#vystupy" class="navItem sb-sub" data-page="vystupy"><span class="ic" aria-hidden="true">📊</span><span class="lb">Výstupy</span></a>
           <a href="#article-factory" class="navItem sb-sub" data-page="article-factory"><span class="ic" aria-hidden="true">✍️</span><span class="lb">Article Factory</span></a>
           <a href="#modul-dkrvo" class="navItem sb-sub" data-page="modul-dkrvo"><span class="ic" aria-hidden="true">📋</span><span class="lb">DKRVO</span></a>
         </div>
@@ -376,16 +374,6 @@
       <div id="eizTokensPageRoot"></div>
     </section>
 
-    <!-- DATABÁZE ČASOPISŮ -->
-    <section id="page-casopisy" class="page">
-      <div id="journalDbPageRoot"></div>
-    </section>
-
-    <!-- VÝSTUPY -->
-    <section id="page-vystupy" class="page">
-      <div id="vystupyPageRoot"></div>
-    </section>
-
     <section id="page-article-factory" class="page">
       <div id="articleFactoryPageRoot"></div>
     </section>
@@ -482,10 +470,6 @@
       <section class="panel">
         <h2>EIZ tokeny</h2>
         <p class="hint">Spusťte <code>supabase/eiz-tokens-schema.sql</code> (po <code>persons-schema.sql</code>), na existující DB <code>eiz-tokens-migrate-v2.sql</code> a <code>eiz-tokens-migrate-v3.sql</code>, poté <code>security-rls.sql</code>. Publikace přiřazujte k roku; přehled metrik je po letech.</p>
-      </section>
-      <section class="panel">
-        <h2>Databáze časopisů</h2>
-        <p class="hint">Spusťte <code>supabase/journal-db-schema.sql</code>, poté <code>security-rls.sql</code>. Import JCR exportů po částech: CSV, TSV, CSC nebo XLSX (Excel). Klíč časopisu = ISSN nebo eISSN. Vzor: <code>data/journal-db-import.example.tsv</code>.</p>
       </section>
       <section class="panel">
         <h2>Document Intelligence</h2>
@@ -1119,12 +1103,6 @@
   <script src="supabase-eiz-tokens.js?v=3.141"></script>
   <script src="eiz-tokens.js?v=3.141"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="supabase-journal-db.js?v=3.141"></script>
-  <script src="journal-db-analysis.js?v=3.141"></script>
-  <script src="journal-db.js?v=3.141"></script>
-  <script src="supabase-vystupy.js?v=3.141"></script>
-  <script src="vystupy-analysis.js?v=3.141"></script>
-  <script src="vystupy.js?v=3.141"></script>
   <script src="supabase-article-factory.js?v=3.141"></script>
   <script src="article-factory-pipeline.js?v=3.141"></script>
   <script src="article-factory.js?v=3.141"></script>

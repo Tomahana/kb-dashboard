@@ -11,7 +11,7 @@
       id: "strategie",
       title: "Strategie",
       slugs: [
-        "interni-souteze", "navraty", "pcr-vyzkum", "casopisy", "vystupy", "article-factory",
+        "interni-souteze", "navraty", "pcr-vyzkum", "article-factory",
         "modul-ppk", "modul-spev", "modul-dkrvo", "modul-vyrocni-zpravy",
         "modul-bilancni-zpravy", "modul-doktorska-skola"
       ]
@@ -130,22 +130,6 @@
       status: "active",
       icon: "🔑",
       stats: ["eizContractsTotal", "eizPublicationsTotal"]
-    },
-    {
-      slug: "casopisy",
-      title: "Databáze časopisů",
-      description: "Import JCR exportů podle roků a oborů — počet časopisů v oboru a roce, AIS pořadí, kvartily/decily/centily a nejlepší výsledek napříč obory v rámci roku.",
-      status: "active",
-      icon: "📚",
-      stats: ["journalRecordsTotal", "journalCategoriesTotal"]
-    },
-    {
-      slug: "vystupy",
-      title: "Výstupy",
-      description: "Publikační výstupy Jimp, JSC, B a C — samostatné tabulky, import z IS VaVaI, analýzy pro DKRVO a PPK.",
-      status: "active",
-      icon: "📈",
-      stats: ["vystupyTotal", "vystupyJimp", "vystupyJsc"]
     },
     {
       slug: "article-factory",
@@ -337,9 +321,6 @@
     const pcrLinked = pcrTopics.filter((t) => t.gestor_osobni_cislo || window.kbPersonLinks?.resolvePerson?.(t, "gestor")).length;
     const eizContracts = window.kbEizTokens?.getContracts?.() || [];
     const eizPublications = window.kbEizTokens?.getPublications?.() || [];
-    const journalRecords = window.kbJournalDb?.getRecords?.() || [];
-    const journalCategories = window.kbJournalDb?.getCategories?.() || [];
-    const vystupyItems = window.kbVystupy?.getVystupy?.() || [];
     const afPublications = window.kbArticleFactory?.getPublications?.() || [];
     const afTopics = window.kbArticleFactory?.getTopics?.() || [];
     const afJournals = window.kbArticleFactory?.getJournals?.() || [];
@@ -364,11 +345,6 @@
       pcrTopicsLinked: pcrLinked,
       eizContractsTotal: eizContracts.length,
       eizPublicationsTotal: eizPublications.length,
-      journalRecordsTotal: journalRecords.length,
-      journalCategoriesTotal: journalCategories.length,
-      vystupyTotal: vystupyItems.length,
-      vystupyJimp: vystupyItems.filter((v) => v.typ_vystupu === "Jimp").length,
-      vystupyJsc: vystupyItems.filter((v) => v.typ_vystupu === "JSC").length,
       articleFactoryPublications: afPublications.length,
       articleFactoryTopics: afTopics.length,
       articleFactoryJournals: afJournals.length,
@@ -400,11 +376,6 @@
       pcrTopicsLinked: `${value} propojených gestorů`,
       eizContractsTotal: `${value} smluv EIZ`,
       eizPublicationsTotal: `${value} publikací EIZ`,
-      journalRecordsTotal: `${value} záznamů časopisů`,
-      journalCategoriesTotal: `${value} oborů JCR`,
-      vystupyTotal: `${value} výstupů`,
-      vystupyJimp: `${value} Jimp`,
-      vystupyJsc: `${value} JSC`,
       articleFactoryPublications: `${value} publikací`,
       articleFactoryTopics: `${value} témat`,
       articleFactoryJournals: `${value} cílových časopisů`,
@@ -422,7 +393,7 @@
 
   function tagClass(key, value) {
     const warnKeys = ["emailsNew", "emailsAi", "deadlinesOverdue", "organsPendingAi", "docIntelligenceNew", "kbItemsOpen"];
-    const purpleKeys = ["competitionsTotal", "navratyCompetitionsTotal", "pcrTopicsTotal", "journalRecordsTotal", "journalCategoriesTotal"];
+    const purpleKeys = ["competitionsTotal", "navratyCompetitionsTotal", "pcrTopicsTotal"];
     const greenKeys = ["personsTotal", "organsTotal", "workplacesTotal", "eizContractsTotal"];
     if (warnKeys.includes(key) && value > 0) return "ty";
     if (purpleKeys.includes(key)) return "tp";
@@ -557,8 +528,6 @@
     document.addEventListener("kb:persons-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:pcr-research-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:eiz-tokens-loaded", () => setTimeout(renderModulesGrid, 60));
-    document.addEventListener("kb:journal-db-loaded", () => setTimeout(renderModulesGrid, 60));
-    document.addEventListener("kb:vystupy-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:rady-organy-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:dkrvo-loaded", () => setTimeout(renderModulesGrid, 60));
     document.addEventListener("kb:kb-items-loaded", () => setTimeout(renderModulesGrid, 60));

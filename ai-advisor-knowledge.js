@@ -16,8 +16,6 @@
     { id: "emaily", label: "E-maily / znalostní báze", page: "emaily", status: "active" },
     { id: "kb-items", label: "KB Notion meeting notes", page: "kb-items", status: "active" },
     { id: "eiz-tokeny", label: "EIZ tokeny / publikace", page: "eiz-tokeny", status: "active" },
-    { id: "casopisy", label: "Databáze časopisů / JCR", page: "casopisy", status: "active" },
-    { id: "vystupy", label: "Výstupy (Jimp, JSC, B, C)", page: "vystupy", status: "active" },
     { id: "article-factory", label: "Article Factory / publikace", page: "article-factory", status: "active" },
     { id: "rady-organy", label: "Rady a orgány UHK", page: "rady-organy", status: "active" }
   ];
@@ -228,53 +226,6 @@
     return out;
   }
 
-  function buildJournalChunks() {
-    const best = window.kbJournalDb?.getBestResults?.() || [];
-    return best.slice(0, 300).map((row) => chunk(
-      `journal:${row.journal_key || row.id}:${row.best_source_year || row.source_year || ""}`,
-      "casopisy",
-      "Databáze časopisů",
-      row.journal_name || row.jcr_abbreviation || "Časopis",
-      [
-        row.best_source_year || row.source_year ? `rok ${row.best_source_year || row.source_year}` : "",
-        row.best_category,
-        row.best_ais != null ? `AIS ${row.best_ais}` : "",
-        row.best_ais_rank ? `pořadí ${row.best_ais_rank_fraction || row.best_ais_rank}` : "",
-        row.best_ais_percentile_band ? row.best_ais_percentile_band : "",
-        row.best_ais_quartile ? row.best_ais_quartile : "",
-        row.issn,
-        row.jif ? `JIF ${row.jif}` : ""
-      ].filter(Boolean).join(" · "),
-      "#casopisy",
-      { journal_key: row.journal_key, issn: row.issn, source_year: row.best_source_year || row.source_year }
-    ));
-  }
-
-  function buildVystupyChunks() {
-    const items = window.kbVystupy?.getVystupy?.() || [];
-    return items.map((v) => chunk(
-      `vystup:${v.typ_vystupu}:${v.id}`,
-      "vystupy",
-      `Výstupy · ${v.typ_vystupu}`,
-      v.nazev,
-      [
-        v.typ_vystupu,
-        v.rok ? `rok ${v.rok}` : "",
-        v.autor,
-        v.zkr_fak || v.fakulta,
-        v.katedra,
-        v.doi,
-        v.isbn,
-        v.casopis,
-        v.riv_id,
-        v.cislo_na_riv,
-        v.poznamka
-      ].filter(Boolean).join(" · "),
-      "#vystupy",
-      { typ_vystupu: v.typ_vystupu, rok: v.rok, riv_id: v.riv_id }
-    ));
-  }
-
   function buildArticleFactoryChunks() {
     const pubs = window.kbArticleFactory?.getPublications?.() || [];
     const topics = window.kbArticleFactory?.getTopics?.() || [];
@@ -385,8 +336,6 @@
     emaily: buildEmailChunks,
     "kb-items": buildKbItemChunks,
     "eiz-tokeny": buildEizChunks,
-    casopisy: buildJournalChunks,
-    vystupy: buildVystupyChunks,
     "article-factory": buildArticleFactoryChunks,
     "rady-organy": buildOrganChunks
   };
