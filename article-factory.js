@@ -1252,11 +1252,6 @@
       });
     }
 
-    const topicDlg = el("afTopicDialog");
-    if (topicDlg) {
-      /* topic form is inline on topics tab */
-    }
-
     const journalDlg = el("afJournalDialog");
     if (journalDlg) {
       armAfDialog(journalDlg, () => { editingJournal = null; });
