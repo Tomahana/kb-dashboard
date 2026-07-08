@@ -11,7 +11,7 @@
       id: "strategie",
       title: "Strategie",
       slugs: [
-        "interni-souteze", "navraty", "pcr-vyzkum", "casopisy", "vystupy",
+        "interni-souteze", "navraty", "pcr-vyzkum", "casopisy", "vystupy", "article-factory",
         "modul-ppk", "modul-spev", "modul-dkrvo", "modul-vyrocni-zpravy",
         "modul-bilancni-zpravy", "modul-doktorska-skola"
       ]
@@ -146,6 +146,14 @@
       status: "active",
       icon: "📈",
       stats: ["vystupyTotal", "vystupyJimp", "vystupyJsc"]
+    },
+    {
+      slug: "article-factory",
+      title: "Article Factory",
+      description: "Publikační pipeline — evidence publikací, témat a cílových Q1 časopisů. Příprava rukopisů s AI podporou a povinnou lidskou revizí.",
+      status: "active",
+      icon: "✍️",
+      stats: ["articleFactoryPublications", "articleFactoryTopics", "articleFactoryJournals"]
     },
     {
       slug: "rady-organy",
@@ -332,6 +340,9 @@
     const journalRecords = window.kbJournalDb?.getRecords?.() || [];
     const journalCategories = window.kbJournalDb?.getCategories?.() || [];
     const vystupyItems = window.kbVystupy?.getVystupy?.() || [];
+    const afPublications = window.kbArticleFactory?.getPublications?.() || [];
+    const afTopics = window.kbArticleFactory?.getTopics?.() || [];
+    const afJournals = window.kbArticleFactory?.getJournals?.() || [];
     const organList = window.kbRadyOrgany?.getOrgans?.() || [];
     const workplaceList = window.kbDkrvo?.getWorkplaces?.() || [];
     const kbItems = window.kbItems?.getItems?.() || [];
@@ -358,6 +369,9 @@
       vystupyTotal: vystupyItems.length,
       vystupyJimp: vystupyItems.filter((v) => v.typ_vystupu === "Jimp").length,
       vystupyJsc: vystupyItems.filter((v) => v.typ_vystupu === "JSC").length,
+      articleFactoryPublications: afPublications.length,
+      articleFactoryTopics: afTopics.length,
+      articleFactoryJournals: afJournals.length,
       organsTotal: organList.length,
       organsPendingAi: window.kbRadyOrgany?.pendingChecksCount?.() || 0,
       workplacesTotal: workplaceList.length,
@@ -391,6 +405,9 @@
       vystupyTotal: `${value} výstupů`,
       vystupyJimp: `${value} Jimp`,
       vystupyJsc: `${value} JSC`,
+      articleFactoryPublications: `${value} publikací`,
+      articleFactoryTopics: `${value} témat`,
+      articleFactoryJournals: `${value} cílových časopisů`,
       organsTotal: `${value} orgánů`,
       organsPendingAi: `${value} AI ke kontrole`,
       workplacesTotal: `${value} pracovišť`,

@@ -18,6 +18,7 @@
     { id: "eiz-tokeny", label: "EIZ tokeny / publikace", page: "eiz-tokeny", status: "active" },
     { id: "casopisy", label: "Databáze časopisů / JCR", page: "casopisy", status: "active" },
     { id: "vystupy", label: "Výstupy (Jimp, JSC, B, C)", page: "vystupy", status: "active" },
+    { id: "article-factory", label: "Article Factory / publikace", page: "article-factory", status: "active" },
     { id: "rady-organy", label: "Rady a orgány UHK", page: "rady-organy", status: "active" }
   ];
 
@@ -274,6 +275,35 @@
     ));
   }
 
+  function buildArticleFactoryChunks() {
+    const pubs = window.kbArticleFactory?.getPublications?.() || [];
+    const topics = window.kbArticleFactory?.getTopics?.() || [];
+    const out = [];
+    for (const p of pubs) {
+      out.push(chunk(
+        `af-pub:${p.id}`,
+        "article-factory",
+        "Article Factory · publikace",
+        p.title,
+        [p.authors, p.year, p.journal_or_publisher, p.doi, p.wos_category, p.abstract].filter(Boolean).join(" · "),
+        "#article-factory",
+        { year: p.year, doi: p.doi }
+      ));
+    }
+    for (const t of topics) {
+      out.push(chunk(
+        `af-topic:${t.id}`,
+        "article-factory",
+        "Article Factory · téma",
+        t.title,
+        [t.status, t.research_area, t.description, t.target_wos_category].filter(Boolean).join(" · "),
+        "#article-factory",
+        { status: t.status, priority: t.priority }
+      ));
+    }
+    return out;
+  }
+
   function buildOrganChunks() {
     const items = window.kbRadyOrgany?.getOrgans?.() || [];
     const out = [];
@@ -357,6 +387,7 @@
     "eiz-tokeny": buildEizChunks,
     casopisy: buildJournalChunks,
     vystupy: buildVystupyChunks,
+    "article-factory": buildArticleFactoryChunks,
     "rady-organy": buildOrganChunks
   };
 
