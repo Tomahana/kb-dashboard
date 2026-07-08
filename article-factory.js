@@ -1,16 +1,28 @@
 // Modul Article Factory — MVP: publikace, témata, časopisy, projekty, pipeline, rukopis, export.
 
 (function () {
-  const VIEWS = [
-    { id: "publications", label: "Moje publikace", icon: "📚" },
-    { id: "topics", label: "Témata článků", icon: "💡" },
-    { id: "journals", label: "Cílové časopisy", icon: "🎯" },
-    { id: "projects", label: "Projekty", icon: "📁" },
-    { id: "pipeline", label: "Pipeline", icon: "⚙️" },
-    { id: "manuscript", label: "Rukopis", icon: "📝" },
-    { id: "review", label: "Review", icon: "🔍" },
-    { id: "export", label: "Export", icon: "📤" }
+  const VIEW_GROUPS = [
+    {
+      label: "Knihovna",
+      items: [
+        { id: "publications", label: "Moje publikace", icon: "📚" },
+        { id: "topics", label: "Témata článků", icon: "💡" },
+        { id: "journals", label: "Cílové časopisy", icon: "🎯" }
+      ]
+    },
+    {
+      label: "Projekt a pipeline",
+      items: [
+        { id: "projects", label: "Projekty", icon: "📁" },
+        { id: "pipeline", label: "Pipeline", icon: "⚙️" },
+        { id: "manuscript", label: "Rukopis", icon: "📝" },
+        { id: "review", label: "Review", icon: "🔍" },
+        { id: "export", label: "Export", icon: "📤" }
+      ]
+    }
   ];
+
+  const VIEWS = VIEW_GROUPS.flatMap((g) => g.items);
 
   const TOPIC_STATUSES = [
     "idea", "selected", "in_progress", "drafted", "reviewed", "submitted", "rejected", "published"
@@ -179,10 +191,18 @@
     return [l(item.journal_title), l(item.wos_category)].filter(Boolean).join("|") || `journal-${uuid()}`;
   }
 
-  const AF_DIALOG_IDS = ["afPublicationDialog", "afTopicDialog", "afJournalDialog", "afProjectDialog"];
+  const AF_DIALOG_IDS = ["afPublicationDialog", "afJournalDialog", "afProjectDialog"];
 
   function isAnyDialogOpen() {
     return AF_DIALOG_IDS.some((id) => el(id)?.open);
+  }
+
+  function isInlineEditorOpen() {
+    return editingTopic !== null && activeView === "topics";
+  }
+
+  function isDataEntryActive() {
+    return isAnyDialogOpen() || isInlineEditorOpen();
   }
 
   function captureOpenDialogDraft() {
@@ -197,14 +217,14 @@
       editingPublication = item;
     }
 
-    const topicDlg = el("afTopicDialog");
-    if (topicDlg?.open) {
-      reopenId = "afTopicDialog";
-      const fd = new FormData(topicDlg.querySelector("form"));
+    const topicForm = el("afTopicInlineForm");
+    if (topicForm && editingTopic !== null) {
+      reopenId = "topics-inline";
+      const fd = new FormData(topicForm);
       const item = {
         ...(editingTopic || {}),
         id: editingTopic?.id || uuid(),
-        related_publication_ids: [...topicDlg.querySelector("[name=related_publication_ids]")?.selectedOptions || []].map((o) => o.value)
+        related_publication_ids: [...topicForm.querySelector("[name=related_publication_ids]")?.selectedOptions || []].map((o) => o.value)
       };
       fd.forEach((val, key) => {
         if (key === "related_publication_ids") return;
@@ -497,7 +517,7 @@
 
   async function loadData(options = {}) {
     if (loading) return;
-    if (!options.force && isAnyDialogOpen()) return;
+    if (!options.force && isDataEntryActive()) return;
     loading = true;
     try {
       const canProbe = window.kbSupabaseArticleFactory?.probeTables;
@@ -902,7 +922,8 @@
       </dialog>`;
   }
 
-  function renderTopicDialog() {
+  function renderTopicInlineForm() {
+    if (editingTopic === null) return "";
     const t = editingTopic || {};
     const pubOptions = publications.map((p) =>
       `<option value="${html(p.id)}" ${(t.related_publication_ids || []).includes(p.id) ? "selected" : ""}>${html(p.title)}</option>`
@@ -911,25 +932,27 @@
       `<option value="${s}" ${t.status === s ? "selected" : ""}>${statusLabel(s)}</option>`
     ).join("");
     return `
-      <dialog id="afTopicDialog" class="afDialog" closedby="none">
-        <form method="dialog" class="afDialogForm">
-          <h3>${t.id ? "Upravit téma" : "Nové téma"}</h3>
+      <section id="afTopicInlineForm" class="afInlinePanel">
+        <h3>${t.id ? "Upravit téma" : "Nové téma"}</h3>
+        <form class="afInlineForm">
           <label>Název *<input name="title" value="${html(t.title)}" required></label>
           <label>Popis<textarea name="description" rows="3">${html(t.description)}</textarea></label>
           <label>Výzkumná oblast<input name="research_area" value="${html(t.research_area)}"></label>
           <label>Možná metodologie<textarea name="possible_methodology" rows="2">${html(t.possible_methodology)}</textarea></label>
           <label>Cílový WoS obor<input name="target_wos_category" value="${html(t.target_wos_category)}"></label>
           <label>Očekávaný přínos<textarea name="expected_contribution" rows="2">${html(t.expected_contribution)}</textarea></label>
-          <label>Priorita (1–5)<input name="priority" type="number" min="1" max="5" value="${html(t.priority || 3)}"></label>
-          <label>Status<select name="status">${statusOptions}</select></label>
+          <div class="afInlineFormRow">
+            <label>Priorita (1–5)<input name="priority" type="number" min="1" max="5" value="${html(t.priority || 3)}"></label>
+            <label>Status<select name="status">${statusOptions}</select></label>
+          </div>
           <label>Související publikace<select name="related_publication_ids" multiple size="4">${pubOptions}</select></label>
           <label>Poznámky<textarea name="notes" rows="2">${html(t.notes)}</textarea></label>
           <div class="afDialogActions">
-            <button type="button" class="btn secondary" data-af-cancel>Zrušit</button>
-            <button type="submit" class="btn primary" value="confirm">Uložit</button>
+            <button type="button" class="btn secondary" data-af-cancel-topic>Zrušit</button>
+            <button type="submit" class="btn primary">Uložit téma</button>
           </div>
         </form>
-      </dialog>`;
+      </section>`;
   }
 
   function renderJournalDialog() {
@@ -1009,8 +1032,10 @@
       <div class="afToolbar">
         <button type="button" class="btn primary" data-af-new-topic>+ Téma</button>
         <label class="btn">Import TSV/CSV<input type="file" accept=".tsv,.csv,.txt" hidden data-af-import-topic></label>
+        <button type="button" class="btn" data-af-goto-projects>→ Projekty</button>
       </div>
-      <p class="hint">Import témat: CSV/TSV se sloupcem <code>Název</code> (nebo <code>Název *</code>). Status <code>Nápad</code> = idea. Sloupec <code>Související publikace</code> páruje názvy z Moje publikace. Vzor: <code>data/article-topics-import.nove-tema-q1.csv</code>.</p>
+      <p class="hint">Formulář tématu je přímo na stránce (ne vyskakovací okno). Projekt vytvoříte v záložce <strong>Projekt a pipeline → Projekty</strong>.</p>
+      ${renderTopicInlineForm()}
       <div class="afTableWrap">
         <table class="afTable">
           <thead><tr><th>P</th><th>Téma</th><th>Oblast</th><th>Status</th><th>Publ.</th><th></th></tr></thead>
@@ -1064,6 +1089,7 @@
       <div class="afToolbar">
         <button type="button" class="btn primary" data-af-new-project>+ Projekt</button>
       </div>
+      <p class="hint">Zde propojíte <strong>téma</strong> s <strong>cílovým časopisem</strong> a spustíte pipeline. Tlačítko Projekty je v řádku záložek <strong>Projekt a pipeline</strong> (hned pod Knihovnou).</p>
       <div class="afTableWrap">
         <table class="afTable">
           <thead><tr><th>Název</th><th>Téma</th><th>Časopis</th><th>Status</th><th></th></tr></thead>
@@ -1185,6 +1211,18 @@
       </div>`;
   }
 
+  function renderTabsHtml() {
+    return VIEW_GROUPS.map((group) => `
+      <div class="afTabGroup">
+        <div class="afTabGroupLabel">${html(group.label)}</div>
+        <div class="afTabRow">
+          ${group.items.map((v) =>
+            `<button type="button" class="afTab ${activeView === v.id ? "active" : ""}" data-af-view="${v.id}">${v.icon} ${html(v.label)}</button>`
+          ).join("")}
+        </div>
+      </div>`).join("");
+  }
+
   function renderPlaceholder(title, desc) {
     return `<div class="afPlaceholder"><h3>${html(title)}</h3><p>${html(desc)}</p><p class="hint">Dostupné od Fáze 2–3.</p></div>`;
   }
@@ -1216,19 +1254,7 @@
 
     const topicDlg = el("afTopicDialog");
     if (topicDlg) {
-      armAfDialog(topicDlg, () => { editingTopic = null; });
-      topicDlg.addEventListener("close", async () => {
-        if (topicDlg.returnValue !== "confirm" && topicDlg.returnValue !== "default") return;
-        const fd = new FormData(topicDlg.querySelector("form"));
-        const item = { ...(editingTopic || {}), id: editingTopic?.id || uuid(), __existing: !!editingTopic?.id, related_publication_ids: [] };
-        fd.forEach((val, key) => {
-          if (key === "related_publication_ids") return;
-          item[key] = n(val);
-        });
-        item.related_publication_ids = [...topicDlg.querySelector("[name=related_publication_ids]")?.selectedOptions || []].map((o) => o.value);
-        await saveTopic(item);
-        editingTopic = null;
-      });
+      /* topic form is inline on topics tab */
     }
 
     const journalDlg = el("afJournalDialog");
@@ -1335,15 +1361,48 @@
 
     root.querySelector("[data-af-new-topic]")?.addEventListener("click", () => {
       editingTopic = { priority: 3, status: "idea", related_publication_ids: [] };
+      activeView = "topics";
       render();
-      el("afTopicDialog")?.showModal();
+      el("afTopicInlineForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
     root.querySelectorAll("[data-af-edit-topic]").forEach((btn) => {
       btn.addEventListener("click", () => {
         editingTopic = topics.find((t) => t.id === btn.dataset.afEditTopic) || {};
+        activeView = "topics";
         render();
-        el("afTopicDialog")?.showModal();
+        el("afTopicInlineForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
+    });
+    root.querySelector("[data-af-goto-projects]")?.addEventListener("click", () => {
+      activeView = "projects";
+      render();
+    });
+    root.querySelector("#afTopicInlineForm form")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      const fd = new FormData(form);
+      const item = {
+        ...(editingTopic || {}),
+        id: editingTopic?.id || uuid(),
+        __existing: !!editingTopic?.id,
+        related_publication_ids: []
+      };
+      fd.forEach((val, key) => {
+        if (key === "related_publication_ids") return;
+        item[key] = n(val);
+      });
+      item.related_publication_ids = [...form.querySelector("[name=related_publication_ids]")?.selectedOptions || []].map((o) => o.value);
+      item.priority = Number(item.priority) || 3;
+      item.status = normalizeTopicImportStatus(item.status);
+      if (await saveTopic(item, { silent: true })) {
+        editingTopic = null;
+        setStatus("Téma uloženo.");
+        render();
+      }
+    });
+    root.querySelector("[data-af-cancel-topic]")?.addEventListener("click", () => {
+      editingTopic = null;
+      render();
     });
     root.querySelectorAll("[data-af-del-topic]").forEach((btn) => {
       btn.addEventListener("click", () => deleteItem("topics", btn.dataset.afDelTopic));
@@ -1380,11 +1439,11 @@
 
   function injectStyles() {
     const existing = el("articleFactoryStyles");
-    if (existing?.dataset?.theme === "dark-v2") return;
+    if (existing?.dataset?.theme === "dark-v3") return;
     if (existing) existing.remove();
     const style = document.createElement("style");
     style.id = "articleFactoryStyles";
-    style.dataset.theme = "dark-v2";
+    style.dataset.theme = "dark-v3";
     style.textContent = `
       #page-article-factory .afModule {
         padding: 0 0 2rem;
@@ -1395,9 +1454,26 @@
       }
       #page-article-factory .afTabs {
         display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+        margin-bottom: 1rem;
+      }
+      #page-article-factory .afTabGroup {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+      #page-article-factory .afTabGroupLabel {
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted, #94a3b8);
+      }
+      #page-article-factory .afTabRow {
+        display: flex;
         flex-wrap: wrap;
         gap: 0.35rem;
-        margin-bottom: 1rem;
       }
       #page-article-factory .afTab {
         border: 1px solid var(--border, #2a3048);
@@ -1649,6 +1725,57 @@
       #page-article-factory #articleFactoryStatus {
         color: var(--muted, #94a3b8);
       }
+      #page-article-factory .afInlinePanel {
+        margin: 0.75rem 0 1rem;
+        padding: 1rem 1.1rem;
+        border: 1px solid var(--accent, #4f8ef7);
+        border-radius: 12px;
+        background: var(--surface2, #1e2335);
+        box-shadow: 0 0 0 1px rgba(79, 142, 247, 0.12);
+      }
+      #page-article-factory .afInlinePanel h3 {
+        margin: 0 0 0.75rem;
+        color: var(--text, #e2e8f0);
+        font-size: 1rem;
+      }
+      #page-article-factory .afInlineForm {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.65rem 0.85rem;
+      }
+      #page-article-factory .afInlineForm label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        font-size: 0.85rem;
+        color: var(--muted, #94a3b8);
+      }
+      #page-article-factory .afInlineForm label:has(textarea),
+      #page-article-factory .afInlineForm label:has(select[multiple]),
+      #page-article-factory .afInlineForm .afDialogActions {
+        grid-column: 1 / -1;
+      }
+      #page-article-factory .afInlineFormRow {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.85rem;
+        grid-column: 1 / -1;
+      }
+      #page-article-factory .afInlineForm input,
+      #page-article-factory .afInlineForm textarea,
+      #page-article-factory .afInlineForm select {
+        padding: 0.4rem 0.5rem;
+        border-radius: 6px;
+        border: 1px solid var(--border, #2a3048);
+        background: var(--surface, #181c27);
+        color: var(--text, #e2e8f0);
+      }
+      @media (max-width: 860px) {
+        #page-article-factory .afInlineForm,
+        #page-article-factory .afInlineFormRow {
+          grid-template-columns: 1fr;
+        }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1667,20 +1794,15 @@
     ensureRenderShell(root);
 
     const reopenDialogId = captureOpenDialogDraft();
-    const needsDialogs = reopenDialogId
+    const needsDialogs = reopenDialogId && reopenDialogId !== "topics-inline"
       || editingPublication !== null
-      || editingTopic !== null
       || editingJournal !== null
       || editingProject !== null;
-
-    const tabHtml = VIEWS.map((v) =>
-      `<button type="button" class="afTab ${activeView === v.id ? "active" : ""}" data-af-view="${v.id}">${v.icon} ${html(v.label)}</button>`
-    ).join("");
 
     el("articleFactoryMain").innerHTML = `
       <div class="afModule">
         <p class="hint">Publikační pipeline pro Q1 články — rukopis anglicky, komentáře česky. AI výstupy vyžadují lidskou revizi.</p>
-        <div class="afTabs">${tabHtml}</div>
+        <div class="afTabs">${renderTabsHtml()}</div>
         <div class="afToolbar">
           <input type="search" class="afSearch" placeholder="Hledat…" data-af-search value="${html(filterSearch)}">
           <button type="button" class="btn" data-af-reload>↻ Načíst</button>
@@ -1693,7 +1815,6 @@
     if (needsDialogs) {
       dialogHost.innerHTML = `
         ${renderPublicationDialog()}
-        ${renderTopicDialog()}
         ${renderJournalDialog()}
         ${renderProjectDialog()}
       `;
@@ -1707,7 +1828,10 @@
     }
 
     bindEvents(root);
-    if (reopenDialogId) el(reopenDialogId)?.showModal();
+    if (reopenDialogId && reopenDialogId !== "topics-inline") el(reopenDialogId)?.showModal();
+    if (reopenDialogId === "topics-inline" || (editingTopic !== null && activeView === "topics")) {
+      el("afTopicInlineForm")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
   }
 
   function init() {
