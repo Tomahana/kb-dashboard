@@ -1,13 +1,14 @@
-// Modul Article Factory — příprava vědeckých článků (Fáze 1: publikace, témata, časopisy).
+// Modul Article Factory — MVP: publikace, témata, časopisy, projekty, pipeline, rukopis, export.
 
 (function () {
   const VIEWS = [
     { id: "publications", label: "Moje publikace", icon: "📚" },
     { id: "topics", label: "Témata článků", icon: "💡" },
     { id: "journals", label: "Cílové časopisy", icon: "🎯" },
+    { id: "projects", label: "Projekty", icon: "📁" },
     { id: "pipeline", label: "Pipeline", icon: "⚙️" },
     { id: "manuscript", label: "Rukopis", icon: "📝" },
-    { id: "review", label: "Review panel", icon: "🔍" },
+    { id: "review", label: "Review", icon: "🔍" },
     { id: "export", label: "Export", icon: "📤" }
   ];
 
@@ -61,14 +62,22 @@
   let publications = [];
   let topics = [];
   let journals = [];
+  let projects = [];
+  let versions = [];
+  let reviews = [];
+  let pipelineRuns = [];
   let useSupabase = false;
   let loading = false;
+  let pipelineLoading = false;
   let activeView = "publications";
   let filterSearch = "";
+  let selectedProjectId = "";
   let editingPublication = null;
   let editingTopic = null;
   let editingJournal = null;
+  let editingProject = null;
   let pipelineStatus = null;
+  let lastPipelineResult = null;
 
   const el = (id) => document.getElementById(id);
   const n = (s) => (s || "").toString().trim();
@@ -77,7 +86,36 @@
   const uuid = () => crypto.randomUUID?.() || `af-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   function persistLocal() {
-    window.kbSupabaseArticleFactory?.saveLocal?.({ publications, topics, journals });
+    window.kbSupabaseArticleFactory?.saveLocal?.({
+      publications, topics, journals, projects, versions, reviews, pipelineRuns
+    });
+  }
+
+  function getSelectedProject() {
+    return projects.find((p) => p.id === selectedProjectId) || projects[0] || null;
+  }
+
+  function getProjectVersions(projectId) {
+    return versions.filter((v) => v.article_project_id === projectId).sort((a, b) => b.version_number - a.version_number);
+  }
+
+  function getProjectReviews(projectId) {
+    return reviews.filter((r) => r.article_project_id === projectId);
+  }
+
+  function getCurrentVersion(project) {
+    if (!project) return null;
+    return versions.find((v) => v.id === project.current_version_id)
+      || getProjectVersions(project.id)[0]
+      || null;
+  }
+
+  function topicTitle(id) {
+    return topics.find((t) => t.id === id)?.title || "—";
+  }
+
+  function journalTitle(id) {
+    return journals.find((j) => j.id === id)?.journal_title || "—";
   }
 
   function setStatus(text, isError) {
@@ -196,13 +234,23 @@
         publications = data.publications || [];
         topics = data.topics || [];
         journals = data.journals || [];
+        projects = data.projects || [];
+        versions = data.versions || [];
+        reviews = data.reviews || [];
+        pipelineRuns = data.pipelineRuns || [];
+        if (!selectedProjectId && projects.length) selectedProjectId = projects[0].id;
         persistLocal();
-        setStatus(`Načteno ze Supabase: ${publications.length} publikací, ${topics.length} témat, ${journals.length} časopisů.`);
+        setStatus(`Načteno: ${publications.length} publ., ${topics.length} témat, ${journals.length} čas., ${projects.length} projektů.`);
       } else {
-        const local = window.kbSupabaseArticleFactory?.loadLocal?.() || { publications: [], topics: [], journals: [] };
-        publications = local.publications;
-        topics = local.topics;
-        journals = local.journals;
+        const local = window.kbSupabaseArticleFactory?.loadLocal?.() || {};
+        publications = local.publications || [];
+        topics = local.topics || [];
+        journals = local.journals || [];
+        projects = local.projects || [];
+        versions = local.versions || [];
+        reviews = local.reviews || [];
+        pipelineRuns = local.pipelineRuns || [];
+        if (!selectedProjectId && projects.length) selectedProjectId = projects[0].id;
         setStatus(useSupabase
           ? "Supabase tabulky nejsou k dispozici — používám lokální cache."
           : `Lokální režim: ${publications.length} publikací, ${topics.length} témat, ${journals.length} časopisů.`);
@@ -287,6 +335,80 @@
     render();
   }
 
+  async function saveProject(item) {
+    if (!n(item.working_title) && !item.topic_id) {
+      setStatus("Projekt potřebuje název nebo téma.", true);
+      return;
+    }
+    if (!item.working_title && item.topic_id) {
+      item.working_title = topicTitle(item.topic_id);
+    }
+    const checklist = item.revision_checklist?.length
+      ? item.revision_checklist
+      : (window.kbArticleFactoryTypes?.REVISION_CHECKLIST || []).map((c) => ({ ...c, checked: false }));
+    item.revision_checklist = checklist;
+    item.is_ai_assisted = true;
+    if (useSupabase && await ensureAuth()) {
+      const saved = await window.kbSupabaseArticleFactory.upsertProject(item);
+      const idx = projects.findIndex((p) => p.id === saved.id);
+      if (idx >= 0) projects[idx] = saved;
+      else projects.push(saved);
+      selectedProjectId = saved.id;
+    } else {
+      if (!item.id) item.id = uuid();
+      item.__existing = true;
+      const idx = projects.findIndex((p) => p.id === item.id);
+      if (idx >= 0) projects[idx] = item;
+      else projects.push(item);
+      selectedProjectId = item.id;
+    }
+    persistLocal();
+    setStatus("Projekt uložen.");
+    render();
+  }
+
+  async function runPipelineForProject(projectId) {
+    if (!projectId) {
+      setStatus("Vyberte projekt.", true);
+      return;
+    }
+    if (!useSupabase) {
+      setStatus("Pipeline vyžaduje Supabase a nasazenou Edge Function.", true);
+      return;
+    }
+    pipelineLoading = true;
+    render();
+    try {
+      setStatus("Spouštím AI pipeline (8 rolí)… může trvat několik minut.");
+      const result = await window.kbArticlePipeline.runPipeline(projectId);
+      lastPipelineResult = result;
+      await loadData();
+      setStatus(`Pipeline dokončena. Run ID: ${result.run_id || "—"}. Vyžaduje lidskou revizi.`);
+      activeView = "manuscript";
+    } catch (err) {
+      setStatus(`Pipeline selhala: ${err.message || err}`, true);
+    } finally {
+      pipelineLoading = false;
+      render();
+    }
+  }
+
+  async function markHumanReviewed() {
+    const project = getSelectedProject();
+    if (!project) return;
+    if (useSupabase && await ensureAuth()) {
+      const saved = await window.kbSupabaseArticleFactory.markHumanReviewed(project.id);
+      const idx = projects.findIndex((p) => p.id === saved.id);
+      if (idx >= 0) projects[idx] = saved;
+    } else {
+      project.human_reviewed_at = new Date().toISOString();
+      project.status = "ready_for_submission";
+    }
+    persistLocal();
+    setStatus("Projekt označen jako lidsky zkontrolován.");
+    render();
+  }
+
   async function syncFromVystupy() {
     const vystupy = (window.kbVystupy?.getVystupy?.() || [])
       .filter((v) => v.typ_vystupu === "Jimp" || v.typ_vystupu === "JSC");
@@ -367,11 +489,17 @@
     if (useSupabase && await ensureAuth()) {
       if (type === "publications") await window.kbSupabaseArticleFactory.deletePublication(id);
       else if (type === "topics") await window.kbSupabaseArticleFactory.deleteTopic(id);
+      else if (type === "projects") await window.kbSupabaseArticleFactory.deleteProject(id);
       else await window.kbSupabaseArticleFactory.deleteJournal(id);
     }
     if (type === "publications") publications = publications.filter((p) => p.id !== id);
     else if (type === "topics") topics = topics.filter((t) => t.id !== id);
-    else journals = journals.filter((j) => j.id !== id);
+    else if (type === "projects") {
+      projects = projects.filter((p) => p.id !== id);
+      versions = versions.filter((v) => v.article_project_id !== id);
+      reviews = reviews.filter((r) => r.article_project_id !== id);
+      if (selectedProjectId === id) selectedProjectId = projects[0]?.id || "";
+    } else journals = journals.filter((j) => j.id !== id);
     persistLocal();
     setStatus("Záznam smazán.");
     render();
@@ -588,20 +716,141 @@
       </div>`;
   }
 
+  function renderProjectsView() {
+    const rows = projects.map((p) => `
+      <tr class="${p.id === selectedProjectId ? "afRowSelected" : ""}">
+        <td><strong>${html(p.working_title || "Bez názvu")}</strong></td>
+        <td>${html(topicTitle(p.topic_id))}</td>
+        <td>${html(journalTitle(p.target_journal_id))}</td>
+        <td><span class="afStatus">${html(p.status)}</span></td>
+        <td class="afActions">
+          <button type="button" class="btn small" data-af-select-project="${html(p.id)}">Vybrat</button>
+          <button type="button" class="btn small" data-af-edit-project="${html(p.id)}">Upravit</button>
+          <button type="button" class="btn small danger" data-af-del-project="${html(p.id)}">Smazat</button>
+        </td>
+      </tr>`).join("");
+    return `
+      <div class="afToolbar">
+        <button type="button" class="btn primary" data-af-new-project>+ Projekt</button>
+      </div>
+      <div class="afTableWrap">
+        <table class="afTable">
+          <thead><tr><th>Název</th><th>Téma</th><th>Časopis</th><th>Status</th><th></th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="5" class="afEmpty">Zatím žádné projekty — vytvořte z tématu.</td></tr>`}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function renderProjectDialog() {
+    const p = editingProject || {};
+    const topicOpts = topics.map((t) => `<option value="${html(t.id)}" ${p.topic_id === t.id ? "selected" : ""}>${html(t.title)}</option>`).join("");
+    const journalOpts = journals.map((j) => `<option value="${html(j.id)}" ${p.target_journal_id === j.id ? "selected" : ""}>${html(j.journal_title)}</option>`).join("");
+    return `
+      <dialog id="afProjectDialog" class="afDialog">
+        <form method="dialog" class="afDialogForm">
+          <h3>${p.id ? "Upravit projekt" : "Nový publikační projekt"}</h3>
+          <label>Téma<select name="topic_id"><option value="">—</option>${topicOpts}</select></label>
+          <label>Pracovní název<input name="working_title" value="${html(p.working_title)}"></label>
+          <label>Cílový časopis<select name="target_journal_id"><option value="">—</option>${journalOpts}</select></label>
+          <label>Výzkumná otázka<textarea name="research_question" rows="2">${html(p.research_question)}</textarea></label>
+          <label>Hypotéza / cíl<textarea name="hypothesis_or_objective" rows="2">${html(p.hypothesis_or_objective)}</textarea></label>
+          <label>Interní deadline<input name="deadline_internal" type="date" value="${html(p.deadline_internal || "")}"></label>
+          <div class="afDialogActions">
+            <button type="button" class="btn secondary" data-af-cancel>Zrušit</button>
+            <button type="submit" class="btn primary">Uložit</button>
+          </div>
+        </form>
+      </dialog>`;
+  }
+
   function renderPipelineView() {
+    const project = getSelectedProject();
     const ps = pipelineStatus || {};
+    const runs = pipelineRuns.filter((r) => r.article_project_id === project?.id).slice(-3);
     return `
       <div class="afPlaceholder">
-        <p><strong>Publikační pipeline</strong> — měsíční příprava článku s lidskou kontrolou.</p>
-        <p class="hint">Fáze 1: evidence dat + Edge Function. AI kroky (8 rolí) přijdou ve Fázi 3.</p>
+        <p><strong>AI publikační pipeline</strong> — 8 rolí, výstup vždy jako draft.</p>
+        ${project ? `<p>Aktivní projekt: <strong>${html(project.working_title)}</strong> (${html(project.status)})</p>` : `<p class="afError">Nejdříve vytvořte a vyberte projekt.</p>`}
         <div class="afToolbar">
-          <button type="button" class="btn primary" data-af-pipeline-ping>Otestovat Edge Function</button>
-          <button type="button" class="btn" data-af-reload>Načíst Supabase</button>
+          <select data-af-project-select class="afSearch">${projects.map((p) => `<option value="${html(p.id)}" ${p.id === selectedProjectId ? "selected" : ""}>${html(p.working_title)}</option>`).join("")}</select>
+          <button type="button" class="btn" data-af-pipeline-ping>Test Edge Function</button>
+          <button type="button" class="btn primary" data-af-run-pipeline ${!project || pipelineLoading ? "disabled" : ""}>${pipelineLoading ? "Pipeline běží…" : "Spustit pipeline"}</button>
         </div>
-        ${ps.ok ? `<pre class="afPre">${html(JSON.stringify(ps, null, 2))}</pre>` : ""}
+        ${lastPipelineResult ? `<pre class="afPre">${html(JSON.stringify(lastPipelineResult, null, 2).slice(0, 4000))}</pre>` : ""}
+        ${runs.length ? `<h4>Poslední běhy</h4><ul>${runs.map((r) => `<li>${html(r.status)} — ${html(r.summary || "")} (${html(r.created_at)})</li>`).join("")}</ul>` : ""}
+        ${ps.ok ? `<p class="hint">Edge Function OK (fáze ${ps.phase || "mvp"})</p>` : ""}
         ${ps.error ? `<p class="afError">${html(ps.error)}</p>` : ""}
-        <p class="hint">SQL: <code>supabase/article-factory-schema.sql</code> → <code>article-factory-storage.sql</code> → <code>article-factory-rls.sql</code><br>
-        Deploy: <code>supabase functions deploy article-pipeline</code></p>
+      </div>`;
+  }
+
+  function renderManuscriptView() {
+    const project = getSelectedProject();
+    if (!project) return `<div class="afEmpty">Vyberte projekt v záložce Projekty nebo Pipeline.</div>`;
+    const version = getCurrentVersion(project);
+    if (!version) return `<div class="afEmpty">Zatím žádná verze rukopisu — spusťte pipeline.</div>`;
+    const sections = window.kbArticleFactoryTypes?.MANUSCRIPT_SECTIONS || [];
+    const sectionHtml = sections.map(({ key, label }) => {
+      const body = n(version[key]);
+      if (!body) return "";
+      return `<details class="afSection" open><summary>${html(label)}</summary><div class="afSectionBody">${html(body)}</div></details>`;
+    }).join("");
+    return `
+      <div class="afManuscript">
+        <h3>${html(version.title || project.working_title)} <span class="afTag">v${version.version_number} DRAFT</span></h3>
+        <p class="hint">Model: ${html(version.model_used || "—")} · Role: ${html(version.created_by_role || "—")}</p>
+        ${sectionHtml || `<pre class="afPre">${html(version.full_text_markdown || "")}</pre>`}
+        <h4>Factual Basis</h4>
+        <pre class="afPre">${html(JSON.stringify(version.factual_basis || {}, null, 2))}</pre>
+        <h4>Human Work Needed</h4>
+        <pre class="afPre">${html(JSON.stringify(version.human_work_needed || [], null, 2))}</pre>
+      </div>`;
+  }
+
+  function renderReviewView() {
+    const project = getSelectedProject();
+    if (!project) return `<div class="afEmpty">Vyberte projekt.</div>`;
+    const projectReviews = getProjectReviews(project.id);
+    const cards = projectReviews.map((r) => `
+      <article class="afReviewCard">
+        <h4>${html(r.ai_role)}</h4>
+        ${r.strengths ? `<p><strong>Strengths:</strong> ${html(r.strengths)}</p>` : ""}
+        ${r.weaknesses ? `<p><strong>Weaknesses:</strong> ${html(r.weaknesses)}</p>` : ""}
+        ${r.factual_risks ? `<p><strong>Factual risks:</strong> ${html(r.factual_risks)}</p>` : ""}
+        ${r.methodological_risks ? `<p><strong>Methodological risks:</strong> ${html(r.methodological_risks)}</p>` : ""}
+        ${r.journal_fit_assessment ? `<p><strong>Journal fit:</strong> ${html(r.journal_fit_assessment)}</p>` : ""}
+      </article>`).join("");
+    const checklist = project.revision_checklist?.length
+      ? project.revision_checklist
+      : (window.kbArticleFactoryTypes?.REVISION_CHECKLIST || []).map((c) => ({ ...c, checked: false }));
+    const checklistHtml = checklist.map((item, idx) => `
+      <label class="afCheckItem"><input type="checkbox" data-af-check-idx="${idx}" ${item.checked ? "checked" : ""}> ${html(item.question)}</label>`).join("");
+    return `
+      <div class="afReview">
+        <h3>AI Review panel</h3>
+        ${cards || `<p class="afEmpty">Zatím žádné AI recenze — spusťte pipeline.</p>`}
+        <h3>Checklist před lidskou revizí</h3>
+        <div class="afChecklist">${checklistHtml}</div>
+        <div class="afToolbar">
+          <button type="button" class="btn primary" data-af-mark-reviewed>Označit jako lidsky zkontrolováno</button>
+        </div>
+      </div>`;
+  }
+
+  function renderExportView() {
+    const project = getSelectedProject();
+    if (!project) return `<div class="afEmpty">Vyberte projekt.</div>`;
+    const version = getCurrentVersion(project);
+    if (!version) return `<div class="afEmpty">Chybí verze rukopisu k exportu.</div>`;
+    const canExport = !!project.human_reviewed_at;
+    return `
+      <div class="afExport">
+        <h3>Export Markdown</h3>
+        <p class="hint">Doporučeno exportovat až po lidské revizi. DOCX export: TODO.</p>
+        <p>Human reviewed: ${project.human_reviewed_at ? new Date(project.human_reviewed_at).toLocaleString("cs-CZ") : "ne"}</p>
+        <div class="afToolbar">
+          <button type="button" class="btn primary" data-af-export-md ${!canExport ? "" : ""}>Stáhnout Markdown</button>
+          ${!canExport ? `<span class="hint">Export je možný i bez revize — obsahuje DRAFT watermark.</span>` : ""}
+        </div>
       </div>`;
   }
 
@@ -613,10 +862,11 @@
     if (activeView === "publications") return renderPublicationsView();
     if (activeView === "topics") return renderTopicsView();
     if (activeView === "journals") return renderJournalsView();
+    if (activeView === "projects") return renderProjectsView();
     if (activeView === "pipeline") return renderPipelineView();
-    if (activeView === "manuscript") return renderPlaceholder("Rukopis", "Editor verzí, Factual Basis a Human Work Needed.");
-    if (activeView === "review") return renderPlaceholder("Review panel", "AI recenze od 8 rolí.");
-    return renderPlaceholder("Export", "Markdown export po lidské revizi (human_reviewed_at).");
+    if (activeView === "manuscript") return renderManuscriptView();
+    if (activeView === "review") return renderReviewView();
+    return renderExportView();
   }
 
   function bindDialogs() {
@@ -665,6 +915,20 @@
       });
       journalDlg.__bound = true;
     }
+
+    const projectDlg = el("afProjectDialog");
+    if (projectDlg && !projectDlg.__bound) {
+      projectDlg.querySelector("[data-af-cancel]")?.addEventListener("click", () => projectDlg.close());
+      projectDlg.addEventListener("close", async () => {
+        if (projectDlg.returnValue !== "confirm" && projectDlg.returnValue !== "default") return;
+        const fd = new FormData(projectDlg.querySelector("form"));
+        const item = { ...(editingProject || {}), id: editingProject?.id || uuid(), __existing: !!editingProject?.id, status: editingProject?.status || "planning" };
+        fd.forEach((val, key) => { item[key] = n(val); });
+        await saveProject(item);
+        editingProject = null;
+      });
+      projectDlg.__bound = true;
+    }
   }
 
   function bindEvents(root) {
@@ -682,7 +946,44 @@
 
     root.querySelector("[data-af-reload]")?.addEventListener("click", () => loadData());
     root.querySelector("[data-af-pipeline-ping]")?.addEventListener("click", () => checkPipeline());
+    root.querySelector("[data-af-run-pipeline]")?.addEventListener("click", () => runPipelineForProject(selectedProjectId));
+    root.querySelector("[data-af-project-select]")?.addEventListener("change", (e) => {
+      selectedProjectId = e.target.value;
+      render();
+    });
     root.querySelector("[data-af-sync-vystupy]")?.addEventListener("click", () => syncFromVystupy());
+
+    root.querySelector("[data-af-new-project]")?.addEventListener("click", () => {
+      editingProject = { revision_checklist: window.kbArticleFactoryTypes?.REVISION_CHECKLIST?.map((c) => ({ ...c, checked: false })) };
+      render();
+      el("afProjectDialog")?.showModal();
+    });
+    root.querySelectorAll("[data-af-edit-project]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        editingProject = projects.find((p) => p.id === btn.dataset.afEditProject) || {};
+        render();
+        el("afProjectDialog")?.showModal();
+      });
+    });
+    root.querySelectorAll("[data-af-select-project]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selectedProjectId = btn.dataset.afSelectProject;
+        setStatus("Projekt vybrán.");
+        render();
+      });
+    });
+    root.querySelectorAll("[data-af-del-project]").forEach((btn) => {
+      btn.addEventListener("click", () => deleteItem("projects", btn.dataset.afDelProject));
+    });
+
+    root.querySelector("[data-af-mark-reviewed]")?.addEventListener("click", () => markHumanReviewed());
+    root.querySelector("[data-af-export-md]")?.addEventListener("click", () => {
+      const project = getSelectedProject();
+      const version = getCurrentVersion(project);
+      if (!version) return;
+      window.kbArticleFactoryExport?.exportVersion?.(version, project, getProjectReviews(project.id));
+      setStatus("Markdown export stažen.");
+    });
 
     root.querySelector("[data-af-new-pub]")?.addEventListener("click", () => {
       editingPublication = {};
@@ -783,6 +1084,12 @@
       .afDialogActions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
       .btn.small { font-size: 0.8rem; padding: 0.25rem 0.5rem; }
       .btn.danger { color: #b91c1c; border-color: #fecaca; }
+      .afRowSelected { background: #eff6ff; }
+      .afSection { margin: 0.5rem 0; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.5rem; }
+      .afSectionBody { white-space: pre-wrap; font-size: 0.9rem; margin-top: 0.5rem; }
+      .afReviewCard { border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; }
+      .afChecklist { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.75rem 0; }
+      .afCheckItem { font-size: 0.9rem; }
     `;
     document.head.appendChild(style);
   }
@@ -817,6 +1124,7 @@
       ${renderPublicationDialog()}
       ${renderTopicDialog()}
       ${renderJournalDialog()}
+      ${renderProjectDialog()}
     `;
 
     const statusNode = el("articleFactoryStatus");
@@ -842,6 +1150,10 @@
     getPublications: () => publications,
     getTopics: () => topics,
     getJournals: () => journals,
+    getProjects: () => projects,
+    getVersions: () => versions,
+    getReviews: () => reviews,
+    getSelectedProject,
     loadData,
     render
   };

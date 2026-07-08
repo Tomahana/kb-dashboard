@@ -48,9 +48,19 @@
     return invoke("status");
   }
 
+  async function runPipeline(projectId) {
+    return invoke("run_pipeline", { project_id: projectId });
+  }
+
+  async function runStep(projectId, step, priorOutputs = {}) {
+    return invoke("run_step", { project_id: projectId, step, prior_outputs: priorOutputs });
+  }
+
   window.kbArticlePipeline = {
     invoke,
     ping,
-    getStatus
+    getStatus,
+    runPipeline,
+    runStep
   };
 })();
