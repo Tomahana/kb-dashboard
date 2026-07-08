@@ -157,10 +157,15 @@ export const ROLE_CONFIGS: Record<AiRole, AIRoleConfig> = {
   },
 };
 
+/** Article Factory — vlastní Anthropic klíč (odděleně od kb-agent). Fallback na sdílený ANTHROPIC_API_KEY. */
+export function getAnthropicApiKey(): string | null {
+  return Deno.env.get("ANTHROPIC_API_KEY_article") || Deno.env.get("ANTHROPIC_API_KEY") || null;
+}
+
 export function getProviderApiKey(provider: AiProvider): string | null {
+  if (provider === "anthropic") return getAnthropicApiKey();
   const map: Record<string, string> = {
     openai: "OPENAI_API_KEY",
-    anthropic: "ANTHROPIC_API_KEY",
     xai: "XAI_API_KEY",
     google: "GOOGLE_API_KEY",
   };
@@ -172,7 +177,9 @@ export function getProviderApiKey(provider: AiProvider): string | null {
 export function aiKeysStatus(): Record<string, boolean> {
   return {
     openai: !!Deno.env.get("OPENAI_API_KEY"),
-    anthropic: !!Deno.env.get("ANTHROPIC_API_KEY"),
+    anthropic: !!getAnthropicApiKey(),
+    anthropic_article: !!Deno.env.get("ANTHROPIC_API_KEY_article"),
+    anthropic_shared: !!Deno.env.get("ANTHROPIC_API_KEY"),
     xai: !!Deno.env.get("XAI_API_KEY"),
     google: !!Deno.env.get("GOOGLE_API_KEY"),
   };

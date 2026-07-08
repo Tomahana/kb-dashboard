@@ -1,7 +1,7 @@
 /**
  * Article Pipeline — Supabase Edge Function (MVP)
  *
- * Env secrets: OPENAI_API_KEY, ANTHROPIC_API_KEY, XAI_API_KEY, GOOGLE_API_KEY (optional)
+ * Env secrets: OPENAI_API_KEY, ANTHROPIC_API_KEY_article (nebo ANTHROPIC_API_KEY), XAI_API_KEY
  * Deploy: supabase functions deploy article-pipeline --project-ref <ref>
  */
 
