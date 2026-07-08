@@ -152,6 +152,87 @@
     return [l(item.journal_title), l(item.wos_category)].filter(Boolean).join("|") || `journal-${uuid()}`;
   }
 
+  const AF_DIALOG_IDS = ["afPublicationDialog", "afTopicDialog", "afJournalDialog", "afProjectDialog"];
+
+  function isAnyDialogOpen() {
+    return AF_DIALOG_IDS.some((id) => el(id)?.open);
+  }
+
+  function captureOpenDialogDraft() {
+    let reopenId = null;
+
+    const pubDlg = el("afPublicationDialog");
+    if (pubDlg?.open) {
+      reopenId = "afPublicationDialog";
+      const fd = new FormData(pubDlg.querySelector("form"));
+      const item = { ...(editingPublication || {}), id: editingPublication?.id || uuid() };
+      fd.forEach((val, key) => { item[key] = n(val); });
+      editingPublication = item;
+    }
+
+    const topicDlg = el("afTopicDialog");
+    if (topicDlg?.open) {
+      reopenId = "afTopicDialog";
+      const fd = new FormData(topicDlg.querySelector("form"));
+      const item = {
+        ...(editingTopic || {}),
+        id: editingTopic?.id || uuid(),
+        related_publication_ids: [...topicDlg.querySelector("[name=related_publication_ids]")?.selectedOptions || []].map((o) => o.value)
+      };
+      fd.forEach((val, key) => {
+        if (key === "related_publication_ids") return;
+        item[key] = n(val);
+      });
+      editingTopic = item;
+    }
+
+    const journalDlg = el("afJournalDialog");
+    if (journalDlg?.open) {
+      reopenId = "afJournalDialog";
+      const fd = new FormData(journalDlg.querySelector("form"));
+      const item = { ...(editingJournal || {}), id: editingJournal?.id || uuid() };
+      fd.forEach((val, key) => { item[key] = n(val); });
+      editingJournal = item;
+    }
+
+    const projectDlg = el("afProjectDialog");
+    if (projectDlg?.open) {
+      reopenId = "afProjectDialog";
+      const fd = new FormData(projectDlg.querySelector("form"));
+      const item = { ...(editingProject || {}), id: editingProject?.id || uuid() };
+      fd.forEach((val, key) => { item[key] = n(val); });
+      editingProject = item;
+    }
+
+    return reopenId;
+  }
+
+  function ensureRenderShell(root) {
+    if (!el("articleFactoryMain")) {
+      root.innerHTML = `<div id="articleFactoryMain"></div><div id="articleFactoryDialogs"></div>`;
+    }
+  }
+
+  function armAfDialog(dlg, onCancel) {
+    if (!dlg) return;
+    dlg.addEventListener("cancel", (e) => {
+      if (!dlg.dataset.afAllowClose) {
+        e.preventDefault();
+        return;
+      }
+      delete dlg.dataset.afAllowClose;
+      onCancel?.();
+    });
+    dlg.querySelector("[data-af-cancel]")?.addEventListener("click", () => {
+      dlg.dataset.afAllowClose = "1";
+      onCancel?.();
+      dlg.close("cancel");
+    });
+    dlg.querySelector("form")?.addEventListener("submit", () => {
+      dlg.dataset.afAllowClose = "1";
+    });
+  }
+
   function cleanJournalIssn(value) {
     const v = n(value);
     return /^n\/a$/i.test(v) ? "" : v;
@@ -332,8 +413,9 @@
     return out;
   }
 
-  async function loadData() {
+  async function loadData(options = {}) {
     if (loading) return;
+    if (!options.force && isAnyDialogOpen()) return;
     loading = true;
     try {
       const canProbe = window.kbSupabaseArticleFactory?.probeTables;
@@ -667,7 +749,7 @@
   function renderPublicationDialog() {
     const p = editingPublication || {};
     return `
-      <dialog id="afPublicationDialog" class="afDialog">
+      <dialog id="afPublicationDialog" class="afDialog" closedby="none">
         <form method="dialog" class="afDialogForm">
           <h3>${p.id ? "Upravit publikaci" : "Nová publikace"}</h3>
           <label>Název *<input name="title" value="${html(p.title)}" required></label>
@@ -684,7 +766,7 @@
           <label>Poznámky<textarea name="notes" rows="2">${html(p.notes)}</textarea></label>
           <div class="afDialogActions">
             <button type="button" class="btn secondary" data-af-cancel>Zrušit</button>
-            <button type="submit" class="btn primary">Uložit</button>
+            <button type="submit" class="btn primary" value="confirm">Uložit</button>
           </div>
         </form>
       </dialog>`;
@@ -699,7 +781,7 @@
       `<option value="${s}" ${t.status === s ? "selected" : ""}>${statusLabel(s)}</option>`
     ).join("");
     return `
-      <dialog id="afTopicDialog" class="afDialog">
+      <dialog id="afTopicDialog" class="afDialog" closedby="none">
         <form method="dialog" class="afDialogForm">
           <h3>${t.id ? "Upravit téma" : "Nové téma"}</h3>
           <label>Název *<input name="title" value="${html(t.title)}" required></label>
@@ -714,7 +796,7 @@
           <label>Poznámky<textarea name="notes" rows="2">${html(t.notes)}</textarea></label>
           <div class="afDialogActions">
             <button type="button" class="btn secondary" data-af-cancel>Zrušit</button>
-            <button type="submit" class="btn primary">Uložit</button>
+            <button type="submit" class="btn primary" value="confirm">Uložit</button>
           </div>
         </form>
       </dialog>`;
@@ -723,7 +805,7 @@
   function renderJournalDialog() {
     const j = editingJournal || {};
     return `
-      <dialog id="afJournalDialog" class="afDialog">
+      <dialog id="afJournalDialog" class="afDialog" closedby="none">
         <form method="dialog" class="afDialogForm">
           <h3>${j.id ? "Upravit časopis" : "Nový cílový časopis"}</h3>
           <label>Název časopisu *<input name="journal_title" value="${html(j.journal_title)}" required></label>
@@ -744,7 +826,7 @@
           <label>Poznámky<textarea name="notes" rows="2">${html(j.notes)}</textarea></label>
           <div class="afDialogActions">
             <button type="button" class="btn secondary" data-af-cancel>Zrušit</button>
-            <button type="submit" class="btn primary">Uložit</button>
+            <button type="submit" class="btn primary" value="confirm">Uložit</button>
           </div>
         </form>
       </dialog>`;
@@ -822,9 +904,10 @@
     return `
       <div class="afToolbar">
         <button type="button" class="btn primary" data-af-new-journal>+ Časopis</button>
-        <label class="btn">Import TSV<input type="file" accept=".tsv,.csv,.txt" hidden data-af-import-journal></label>
+        <label class="btn">Import TSV/CSV<input type="file" accept=".tsv,.csv,.txt" hidden data-af-import-journal></label>
         <a href="#casopisy" class="btn">Databáze časopisů (JCR)</a>
       </div>
+      <p class="hint">Import: vlastní TSV/CSV nebo přímo export z JCR (<code>Journal name</code>, <code>ISSN</code>, <code>Category</code>, <code>JIF Quartile</code>). Připravený soubor: <code>data/article-journals-import.jcr-q1-2025.tsv</code> — 183 Q1 časopisů (BUSINESS; IS; LIS), duplicitní kategorie sloučeny.</p>
       <div class="afTableWrap">
         <table class="afTable">
           <thead><tr><th>Časopis</th><th>ISSN</th><th>Obor</th><th>Kvartil</th><th>Ověřeno</th><th></th></tr></thead>
@@ -863,7 +946,7 @@
     const topicOpts = topics.map((t) => `<option value="${html(t.id)}" ${p.topic_id === t.id ? "selected" : ""}>${html(t.title)}</option>`).join("");
     const journalOpts = journals.map((j) => `<option value="${html(j.id)}" ${p.target_journal_id === j.id ? "selected" : ""}>${html(j.journal_title)}</option>`).join("");
     return `
-      <dialog id="afProjectDialog" class="afDialog">
+      <dialog id="afProjectDialog" class="afDialog" closedby="none">
         <form method="dialog" class="afDialogForm">
           <h3>${p.id ? "Upravit projekt" : "Nový publikační projekt"}</h3>
           <label>Téma<select name="topic_id"><option value="">—</option>${topicOpts}</select></label>
@@ -874,7 +957,7 @@
           <label>Interní deadline<input name="deadline_internal" type="date" value="${html(p.deadline_internal || "")}"></label>
           <div class="afDialogActions">
             <button type="button" class="btn secondary" data-af-cancel>Zrušit</button>
-            <button type="submit" class="btn primary">Uložit</button>
+            <button type="submit" class="btn primary" value="confirm">Uložit</button>
           </div>
         </form>
       </dialog>`;
@@ -988,8 +1071,8 @@
 
   function bindDialogs() {
     const pubDlg = el("afPublicationDialog");
-    if (pubDlg && !pubDlg.__bound) {
-      pubDlg.querySelector("[data-af-cancel]")?.addEventListener("click", () => pubDlg.close());
+    if (pubDlg) {
+      armAfDialog(pubDlg, () => { editingPublication = null; });
       pubDlg.addEventListener("close", async () => {
         if (pubDlg.returnValue !== "confirm" && pubDlg.returnValue !== "default") return;
         const fd = new FormData(pubDlg.querySelector("form"));
@@ -998,12 +1081,11 @@
         await savePublication(item);
         editingPublication = null;
       });
-      pubDlg.__bound = true;
     }
 
     const topicDlg = el("afTopicDialog");
-    if (topicDlg && !topicDlg.__bound) {
-      topicDlg.querySelector("[data-af-cancel]")?.addEventListener("click", () => topicDlg.close());
+    if (topicDlg) {
+      armAfDialog(topicDlg, () => { editingTopic = null; });
       topicDlg.addEventListener("close", async () => {
         if (topicDlg.returnValue !== "confirm" && topicDlg.returnValue !== "default") return;
         const fd = new FormData(topicDlg.querySelector("form"));
@@ -1016,12 +1098,11 @@
         await saveTopic(item);
         editingTopic = null;
       });
-      topicDlg.__bound = true;
     }
 
     const journalDlg = el("afJournalDialog");
-    if (journalDlg && !journalDlg.__bound) {
-      journalDlg.querySelector("[data-af-cancel]")?.addEventListener("click", () => journalDlg.close());
+    if (journalDlg) {
+      armAfDialog(journalDlg, () => { editingJournal = null; });
       journalDlg.addEventListener("close", async () => {
         if (journalDlg.returnValue !== "confirm" && journalDlg.returnValue !== "default") return;
         const fd = new FormData(journalDlg.querySelector("form"));
@@ -1030,12 +1111,11 @@
         await saveJournal(item);
         editingJournal = null;
       });
-      journalDlg.__bound = true;
     }
 
     const projectDlg = el("afProjectDialog");
-    if (projectDlg && !projectDlg.__bound) {
-      projectDlg.querySelector("[data-af-cancel]")?.addEventListener("click", () => projectDlg.close());
+    if (projectDlg) {
+      armAfDialog(projectDlg, () => { editingProject = null; });
       projectDlg.addEventListener("close", async () => {
         if (projectDlg.returnValue !== "confirm" && projectDlg.returnValue !== "default") return;
         const fd = new FormData(projectDlg.querySelector("form"));
@@ -1044,7 +1124,6 @@
         await saveProject(item);
         editingProject = null;
       });
-      projectDlg.__bound = true;
     }
   }
 
@@ -1061,7 +1140,7 @@
       render();
     });
 
-    root.querySelector("[data-af-reload]")?.addEventListener("click", () => loadData());
+    root.querySelector("[data-af-reload]")?.addEventListener("click", () => loadData({ force: true }));
     root.querySelector("[data-af-pipeline-ping]")?.addEventListener("click", () => checkPipeline());
     root.querySelector("[data-af-run-pipeline]")?.addEventListener("click", () => runPipelineForProject(selectedProjectId));
     root.querySelector("[data-af-project-select]")?.addEventListener("change", (e) => {
@@ -1222,12 +1301,20 @@
     const root = el("articleFactoryPageRoot");
     if (!root) return;
     injectPage();
+    ensureRenderShell(root);
+
+    const reopenDialogId = captureOpenDialogDraft();
+    const needsDialogs = reopenDialogId
+      || editingPublication !== null
+      || editingTopic !== null
+      || editingJournal !== null
+      || editingProject !== null;
 
     const tabHtml = VIEWS.map((v) =>
       `<button type="button" class="afTab ${activeView === v.id ? "active" : ""}" data-af-view="${v.id}">${v.icon} ${html(v.label)}</button>`
     ).join("");
 
-    root.innerHTML = `
+    el("articleFactoryMain").innerHTML = `
       <div class="afModule">
         <p class="hint">Publikační pipeline pro Q1 články — rukopis anglicky, komentáře česky. AI výstupy vyžadují lidskou revizi.</p>
         <div class="afTabs">${tabHtml}</div>
@@ -1237,12 +1324,19 @@
         </div>
         <div id="articleFactoryStatus" class="hint"></div>
         ${renderContent()}
-      </div>
-      ${renderPublicationDialog()}
-      ${renderTopicDialog()}
-      ${renderJournalDialog()}
-      ${renderProjectDialog()}
-    `;
+      </div>`;
+
+    const dialogHost = el("articleFactoryDialogs");
+    if (needsDialogs) {
+      dialogHost.innerHTML = `
+        ${renderPublicationDialog()}
+        ${renderTopicDialog()}
+        ${renderJournalDialog()}
+        ${renderProjectDialog()}
+      `;
+    } else {
+      dialogHost.innerHTML = "";
+    }
 
     const statusNode = el("articleFactoryStatus");
     if (statusNode && statusNode.textContent === "") {
@@ -1250,6 +1344,7 @@
     }
 
     bindEvents(root);
+    if (reopenDialogId) el(reopenDialogId)?.showModal();
   }
 
   function init() {
