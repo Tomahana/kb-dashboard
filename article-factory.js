@@ -44,15 +44,15 @@
   };
 
   const JOURNAL_IMPORT_ALIASES = {
-    journal_title: ["Journal", "Časopis", "Title", "Název"],
+    journal_title: ["Journal", "Časopis", "Title", "Název", "Journal name"],
     publisher: ["Publisher", "Vydavatel"],
     issn: ["ISSN"],
     eissn: ["eISSN", "EISSN"],
     wos_category: ["WoS Category", "Category", "Obor"],
-    quartile: ["Quartile", "Kvartil"],
-    ais_rank_info: ["AIS", "AIS rank"],
-    scope: ["Scope", "Zaměření"],
-    open_access_info: ["Open access", "OA"],
+    quartile: ["Quartile", "Kvartil", "JIF Quartile"],
+    ais_rank_info: ["AIS", "AIS rank", "ais_rank_info"],
+    scope: ["Scope", "Zaměření", "Edition"],
+    open_access_info: ["Open access", "OA", "% of Citable OA"],
     publication_fee: ["APC", "Publication fee", "Fee"],
     submission_url: ["Submission URL", "Submit"],
     author_guidelines_url: ["Guidelines URL", "Guidelines"],
@@ -150,6 +150,115 @@
     const issn = n(item.issn) || n(item.eissn);
     if (issn) return `issn:${issn.replace(/\s/g, "")}`;
     return [l(item.journal_title), l(item.wos_category)].filter(Boolean).join("|") || `journal-${uuid()}`;
+  }
+
+  function cleanJournalIssn(value) {
+    const v = n(value);
+    return /^n\/a$/i.test(v) ? "" : v;
+  }
+
+  function detectJcrJournalExport(text) {
+    return /Journal name,.*JIF Quartile/i.test(text);
+  }
+
+  function normalizeJournalImportText(text) {
+    const lines = text.split(/\r?\n/);
+    const idx = lines.findIndex((ln) => /^"?Journal name"?/i.test(ln.trim()));
+    if (idx < 0) return text;
+    return lines.slice(idx)
+      .filter((ln) => !/Copyright \(c\)/i.test(ln) && !/Terms of Use/i.test(ln))
+      .join("\n");
+  }
+
+  function journalImportDedupeKey(item) {
+    const issn = cleanJournalIssn(item.issn);
+    const eissn = cleanJournalIssn(item.eissn);
+    return (issn || eissn || l(item.journal_title)).replace(/\s/g, "");
+  }
+
+  function mergeJournalImportRows(existing, incoming) {
+    const cats = [existing.wos_category, incoming.wos_category]
+      .flatMap((v) => n(v).split(";"))
+      .map((v) => v.trim())
+      .filter(Boolean);
+    existing.wos_category = [...new Set(cats)].join("; ");
+    if (!n(existing.ais_rank_info) && n(incoming.ais_rank_info)) existing.ais_rank_info = incoming.ais_rank_info;
+    if (!n(existing.open_access_info) && n(incoming.open_access_info)) existing.open_access_info = incoming.open_access_info;
+    if (!n(existing.scope) && n(incoming.scope)) existing.scope = incoming.scope;
+    return existing;
+  }
+
+  function dedupeJournalImportRows(rows) {
+    const map = new Map();
+    rows.forEach((row) => {
+      if (!n(row.journal_title)) return;
+      const key = journalImportDedupeKey(row);
+      if (!key) return;
+      if (map.has(key)) map.set(key, mergeJournalImportRows(map.get(key), row));
+      else map.set(key, { ...row });
+    });
+    return [...map.values()];
+  }
+
+  function buildJcrAisRankInfo(raw) {
+    const parts = [];
+    const jif = n(raw["2025 JIF"]);
+    const jifRank = n(raw["JIF Rank"]);
+    const fiveJif = n(raw["5 Year JIF"]);
+    const aisQ = n(raw["AIS Quartile"]);
+    const aisRank = n(raw["AIS Rank"]);
+    if (jif) parts.push(`JIF ${jif}`);
+    if (jifRank) parts.push(`JIF rank ${jifRank}`);
+    if (fiveJif && !/^n\/a$/i.test(fiveJif)) parts.push(`5y JIF ${fiveJif}`);
+    if (aisQ && aisRank && !/^n\/a$/i.test(aisRank)) parts.push(`AIS ${aisQ} ${aisRank}`);
+    else if (aisQ && !/^n\/a$/i.test(aisQ)) parts.push(`AIS ${aisQ}`);
+    return parts.join("; ");
+  }
+
+  function buildJcrJournalNotes(raw) {
+    const parts = ["JCR 2025 Q1 export"];
+    const abbr = n(raw["JCR Abbreviation"]);
+    const jci = n(raw["2025 JCI"]);
+    if (abbr) parts.push(`Abbrev: ${abbr}`);
+    if (jci) parts.push(`JCI ${jci}`);
+    return `${parts.join(". ")}.`;
+  }
+
+  function rowsFromJcrJournalExport(text) {
+    const normalized = normalizeJournalImportText(text);
+    const lines = normalized.split(/\r?\n/).filter((ln) => n(ln));
+    if (!lines.length) return [];
+    const delimiter = detectDelimiter(lines[0]);
+    const grid = parseCsvRecords(normalized, delimiter);
+    if (grid.length < 2) return [];
+    const headers = grid[0].map((h) => n(h).replace(/^\uFEFF/, ""));
+    const rows = [];
+    for (let i = 1; i < grid.length; i += 1) {
+      const raw = {};
+      headers.forEach((h, idx) => { raw[h] = grid[i][idx] ?? ""; });
+      const title = n(raw["Journal name"]);
+      if (!title) continue;
+      const issn = cleanJournalIssn(raw.ISSN);
+      const eissn = cleanJournalIssn(raw.eISSN);
+      const oa = n(raw["% of Citable OA"]);
+      const edition = n(raw.Edition);
+      rows.push({
+        journal_title: title,
+        publisher: n(raw.Publisher),
+        issn,
+        eissn,
+        wos_category: n(raw.Category),
+        quartile: n(raw["JIF Quartile"]),
+        ais_rank_info: buildJcrAisRankInfo(raw),
+        scope: edition,
+        open_access_info: [oa ? `${oa} citable OA` : "", edition].filter(Boolean).join("; "),
+        publication_fee: "",
+        submission_url: "",
+        author_guidelines_url: "",
+        notes: buildJcrJournalNotes(raw)
+      });
+    }
+    return dedupeJournalImportRows(rows);
   }
 
   function parseCsvRecords(text, delimiter) {
@@ -447,9 +556,16 @@
 
   async function importFile(file, type) {
     const text = await file.text();
-    const rows = rowsFromDelimitedText(text, type === "publications"
-      ? PUBLICATION_IMPORT_ALIASES
-      : type === "topics" ? TOPIC_IMPORT_ALIASES : JOURNAL_IMPORT_ALIASES);
+    let rows;
+    if (type === "journals" && detectJcrJournalExport(text)) {
+      rows = rowsFromJcrJournalExport(text);
+    } else {
+      const importText = type === "journals" ? normalizeJournalImportText(text) : text;
+      rows = rowsFromDelimitedText(importText, type === "publications"
+        ? PUBLICATION_IMPORT_ALIASES
+        : type === "topics" ? TOPIC_IMPORT_ALIASES : JOURNAL_IMPORT_ALIASES);
+      if (type === "journals") rows = dedupeJournalImportRows(rows);
+    }
     if (!rows.length) {
       setStatus("Import neobsahuje žádné řádky.", true);
       return;
