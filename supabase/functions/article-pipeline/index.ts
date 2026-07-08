@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         service: "article-pipeline",
-        version: 2,
+        version: 3,
         phase: "mvp",
         user: user.email,
         ai_keys: aiKeysStatus(),
