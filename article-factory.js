@@ -32,15 +32,42 @@
   };
 
   const TOPIC_IMPORT_ALIASES = {
-    title: ["Title", "Název", "Tema", "Téma"],
+    title: ["Title", "Název", "Nazev", "Tema", "Téma"],
+    working_title: ["Nové téma", "Nove tema", "Short title"],
     description: ["Description", "Popis"],
-    research_area: ["Research area", "Oblast", "Obor"],
-    possible_methodology: ["Methodology", "Metodologie"],
-    target_wos_category: ["WoS Category", "Cílový obor"],
-    expected_contribution: ["Contribution", "Přínos"],
-    priority: ["Priority", "Priorita"],
+    research_area: ["Research area", "Oblast", "Obor", "Výzkumná oblast", "Vyzkumna oblast"],
+    possible_methodology: ["Methodology", "Metodologie", "Možná metodologie", "Mozna metodologie"],
+    target_wos_category: ["WoS Category", "Cílový obor", "Cilovy obor", "Cílový WoS obor"],
+    expected_contribution: ["Contribution", "Přínos", "Prinos", "Očekávaný přínos", "Ocekavany prinos"],
+    priority: ["Priority", "Priorita", "Priorita (1–5)", "Priorita (1-5)"],
     status: ["Status", "Stav"],
-    notes: ["Notes", "Poznámka"]
+    related_publications_text: ["Související publikace", "Souvisejici publikace", "Related publications"],
+    notes: ["Notes", "Poznámka", "Poznamka", "Poznámky", "Poznamky"]
+  };
+
+  const TOPIC_STATUS_IMPORT_MAP = {
+    idea: "idea",
+    napad: "idea",
+    selected: "selected",
+    vybrano: "selected",
+    "in_progress": "in_progress",
+    probiha: "in_progress",
+    "probíhá": "in_progress",
+    drafted: "drafted",
+    draft: "drafted",
+    koncept: "drafted",
+    reviewed: "reviewed",
+    zkontrolovano: "reviewed",
+    "zkontrolováno": "reviewed",
+    submitted: "submitted",
+    odeslano: "submitted",
+    "odesláno": "submitted",
+    rejected: "rejected",
+    zamitnuto: "rejected",
+    "zamítnuto": "rejected",
+    published: "published",
+    publikovano: "published",
+    "publikováno": "published"
   };
 
   const JOURNAL_IMPORT_ALIASES = {
@@ -383,14 +410,69 @@
     return counts[0][1] > 0 ? counts[0][0] : "\t";
   }
 
+  function normalizeImportHeader(value) {
+    return n(value)
+      .replace(/^\uFEFF/, "")
+      .replace(/\*/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  }
+
+  function foldCs(value) {
+    return normalizeImportHeader(value)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
   function getImportField(row, aliases, field) {
     const keys = aliases[field] || [field];
+    const normalizedEntries = Object.entries(row).map(([k, v]) => [normalizeImportHeader(k), v]);
     for (const key of keys) {
       if (row[key] != null && n(row[key])) return n(row[key]);
       const hit = Object.keys(row).find((k) => l(k) === l(key));
       if (hit && n(row[hit])) return n(row[hit]);
+      const norm = normalizeImportHeader(key);
+      const normHit = normalizedEntries.find(([k]) => k === norm);
+      if (normHit && n(normHit[1])) return n(normHit[1]);
+      const prefixHit = normalizedEntries.find(([k]) => k.startsWith(norm) || norm.startsWith(k));
+      if (prefixHit && n(prefixHit[1])) return n(prefixHit[1]);
     }
     return "";
+  }
+
+  function normalizeTopicImportStatus(raw) {
+    const folded = foldCs(raw).replace(/\s+/g, "_");
+    if (TOPIC_STATUS_IMPORT_MAP[folded]) return TOPIC_STATUS_IMPORT_MAP[folded];
+    if (TOPIC_STATUSES.includes(raw)) return raw;
+    return "idea";
+  }
+
+  function resolvePublicationIdsFromText(text) {
+    if (!n(text)) return [];
+    const parts = text.split(/;/).map((part) => n(part)).filter(Boolean);
+    const ids = [];
+    parts.forEach((part) => {
+      const lp = l(part);
+      const hit = publications.find((p) => {
+        const lt = l(p.title);
+        return lt === lp || lt.includes(lp) || lp.includes(lt);
+      });
+      if (hit && !ids.includes(hit.id)) ids.push(hit.id);
+    });
+    return ids;
+  }
+
+  function finalizeTopicImportRow(row) {
+    const item = { ...row };
+    if (!n(item.title) && n(item.working_title)) item.title = item.working_title;
+    delete item.working_title;
+    item.priority = Number(String(item.priority).replace(/[^\d]/g, "")) || 3;
+    item.status = normalizeTopicImportStatus(item.status);
+    const relatedText = item.related_publications_text;
+    delete item.related_publications_text;
+    item.related_publication_ids = resolvePublicationIdsFromText(relatedText);
+    return item;
   }
 
   function rowsFromDelimitedText(text, aliases) {
@@ -481,7 +563,7 @@
   async function saveTopic(item) {
     if (!n(item.title)) {
       setStatus("Název tématu je povinný.", true);
-      return;
+      return false;
     }
     item.source_key = item.source_key || makeTopicSourceKey(item);
     item.priority = Number(item.priority) || 3;
@@ -501,6 +583,7 @@
     persistLocal();
     setStatus("Téma uloženo.");
     render();
+    return true;
   }
 
   async function saveJournal(item) {
@@ -653,10 +736,25 @@
       return;
     }
     let count = 0;
+    let skipped = 0;
     for (const row of rows) {
-      if (type === "publications" && !n(row.title)) continue;
-      if (type === "topics" && !n(row.title)) continue;
-      if (type === "journals" && !n(row.journal_title)) continue;
+      if (type === "publications" && !n(row.title)) { skipped += 1; continue; }
+      if (type === "topics") {
+        const topicRow = finalizeTopicImportRow(row);
+        if (!n(topicRow.title)) { skipped += 1; continue; }
+        const item = {
+          id: uuid(),
+          __existing: false,
+          imported_at: new Date().toISOString(),
+          ...topicRow
+        };
+        item.source_key = makeTopicSourceKey(item);
+        const saved = await saveTopic(item);
+        if (saved) count += 1;
+        else skipped += 1;
+        continue;
+      }
+      if (type === "journals" && !n(row.journal_title)) { skipped += 1; continue; }
       const item = {
         id: uuid(),
         __existing: false,
@@ -666,19 +764,14 @@
       if (type === "publications") {
         item.source_key = makePublicationSourceKey(item);
         await savePublication(item);
-      } else if (type === "topics") {
-        item.source_key = makeTopicSourceKey(item);
-        item.priority = Number(item.priority) || 3;
-        item.status = TOPIC_STATUSES.includes(item.status) ? item.status : "idea";
-        item.related_publication_ids = [];
-        await saveTopic(item);
       } else {
         item.source_key = makeJournalSourceKey(item);
         await saveJournal(item);
       }
       count += 1;
     }
-    setStatus(`Import dokončen: ${count} záznamů.`);
+    const skipMsg = skipped ? `, ${skipped} přeskočeno` : "";
+    setStatus(`Import dokončen: ${count} záznamů${skipMsg}.`);
     await loadData();
   }
 
@@ -878,8 +971,9 @@
     return `
       <div class="afToolbar">
         <button type="button" class="btn primary" data-af-new-topic>+ Téma</button>
-        <label class="btn">Import TSV<input type="file" accept=".tsv,.csv,.txt" hidden data-af-import-topic></label>
+        <label class="btn">Import TSV/CSV<input type="file" accept=".tsv,.csv,.txt" hidden data-af-import-topic></label>
       </div>
+      <p class="hint">Import témat: CSV/TSV se sloupcem <code>Název</code> (nebo <code>Název *</code>). Status <code>Nápad</code> = idea. Sloupec <code>Související publikace</code> páruje názvy z Moje publikace. Vzor: <code>data/article-topics-import.nove-tema-q1.csv</code>.</p>
       <div class="afTableWrap">
         <table class="afTable">
           <thead><tr><th>P</th><th>Téma</th><th>Oblast</th><th>Status</th><th>Publ.</th><th></th></tr></thead>
