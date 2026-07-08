@@ -117,6 +117,61 @@
   let editingProject = null;
   let pipelineStatus = null;
   let lastPipelineResult = null;
+  let pipelineProgress = null;
+
+  const AI_ROLE_IDS = () => (window.kbArticleFactoryTypes?.AI_ROLES || []).map((r) => r.id);
+  const AI_ROLE_LABEL = (id) => (window.kbArticleFactoryTypes?.AI_ROLES || []).find((r) => r.id === id)?.label || id;
+
+  function latestReviewsByRole(projectId) {
+    const byRole = {};
+    reviews
+      .filter((r) => r.article_project_id === projectId)
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      .forEach((r) => { byRole[r.ai_role] = r; });
+    return byRole;
+  }
+
+  function priorOutputsFromReviews(projectId) {
+    const out = {};
+    Object.entries(latestReviewsByRole(projectId)).forEach(([role, review]) => {
+      if (review.raw_output && typeof review.raw_output === "object") {
+        out[role] = review.raw_output;
+      }
+    });
+    return out;
+  }
+
+  function completedRolesFromRun(run) {
+    const log = Array.isArray(run?.run_log) ? run.run_log : [];
+    return log
+      .filter((e) => e.level === "info" && /dokončen/i.test(e.message || ""))
+      .map((e) => e.step)
+      .filter(Boolean);
+  }
+
+  function getLatestPipelineRun(projectId) {
+    return pipelineRuns
+      .filter((r) => r.article_project_id === projectId)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
+  }
+
+  function isResumableRun(run) {
+    if (!run) return false;
+    if (run.status === "failed") return true;
+    if (run.status !== "running") return false;
+    const ageMs = Date.now() - new Date(run.created_at).getTime();
+    return ageMs > 3 * 60 * 1000;
+  }
+
+  function pipelineResumeInfo(projectId) {
+    const run = getLatestPipelineRun(projectId);
+    if (!isResumableRun(run)) return null;
+    const roles = AI_ROLE_IDS();
+    const done = new Set(completedRolesFromRun(run));
+    const nextRole = roles.find((role) => !done.has(role));
+    if (!nextRole) return null;
+    return { run, nextRole, doneCount: done.size, total: roles.length };
+  }
 
   const el = (id) => document.getElementById(id);
   const n = (s) => (s || "").toString().trim();
@@ -552,6 +607,13 @@
         versions = data.versions || [];
         reviews = data.reviews || [];
         pipelineRuns = data.pipelineRuns || [];
+        if (selectedProjectId && useSupabase && !pipelineLoading) {
+          const stale = await window.kbSupabaseArticleFactory.markStalePipelineRuns(selectedProjectId, 12);
+          if (stale > 0) {
+            const bundle = await window.kbSupabaseArticleFactory.loadAll();
+            pipelineRuns = bundle.pipelineRuns || pipelineRuns;
+          }
+        }
         if (!selectedProjectId && projects.length) selectedProjectId = projects[0].id;
         persistLocal();
         setStatus(`Načteno: ${publications.length} publ., ${topics.length} témat, ${journals.length} čas., ${projects.length} projektů.`);
@@ -690,7 +752,7 @@
     render();
   }
 
-  async function runPipelineForProject(projectId) {
+  async function runPipelineForProject(projectId, options = {}) {
     if (!projectId) {
       setStatus("Vyberte projekt.", true);
       return;
@@ -699,19 +761,106 @@
       setStatus("Pipeline vyžaduje Supabase a nasazenou Edge Function.", true);
       return;
     }
+
+    const roles = AI_ROLE_IDS();
+    if (!roles.length) {
+      setStatus("Chybí definice AI rolí.", true);
+      return;
+    }
+
+    const project = projects.find((p) => p.id === projectId);
     pipelineLoading = true;
+    pipelineProgress = { stepIndex: 0, total: roles.length, stepId: roles[0] };
     render();
+
+    let runId = null;
+    let startIndex = 0;
+    let priorOutputs = {};
+    let runLog = [];
+
     try {
-      setStatus("Spouštím AI pipeline (8 rolí)… může trvat několik minut.");
-      const result = await window.kbArticlePipeline.runPipeline(projectId);
-      lastPipelineResult = result;
-      await loadData();
-      setStatus(`Pipeline dokončena. Run ID: ${result.run_id || "—"}. Vyžaduje lidskou revizi.`);
+      await window.kbSupabaseArticleFactory.markStalePipelineRuns(projectId, 12);
+      await loadData({ force: true });
+
+      const resume = options.resume ? pipelineResumeInfo(projectId) : null;
+      if (resume) {
+        runId = resume.run.id;
+        startIndex = roles.indexOf(resume.nextRole);
+        if (startIndex < 0) startIndex = 0;
+        priorOutputs = priorOutputsFromReviews(projectId);
+        runLog = Array.isArray(resume.run.run_log) ? [...resume.run.run_log] : [];
+        await window.kbSupabaseArticleFactory.updatePipelineRun(runId, {
+          status: "running",
+          summary: `Pokračování od kroku ${startIndex + 1}/${roles.length}: ${roles[startIndex]}`,
+          current_step: roles[startIndex]
+        });
+        setStatus(`Pokračuji pipeline od kroku ${startIndex + 1}/${roles.length}…`);
+      } else {
+        const run = await window.kbSupabaseArticleFactory.createPipelineRun({
+          projectId,
+          topicId: project?.topic_id
+        });
+        runId = run.id;
+        runLog = Array.isArray(run.run_log) ? [...run.run_log] : [];
+        setStatus("Spouštím AI pipeline (8 rolí, krok po kroku)…");
+      }
+
+      for (let i = startIndex; i < roles.length; i++) {
+        const role = roles[i];
+        pipelineProgress = { runId, stepIndex: i + 1, total: roles.length, stepId: role };
+        setStatus(`Pipeline ${i + 1}/${roles.length}: ${AI_ROLE_LABEL(role)}…`);
+        render();
+
+        const body = await window.kbArticlePipeline.runStep(projectId, role, priorOutputs);
+        const step = body.result || {};
+        if (step.parsed) priorOutputs[role] = step.parsed;
+
+        runLog.push({
+          at: new Date().toISOString(),
+          step: role,
+          level: step.ok || step.skipped ? "info" : "error",
+          message: step.ok
+            ? `Krok ${role} dokončen.`
+            : (step.skipped ? `Krok ${role} přeskočen: ${step.error || ""}` : (step.error || "Chyba kroku"))
+        });
+
+        await window.kbSupabaseArticleFactory.updatePipelineRun(runId, {
+          current_step: role,
+          run_log: runLog,
+          summary: `Krok ${i + 1}/${roles.length}: ${AI_ROLE_LABEL(role)}`
+        });
+
+        await loadData({ force: true });
+
+        if (!step.ok && !step.skipped) {
+          await window.kbSupabaseArticleFactory.updatePipelineRun(runId, {
+            status: "failed",
+            summary: `Selhalo na kroku ${role}: ${step.error || "neznámá chyba"}`,
+            completed_at: new Date().toISOString(),
+            current_step: null,
+            run_log: runLog
+          });
+          throw new Error(step.error || `Krok ${role} selhal.`);
+        }
+      }
+
+      await window.kbSupabaseArticleFactory.updatePipelineRun(runId, {
+        status: "completed",
+        summary: "Pipeline dokončena — vyžaduje lidskou revizi.",
+        completed_at: new Date().toISOString(),
+        current_step: null,
+        run_log: runLog
+      });
+
+      lastPipelineResult = { run_id: runId, ok: true };
+      await loadData({ force: true });
+      setStatus("Pipeline dokončena. Zkontrolujte Rukopis a Review panel.");
       activeView = "manuscript";
     } catch (err) {
       setStatus(`Pipeline selhala: ${err.message || err}`, true);
     } finally {
       pipelineLoading = false;
+      pipelineProgress = null;
       render();
     }
   }
@@ -1144,11 +1293,49 @@
       </dialog>`;
   }
 
+  function renderReviewCardBody(r) {
+    const raw = (r.raw_output && typeof r.raw_output === "object") ? r.raw_output : {};
+    const parts = [];
+    if (r.ai_role === "research_strategist") {
+      const rq = raw.research_question?.text || raw.research_question;
+      const hyp = raw.hypothesis?.text || raw.hypothesis;
+      const contrib = raw.expected_contribution?.text || raw.expected_contribution;
+      if (rq) parts.push(`<p><strong>Výzkumná otázka:</strong> ${html(String(rq))}</p>`);
+      if (hyp) parts.push(`<p><strong>Hypotéza:</strong> ${html(String(hyp))}</p>`);
+      if (contrib) parts.push(`<p><strong>Přínos:</strong> ${html(String(contrib))}</p>`);
+      if (Array.isArray(raw.overlap_risks) && raw.overlap_risks.length) {
+        parts.push(`<p><strong>Překryvy:</strong> ${html(raw.overlap_risks.slice(0, 5).join("; "))}</p>`);
+      }
+    } else if (r.ai_role === "literature_scout") {
+      if (Array.isArray(raw.literature_gaps) && raw.literature_gaps.length) {
+        parts.push(`<p><strong>Mezery v literatuře:</strong> ${html(raw.literature_gaps.slice(0, 5).join("; "))}</p>`);
+      }
+      if (Array.isArray(raw.suggested_search_queries) && raw.suggested_search_queries.length) {
+        parts.push(`<p><strong>Dotazy:</strong> ${html(raw.suggested_search_queries.slice(0, 4).join("; "))}</p>`);
+      }
+    } else if (r.ai_role === "methodology_designer" && raw.methodology_section_draft) {
+      parts.push(`<p><strong>Návrh metodologie:</strong></p><div class="afSectionBody">${html(String(raw.methodology_section_draft).slice(0, 1200))}</div>`);
+    }
+    if (r.strengths) parts.push(`<p><strong>Strengths:</strong> ${html(r.strengths)}</p>`);
+    if (r.weaknesses) parts.push(`<p><strong>Weaknesses:</strong> ${html(r.weaknesses)}</p>`);
+    if (r.factual_risks) parts.push(`<p><strong>Factual risks:</strong> ${html(r.factual_risks)}</p>`);
+    if (r.methodological_risks) parts.push(`<p><strong>Methodological risks:</strong> ${html(r.methodological_risks)}</p>`);
+    if (r.journal_fit_assessment) parts.push(`<p><strong>Journal fit:</strong> ${html(r.journal_fit_assessment)}</p>`);
+    if (!parts.length && raw && Object.keys(raw).length) {
+      parts.push(`<pre class="afPre">${html(JSON.stringify(raw, null, 2).slice(0, 2000))}</pre>`);
+    }
+    return parts.join("") || `<p class="hint">Krok dokončen — detail v logu pipeline.</p>`;
+  }
+
   function renderPipelineView() {
     const project = getSelectedProject();
     const ps = pipelineStatus || {};
     const runs = pipelineRuns.filter((r) => r.article_project_id === project?.id).slice(-3);
     const noProjects = !projects.length;
+    const resumeInfo = project && !pipelineLoading ? pipelineResumeInfo(project.id) : null;
+    const progressHtml = pipelineProgress
+      ? `<p class="afTag">Probíhá krok ${pipelineProgress.stepIndex}/${pipelineProgress.total}: ${html(AI_ROLE_LABEL(pipelineProgress.stepId))}</p>`
+      : "";
     return `
       <div class="afPlaceholder">
         <p><strong>AI publikační pipeline</strong> — 8 rolí, výstup vždy jako draft.</p>
@@ -1160,13 +1347,24 @@
           </div>` : ""}
         ${!noProjects && project ? `<p>Aktivní projekt: <strong>${html(project.working_title)}</strong> (${html(project.status)})</p>` : ""}
         ${!noProjects && !project ? `<p class="afError">Vyberte projekt v seznamu níže nebo v záložce Projekty.</p>` : ""}
+        ${progressHtml}
+        ${resumeInfo ? `
+          <div class="afCallout">
+            <p><strong>Pipeline nedokončena</strong> — hotovo ${resumeInfo.doneCount}/${resumeInfo.total} kroků</p>
+            <p class="hint">Často se přeruší po 3. kroku (timeout serveru). Rukopis vzniká až u kroku <strong>Manuscript Writer</strong>. Pokračujte tlačítkem níže.</p>
+            <button type="button" class="btn primary" data-af-resume-pipeline>Pokračovat od ${html(AI_ROLE_LABEL(resumeInfo.nextRole))}</button>
+          </div>` : ""}
         <div class="afToolbar">
           <select data-af-project-select class="afSearch">${projects.map((p) => `<option value="${html(p.id)}" ${p.id === selectedProjectId ? "selected" : ""}>${html(p.working_title)}</option>`).join("")}</select>
           <button type="button" class="btn" data-af-pipeline-ping>Test Edge Function</button>
           <button type="button" class="btn primary" data-af-run-pipeline ${!project || pipelineLoading ? "disabled" : ""}>${pipelineLoading ? "Pipeline běží…" : "Spustit pipeline"}</button>
         </div>
         ${lastPipelineResult ? `<pre class="afPre">${html(JSON.stringify(lastPipelineResult, null, 2).slice(0, 4000))}</pre>` : ""}
-        ${runs.length ? `<h4>Poslední běhy</h4><ul>${runs.map((r) => `<li>${html(r.status)} — ${html(r.summary || "")} (${html(r.created_at)})</li>`).join("")}</ul>` : ""}
+        ${runs.length ? `<h4>Poslední běhy</h4><ul>${runs.map((r) => {
+          const done = completedRolesFromRun(r).length;
+          const extra = r.status === "running" ? ` · ${done}/8 kroků` : "";
+          return `<li><strong>${html(r.status)}</strong>${extra} — ${html(r.summary || "")} <span class="hint">(${html(r.created_at)})</span></li>`;
+        }).join("")}</ul>` : ""}
         ${ps.ok ? `<p class="hint">Edge Function OK (fáze ${ps.phase || "mvp"})</p>` : ""}
         ${ps.error ? `<p class="afError">${html(ps.error)}</p>` : ""}
       </div>`;
@@ -1176,7 +1374,7 @@
     const project = getSelectedProject();
     if (!project) return `<div class="afEmpty">Vyberte projekt v záložce Projekty nebo Pipeline.</div>`;
     const version = getCurrentVersion(project);
-    if (!version) return `<div class="afEmpty">Zatím žádná verze rukopisu — spusťte pipeline.</div>`;
+    if (!version) return `<div class="afEmpty">Zatím žádná verze rukopisu — spusťte pipeline (rukopis vzniká u kroku <strong>Manuscript Writer</strong>, 4/8).${pipelineResumeInfo(project.id) ? ` <button type="button" class="btn small primary" data-af-resume-pipeline>Pokračovat pipeline</button>` : ""}</div>`;
     const sections = window.kbArticleFactoryTypes?.MANUSCRIPT_SECTIONS || [];
     const sectionHtml = sections.map(({ key, label }) => {
       const body = n(version[key]);
@@ -1201,12 +1399,8 @@
     const projectReviews = getProjectReviews(project.id);
     const cards = projectReviews.map((r) => `
       <article class="afReviewCard">
-        <h4>${html(r.ai_role)}</h4>
-        ${r.strengths ? `<p><strong>Strengths:</strong> ${html(r.strengths)}</p>` : ""}
-        ${r.weaknesses ? `<p><strong>Weaknesses:</strong> ${html(r.weaknesses)}</p>` : ""}
-        ${r.factual_risks ? `<p><strong>Factual risks:</strong> ${html(r.factual_risks)}</p>` : ""}
-        ${r.methodological_risks ? `<p><strong>Methodological risks:</strong> ${html(r.methodological_risks)}</p>` : ""}
-        ${r.journal_fit_assessment ? `<p><strong>Journal fit:</strong> ${html(r.journal_fit_assessment)}</p>` : ""}
+        <h4>${html(AI_ROLE_LABEL(r.ai_role))}</h4>
+        ${renderReviewCardBody(r)}
       </article>`).join("");
     const checklist = project.revision_checklist?.length
       ? project.revision_checklist
@@ -1327,6 +1521,9 @@
     root.querySelector("[data-af-reload]")?.addEventListener("click", () => loadData({ force: true }));
     root.querySelector("[data-af-pipeline-ping]")?.addEventListener("click", () => checkPipeline());
     root.querySelector("[data-af-run-pipeline]")?.addEventListener("click", () => runPipelineForProject(selectedProjectId));
+    root.querySelectorAll("[data-af-resume-pipeline]").forEach((btn) => {
+      btn.addEventListener("click", () => runPipelineForProject(selectedProjectId, { resume: true }));
+    });
     root.querySelector("[data-af-project-select]")?.addEventListener("change", (e) => {
       selectedProjectId = e.target.value;
       render();
