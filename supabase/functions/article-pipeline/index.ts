@@ -8,7 +8,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AI_ROLES, type AiRole } from "./types.ts";
 import { ROLE_CONFIGS, aiKeysStatus } from "./config.ts";
-import { runSingleStep, runFullPipeline } from "./orchestrator.ts";
+import { runSingleStep } from "./orchestrator.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,8 +55,8 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         service: "article-pipeline",
-        version: 3,
-        phase: "mvp",
+        version: 4,
+        phase: "approval-gated",
         user: user.email,
         ai_keys: aiKeysStatus(),
         roles: AI_ROLES,
@@ -91,10 +91,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === "run_pipeline") {
-      const projectId = String(payload.project_id || "");
-      if (!projectId) return json({ error: "Chybí project_id." }, 400);
-      const outcome = await runFullPipeline(supabase, projectId);
-      return json({ ok: true, ...outcome });
+      return json({
+        error: "Souvislé spuštění celé pipeline je zakázáno. Použijte řízené etapy v KB a schvalovací body.",
+      }, 409);
     }
 
     return json({ error: `Neznámá akce: ${action}` }, 400);
