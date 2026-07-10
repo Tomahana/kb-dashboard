@@ -51,6 +51,18 @@ Podrobný postup: **[SECURITY.md](SECURITY.md)**
 
 Nevkládejte plné pracovní e-maily do veřejného repozitáře. Repozitář držte privátní, pokud je to možné.
 
+## Article Factory – řízená publikační pipeline
+
+Article Factory používá čtyři povinné lidské kontrolní body: výběr tématu, výzkumný návrh, rešerše a metodika, finální odborná kontrola. Edge Function odmítne spustit AI roli, dokud v databázi neexistuje odpovídající schválení.
+
+Pro existující databázi spusťte v Supabase SQL Editoru:
+
+```sql
+-- obsah souboru supabase/article-factory-approval-gates-migrate.sql
+```
+
+Poté znovu nasaďte Edge Function `article-pipeline`. Souvislé API spuštění celé pipeline je záměrně zakázané. Výsledkem je vždy pracovní balíček připravený k ručnímu podání; aplikace rukopis ani e-mail sama neodesílá.
+
 ## Formát dat
 
 Soubor `data/kb.json` je pole objektů:

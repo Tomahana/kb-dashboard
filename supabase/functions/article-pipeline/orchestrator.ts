@@ -20,6 +20,37 @@ type ProjectContext = {
   currentVersion: Record<string, unknown> | null;
 };
 
+const ROLE_APPROVAL_GATE: Record<AiRole, string> = {
+  research_strategist: "topic_selection",
+  literature_scout: "research_design",
+  methodology_designer: "research_design",
+  manuscript_writer: "evidence_plan",
+  critical_reviewer: "evidence_plan",
+  journal_fit_reviewer: "evidence_plan",
+  integrity_reviewer: "evidence_plan",
+  final_revision_assistant: "evidence_plan",
+};
+
+async function assertRoleApproved(
+  supabase: SupabaseClient,
+  projectId: string,
+  role: AiRole,
+) {
+  const checkpoint = ROLE_APPROVAL_GATE[role];
+  const { data, error } = await supabase
+    .from("kb_article_approvals")
+    .select("decision, created_at")
+    .eq("article_project_id", projectId)
+    .eq("checkpoint", checkpoint)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`Nelze ověřit lidské schválení: ${error.message}`);
+  if (!data || data.decision !== "approved") {
+    throw new Error(`Krok ${role} je uzamčen. Chybí lidské schválení kontrolního bodu ${checkpoint}.`);
+  }
+}
+
 async function loadContext(
   supabase: SupabaseClient,
   projectId: string,
@@ -263,6 +294,7 @@ export async function runSingleStep(
   runId?: string,
   log?: PipelineLogEntry[],
 ): Promise<AIRoleOutput> {
+  await assertRoleApproved(supabase, projectId, role);
   const cfg = getRoleConfig(role);
   if (!cfg.enabled) {
     return { role, provider: cfg.provider, model: cfg.model, ok: false, skipped: true, error: "Role disabled" };

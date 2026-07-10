@@ -157,6 +157,19 @@
     };
   }
 
+  function mapApproval(row) {
+    return {
+      id: row.id,
+      article_project_id: row.article_project_id,
+      checkpoint: row.checkpoint,
+      decision: row.decision,
+      note: row.note || "",
+      decided_by: row.decided_by || null,
+      metadata: row.metadata || {},
+      created_at: row.created_at
+    };
+  }
+
   function toProjectPayload(item) {
     const payload = {
       id: item.id,
@@ -311,17 +324,19 @@
   }
 
   async function loadProjectBundle() {
-    const [projectRows, versionRows, reviewRows, runRows] = await Promise.all([
+    const [projectRows, versionRows, reviewRows, runRows, approvalRows] = await Promise.all([
       loadTablePaged("kb_article_projects", "updated_at"),
       loadTablePaged("kb_article_versions", "version_number"),
       loadTablePaged("kb_article_ai_role_reviews", "created_at"),
-      loadTablePaged("kb_article_pipeline_runs", "created_at")
+      loadTablePaged("kb_article_pipeline_runs", "created_at"),
+      loadTablePaged("kb_article_approvals", "created_at")
     ]);
     const projects = projectRows.map(mapProject);
     const versions = versionRows.map(mapVersion);
     const reviews = reviewRows.map(mapReview);
     const pipelineRuns = runRows || [];
-    return { projects, versions, reviews, pipelineRuns };
+    const approvals = approvalRows.map(mapApproval);
+    return { projects, versions, reviews, pipelineRuns, approvals };
   }
 
   async function loadAll() {
@@ -393,6 +408,25 @@
       .single();
     if (error) throw error;
     return mapProject(data);
+  }
+
+  async function recordApproval(projectId, checkpoint, decision = "approved", note = "", metadata = {}) {
+    const supa = getClient();
+    const { data: userData } = await supa.auth.getUser();
+    const { data, error } = await supa
+      .from("kb_article_approvals")
+      .insert({
+        article_project_id: projectId,
+        checkpoint,
+        decision,
+        note: note || null,
+        decided_by: userData?.user?.id || null,
+        metadata: metadata || {}
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return mapApproval(data);
   }
 
   async function upsertPublicationsBatch(items, onProgress) {
@@ -470,7 +504,7 @@
     if (error) throw error;
   }
 
-  async function createPipelineRun({ projectId, topicId }) {
+  async function createPipelineRun({ projectId, topicId, firstStep, phaseId }) {
     const supa = getClient();
     const month = new Date();
     const monthStr = `${month.getUTCFullYear()}-${String(month.getUTCMonth() + 1).padStart(2, "0")}-01`;
@@ -481,9 +515,9 @@
         article_project_id: projectId,
         selected_topic_id: topicId || null,
         status: "running",
-        current_step: "research_strategist",
-        summary: "Pipeline spuštěna",
-        run_log: [{ at: new Date().toISOString(), step: "system", level: "info", message: "Pipeline start (client)" }]
+        current_step: firstStep || "research_strategist",
+        summary: `Etapa ${phaseId || "pipeline"} spuštěna`,
+        run_log: [{ at: new Date().toISOString(), step: "system", level: "info", message: `Pipeline etapa ${phaseId || "pipeline"} start (client)` }]
       })
       .select("*")
       .single();
@@ -546,10 +580,11 @@
         projects: Array.isArray(parsed.projects) ? parsed.projects : [],
         versions: Array.isArray(parsed.versions) ? parsed.versions : [],
         reviews: Array.isArray(parsed.reviews) ? parsed.reviews : [],
-        pipelineRuns: Array.isArray(parsed.pipelineRuns) ? parsed.pipelineRuns : []
+        pipelineRuns: Array.isArray(parsed.pipelineRuns) ? parsed.pipelineRuns : [],
+        approvals: Array.isArray(parsed.approvals) ? parsed.approvals : []
       };
     } catch (_) {
-      return { publications: [], topics: [], journals: [], projects: [], versions: [], reviews: [], pipelineRuns: [] };
+      return { publications: [], topics: [], journals: [], projects: [], versions: [], reviews: [], pipelineRuns: [], approvals: [] };
     }
   }
 
@@ -572,6 +607,7 @@
     upsertProject,
     deleteProject,
     markHumanReviewed,
+    recordApproval,
     createPipelineRun,
     updatePipelineRun,
     markStalePipelineRuns,

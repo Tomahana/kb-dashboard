@@ -245,6 +245,30 @@ create table if not exists public.kb_article_pipeline_runs (
 comment on column public.kb_article_pipeline_runs.month is 'První den kalendářního měsíce (YYYY-MM-01)';
 
 -- ---------------------------------------------------------------------------
+-- Neměnný audit lidských schválení mezi etapami
+-- ---------------------------------------------------------------------------
+create table if not exists public.kb_article_approvals (
+  id uuid primary key default gen_random_uuid(),
+  article_project_id uuid not null references public.kb_article_projects(id) on delete cascade,
+  checkpoint text not null check (checkpoint in (
+    'topic_selection', 'research_design', 'evidence_plan', 'final_manuscript'
+  )),
+  decision text not null default 'approved' check (decision in (
+    'approved', 'returned', 'rejected'
+  )),
+  note text,
+  decided_by uuid not null default auth.uid(),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists kb_article_approvals_project_idx
+  on public.kb_article_approvals (article_project_id, created_at desc);
+
+comment on table public.kb_article_approvals is
+  'Audit lidských rozhodnutí; schválení nikdy neznamená odeslání rukopisu.';
+
+-- ---------------------------------------------------------------------------
 -- updated_at triggery
 -- ---------------------------------------------------------------------------
 create or replace function public.kb_article_set_updated_at()
@@ -287,3 +311,4 @@ grant select, insert, update, delete on public.kb_article_versions to authentica
 grant select, insert, update, delete on public.kb_article_ai_role_reviews to authenticated;
 grant select, insert, update, delete on public.kb_article_literature_sources to authenticated;
 grant select, insert, update, delete on public.kb_article_pipeline_runs to authenticated;
+grant select, insert on public.kb_article_approvals to authenticated;

@@ -203,6 +203,23 @@ export type PublicationPipelineRun = {
   run_log?: unknown[];
 };
 
+export type ArticleApprovalCheckpoint =
+  | "topic_selection"
+  | "research_design"
+  | "evidence_plan"
+  | "final_manuscript";
+
+export type ArticleApproval = {
+  id?: string;
+  article_project_id: string;
+  checkpoint: ArticleApprovalCheckpoint;
+  decision: "approved" | "returned" | "rejected";
+  note?: string;
+  decided_by?: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+};
+
 export type PipelineLogEntry = {
   at: string;
   step: AiRole | "system";
