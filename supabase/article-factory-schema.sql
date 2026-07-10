@@ -257,7 +257,7 @@ create table if not exists public.kb_article_approvals (
     'approved', 'returned', 'rejected'
   )),
   note text,
-  decided_by uuid,
+  decided_by uuid not null default auth.uid(),
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
