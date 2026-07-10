@@ -105,6 +105,7 @@
   let versions = [];
   let reviews = [];
   let pipelineRuns = [];
+  let approvals = [];
   let useSupabase = false;
   let loading = false;
   let pipelineLoading = false;
@@ -121,6 +122,44 @@
 
   const AI_ROLE_IDS = () => (window.kbArticleFactoryTypes?.AI_ROLES || []).map((r) => r.id);
   const AI_ROLE_LABEL = (id) => (window.kbArticleFactoryTypes?.AI_ROLES || []).find((r) => r.id === id)?.label || id;
+
+  const APPROVAL_GATES = [
+    {
+      id: "topic_selection",
+      number: 1,
+      title: "Výběr tématu",
+      description: "Potvrďte téma, pracovní název a cílový časopis.",
+      roles: ["research_strategist"],
+      action: "Schválit téma a připravit výzkumný návrh"
+    },
+    {
+      id: "research_design",
+      number: 2,
+      title: "Výzkumný návrh",
+      description: "Potvrďte výzkumnou otázku, přínos a zaměření článku.",
+      requiresRoles: ["research_strategist"],
+      roles: ["literature_scout", "methodology_designer"],
+      action: "Schválit návrh a připravit podklady"
+    },
+    {
+      id: "evidence_plan",
+      number: 3,
+      title: "Rešerše, zdroje a metodika",
+      description: "Potvrďte důkazní základnu, metodiku a osnovu před vytvořením rukopisu.",
+      requiresRoles: ["literature_scout", "methodology_designer"],
+      roles: ["manuscript_writer", "critical_reviewer", "journal_fit_reviewer", "integrity_reviewer", "final_revision_assistant"],
+      action: "Schválit podklady a připravit pracovní rukopis"
+    },
+    {
+      id: "final_manuscript",
+      number: 4,
+      title: "Finální odborná kontrola",
+      description: "Po kontrole rukopisu a checklistu jej označte jako připravený k ručnímu podání.",
+      requiresRoles: ["manuscript_writer", "critical_reviewer", "journal_fit_reviewer", "integrity_reviewer", "final_revision_assistant"],
+      roles: [],
+      action: "Schválit pracovní verzi"
+    }
+  ];
 
   function latestReviewsByRole(projectId) {
     const byRole = {};
@@ -139,6 +178,36 @@
       }
     });
     return out;
+  }
+
+  function latestApproval(projectId, checkpoint) {
+    return approvals
+      .filter((a) => a.article_project_id === projectId && a.checkpoint === checkpoint)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
+  }
+
+  function isGateApproved(projectId, checkpoint) {
+    return latestApproval(projectId, checkpoint)?.decision === "approved";
+  }
+
+  function completedRoleSet(projectId) {
+    return new Set(Object.keys(latestReviewsByRole(projectId)));
+  }
+
+  function activeApprovalGate(projectId) {
+    const completed = completedRoleSet(projectId);
+    return APPROVAL_GATES.find((gate) => {
+      if (isGateApproved(projectId, gate.id)) return false;
+      return (gate.requiresRoles || []).every((role) => completed.has(role));
+    }) || null;
+  }
+
+  function pendingApprovedPhase(projectId) {
+    const completed = completedRoleSet(projectId);
+    return APPROVAL_GATES.find((gate) => {
+      if (!isGateApproved(projectId, gate.id) || !gate.roles.length) return false;
+      return gate.roles.some((role) => !completed.has(role));
+    }) || null;
   }
 
   function completedRolesFromRun(run) {
@@ -181,7 +250,7 @@
 
   function persistLocal() {
     window.kbSupabaseArticleFactory?.saveLocal?.({
-      publications, topics, journals, projects, versions, reviews, pipelineRuns
+      publications, topics, journals, projects, versions, reviews, pipelineRuns, approvals
     });
   }
 
@@ -607,6 +676,7 @@
         versions = data.versions || [];
         reviews = data.reviews || [];
         pipelineRuns = data.pipelineRuns || [];
+        approvals = data.approvals || [];
         if (selectedProjectId && useSupabase && !pipelineLoading) {
           const stale = await window.kbSupabaseArticleFactory.markStalePipelineRuns(selectedProjectId, 12);
           if (stale > 0) {
@@ -626,6 +696,7 @@
         versions = local.versions || [];
         reviews = local.reviews || [];
         pipelineRuns = local.pipelineRuns || [];
+        approvals = local.approvals || [];
         if (!selectedProjectId && projects.length) selectedProjectId = projects[0].id;
         setStatus(useSupabase
           ? "Supabase tabulky nejsou k dispozici — používám lokální cache."
@@ -762,9 +833,12 @@
       return;
     }
 
-    const roles = AI_ROLE_IDS();
+    const phase = options.phase || pendingApprovedPhase(projectId);
+    const completed = completedRoleSet(projectId);
+    const roles = (options.roles || phase?.roles || AI_ROLE_IDS())
+      .filter((role) => !completed.has(role));
     if (!roles.length) {
-      setStatus("Chybí definice AI rolí.", true);
+      setStatus("V této etapě nejsou žádné neprovedené AI kroky.", true);
       return;
     }
 
@@ -798,11 +872,13 @@
       } else {
         const run = await window.kbSupabaseArticleFactory.createPipelineRun({
           projectId,
-          topicId: project?.topic_id
+          topicId: project?.topic_id,
+          firstStep: roles[0],
+          phaseId: phase?.id
         });
         runId = run.id;
         runLog = Array.isArray(run.run_log) ? [...run.run_log] : [];
-        setStatus("Spouštím AI pipeline (8 rolí, krok po kroku)…");
+        setStatus(`Spouštím etapu „${phase?.title || "AI pipeline"}“ (${roles.length} kroků)…`);
       }
 
       for (let i = startIndex; i < roles.length; i++) {
@@ -846,7 +922,7 @@
 
       await window.kbSupabaseArticleFactory.updatePipelineRun(runId, {
         status: "completed",
-        summary: "Pipeline dokončena — vyžaduje lidskou revizi.",
+        summary: `Etapa ${phase?.number || ""} dokončena — čeká na další lidské schválení.`,
         completed_at: new Date().toISOString(),
         current_step: null,
         run_log: runLog
@@ -854,8 +930,8 @@
 
       lastPipelineResult = { run_id: runId, ok: true };
       await loadData({ force: true });
-      setStatus("Pipeline dokončena. Zkontrolujte Rukopis a Review panel.");
-      activeView = "manuscript";
+      setStatus("Etapa dokončena. Pipeline se zastavila na dalším kontrolním bodu.");
+      activeView = phase?.id === "evidence_plan" ? "review" : "pipeline";
     } catch (err) {
       setStatus(`Pipeline selhala: ${err.message || err}`, true);
     } finally {
@@ -865,9 +941,62 @@
     }
   }
 
+  async function approveGateAndContinue(checkpoint) {
+    const project = getSelectedProject();
+    const gate = APPROVAL_GATES.find((item) => item.id === checkpoint);
+    if (!project || !gate) return;
+    if (checkpoint === "topic_selection" && (!project.topic_id || !project.target_journal_id || !n(project.working_title))) {
+      setStatus("Před schválením tématu doplňte téma, pracovní název a cílový časopis v detailu projektu.", true);
+      return;
+    }
+    if (isGateApproved(project.id, checkpoint)) {
+      setStatus("Tento kontrolní bod už byl schválen.");
+      return;
+    }
+    if (useSupabase && await ensureAuth()) {
+      const approval = await window.kbSupabaseArticleFactory.recordApproval(project.id, checkpoint, "approved", "", {
+        working_title: project.working_title || null,
+        target_journal_id: project.target_journal_id || null,
+        current_version_id: project.current_version_id || null
+      });
+      approvals.push(approval);
+    } else {
+      approvals.push({
+        id: uuid(),
+        article_project_id: project.id,
+        checkpoint,
+        decision: "approved",
+        created_at: new Date().toISOString(),
+        metadata: {}
+      });
+    }
+    persistLocal();
+    setStatus(`Kontrolní bod ${gate.number} schválen.`);
+    render();
+    if (gate.roles.length) {
+      await runPipelineForProject(project.id, { phase: gate, roles: gate.roles });
+    }
+  }
+
   async function markHumanReviewed() {
     const project = getSelectedProject();
     if (!project) return;
+    const checklist = project.revision_checklist || [];
+    if (!checklist.length || checklist.some((item) => !item.checked)) {
+      setStatus("Nejdříve potvrďte všechny položky kontrolního checklistu.", true);
+      return;
+    }
+    if (!isGateApproved(project.id, "final_manuscript")) {
+      if (useSupabase && await ensureAuth()) {
+        const approval = await window.kbSupabaseArticleFactory.recordApproval(project.id, "final_manuscript", "approved", "", {
+          current_version_id: project.current_version_id || null,
+          checklist: checklist.map((item) => ({ id: item.id, checked: !!item.checked }))
+        });
+        approvals.push(approval);
+      } else {
+        approvals.push({ id: uuid(), article_project_id: project.id, checkpoint: "final_manuscript", decision: "approved", created_at: new Date().toISOString() });
+      }
+    }
     if (useSupabase && await ensureAuth()) {
       const saved = await window.kbSupabaseArticleFactory.markHumanReviewed(project.id);
       const idx = projects.findIndex((p) => p.id === saved.id);
@@ -877,7 +1006,25 @@
       project.status = "ready_for_submission";
     }
     persistLocal();
-    setStatus("Projekt označen jako lidsky zkontrolován.");
+    setStatus("Pracovní verze schválena. Je připravena pouze k ručnímu podání; nic nebylo odesláno.");
+    render();
+  }
+
+  async function updateRevisionChecklist(index, checked) {
+    const project = getSelectedProject();
+    if (!project) return;
+    const checklist = project.revision_checklist?.length
+      ? project.revision_checklist.map((item) => ({ ...item }))
+      : (window.kbArticleFactoryTypes?.REVISION_CHECKLIST || []).map((item) => ({ ...item, checked: false }));
+    if (!checklist[index]) return;
+    checklist[index].checked = !!checked;
+    project.revision_checklist = checklist;
+    if (useSupabase && await ensureAuth()) {
+      const saved = await window.kbSupabaseArticleFactory.upsertProject(project);
+      const idx = projects.findIndex((item) => item.id === saved.id);
+      if (idx >= 0) projects[idx] = saved;
+    }
+    persistLocal();
     render();
   }
 
@@ -1332,13 +1479,29 @@
     const ps = pipelineStatus || {};
     const runs = pipelineRuns.filter((r) => r.article_project_id === project?.id).slice(-3);
     const noProjects = !projects.length;
-    const resumeInfo = project && !pipelineLoading ? pipelineResumeInfo(project.id) : null;
+    const activeGate = project ? activeApprovalGate(project.id) : null;
+    const pendingPhase = project ? pendingApprovedPhase(project.id) : null;
+    const gateCards = project ? APPROVAL_GATES.map((gate) => {
+      const approval = latestApproval(project.id, gate.id);
+      const isActive = activeGate?.id === gate.id;
+      const isPending = pendingPhase?.id === gate.id;
+      const state = approval?.decision === "approved"
+        ? (isPending ? "probíhá" : "schváleno")
+        : (isActive ? "čeká na Vás" : "uzamčeno");
+      return `<article class="afReviewCard ${isActive ? "afGateActive" : ""}">
+        <h4>Kontrolní bod ${gate.number}: ${html(gate.title)} <span class="afTag">${html(state)}</span></h4>
+        <p>${html(gate.description)}</p>
+        ${approval ? `<p class="hint">Schváleno ${new Date(approval.created_at).toLocaleString("cs-CZ")}</p>` : ""}
+        ${isActive && gate.id !== "final_manuscript" ? `<button type="button" class="btn primary" data-af-approve-gate="${html(gate.id)}" ${pipelineLoading ? "disabled" : ""}>${html(gate.action)}</button>` : ""}
+        ${isActive && gate.id === "final_manuscript" ? `<button type="button" class="btn primary" data-af-goto-review>Otevřít finální checklist</button>` : ""}
+      </article>`;
+    }).join("") : "";
     const progressHtml = pipelineProgress
       ? `<p class="afTag">Probíhá krok ${pipelineProgress.stepIndex}/${pipelineProgress.total}: ${html(AI_ROLE_LABEL(pipelineProgress.stepId))}</p>`
       : "";
     return `
       <div class="afPlaceholder">
-        <p><strong>AI publikační pipeline</strong> — 8 rolí, výstup vždy jako draft.</p>
+        <p><strong>AI publikační pipeline</strong> — čtyři povinné kontrolní body. AI se mezi nimi vždy zastaví; výstup zůstává draftem.</p>
         ${noProjects ? `
           <div class="afCallout">
             <p><strong>Zatím nemáte žádný projekt</strong></p>
@@ -1348,21 +1511,21 @@
         ${!noProjects && project ? `<p>Aktivní projekt: <strong>${html(project.working_title)}</strong> (${html(project.status)})</p>` : ""}
         ${!noProjects && !project ? `<p class="afError">Vyberte projekt v seznamu níže nebo v záložce Projekty.</p>` : ""}
         ${progressHtml}
-        ${resumeInfo ? `
+        ${pendingPhase && !pipelineLoading ? `
           <div class="afCallout">
-            <p><strong>Pipeline nedokončena</strong> — hotovo ${resumeInfo.doneCount}/${resumeInfo.total} kroků</p>
-            <p class="hint">Často se přeruší po 3. kroku (timeout serveru). Rukopis vzniká až u kroku <strong>Manuscript Writer</strong>. Pokračujte tlačítkem níže.</p>
-            <button type="button" class="btn primary" data-af-resume-pipeline>Pokračovat od ${html(AI_ROLE_LABEL(resumeInfo.nextRole))}</button>
+            <p><strong>Schválená etapa není dokončena</strong></p>
+            <p class="hint">Můžete bezpečně pokračovat pouze v již schválených AI krocích.</p>
+            <button type="button" class="btn primary" data-af-continue-phase="${html(pendingPhase.id)}">Pokračovat v etapě ${pendingPhase.number}</button>
           </div>` : ""}
+        <div class="afReviewGrid">${gateCards}</div>
         <div class="afToolbar">
           <select data-af-project-select class="afSearch">${projects.map((p) => `<option value="${html(p.id)}" ${p.id === selectedProjectId ? "selected" : ""}>${html(p.working_title)}</option>`).join("")}</select>
           <button type="button" class="btn" data-af-pipeline-ping>Test Edge Function</button>
-          <button type="button" class="btn primary" data-af-run-pipeline ${!project || pipelineLoading ? "disabled" : ""}>${pipelineLoading ? "Pipeline běží…" : "Spustit pipeline"}</button>
         </div>
         ${lastPipelineResult ? `<pre class="afPre">${html(JSON.stringify(lastPipelineResult, null, 2).slice(0, 4000))}</pre>` : ""}
         ${runs.length ? `<h4>Poslední běhy</h4><ul>${runs.map((r) => {
           const done = completedRolesFromRun(r).length;
-          const extra = r.status === "running" ? ` · ${done}/8 kroků` : "";
+          const extra = r.status === "running" ? ` · ${done} dokončených kroků` : "";
           return `<li><strong>${html(r.status)}</strong>${extra} — ${html(r.summary || "")} <span class="hint">(${html(r.created_at)})</span></li>`;
         }).join("")}</ul>` : ""}
         ${ps.ok ? `<p class="hint">Edge Function OK (fáze ${ps.phase || "mvp"})</p>` : ""}
@@ -1407,14 +1570,18 @@
       : (window.kbArticleFactoryTypes?.REVISION_CHECKLIST || []).map((c) => ({ ...c, checked: false }));
     const checklistHtml = checklist.map((item, idx) => `
       <label class="afCheckItem"><input type="checkbox" data-af-check-idx="${idx}" ${item.checked ? "checked" : ""}> ${html(item.question)}</label>`).join("");
+    const finalGateReady = activeApprovalGate(project.id)?.id === "final_manuscript";
+    const finalApproved = isGateApproved(project.id, "final_manuscript");
+    const allChecked = checklist.length > 0 && checklist.every((item) => item.checked);
     return `
       <div class="afReview">
         <h3>AI Review panel</h3>
         ${cards || `<p class="afEmpty">Zatím žádné AI recenze — spusťte pipeline.</p>`}
         <h3>Checklist před lidskou revizí</h3>
         <div class="afChecklist">${checklistHtml}</div>
+        <p class="hint">Schválení pouze označí pracovní balíček jako připravený k ručnímu podání. Nic se neodesílá do časopisu ani e-mailem.</p>
         <div class="afToolbar">
-          <button type="button" class="btn primary" data-af-mark-reviewed>Označit jako lidsky zkontrolováno</button>
+          <button type="button" class="btn primary" data-af-mark-reviewed ${!finalGateReady || !allChecked || finalApproved ? "disabled" : ""}>${finalApproved ? "Pracovní verze schválena" : "Schválit pracovní verzi"}</button>
         </div>
       </div>`;
   }
@@ -1520,10 +1687,19 @@
 
     root.querySelector("[data-af-reload]")?.addEventListener("click", () => loadData({ force: true }));
     root.querySelector("[data-af-pipeline-ping]")?.addEventListener("click", () => checkPipeline());
-    root.querySelector("[data-af-run-pipeline]")?.addEventListener("click", () => runPipelineForProject(selectedProjectId));
-    root.querySelectorAll("[data-af-resume-pipeline]").forEach((btn) => {
-      btn.addEventListener("click", () => runPipelineForProject(selectedProjectId, { resume: true }));
+    root.querySelectorAll("[data-af-approve-gate]").forEach((btn) => {
+      btn.addEventListener("click", () => approveGateAndContinue(btn.dataset.afApproveGate));
     });
+    root.querySelectorAll("[data-af-continue-phase]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const phase = APPROVAL_GATES.find((item) => item.id === btn.dataset.afContinuePhase);
+        if (phase) runPipelineForProject(selectedProjectId, { phase, roles: phase.roles });
+      });
+    });
+    root.querySelectorAll("[data-af-resume-pipeline]").forEach((btn) => {
+      btn.addEventListener("click", () => runPipelineForProject(selectedProjectId, { phase: pendingApprovedPhase(selectedProjectId) }));
+    });
+    root.querySelector("[data-af-goto-review]")?.addEventListener("click", () => { activeView = "review"; render(); });
     root.querySelector("[data-af-project-select]")?.addEventListener("change", (e) => {
       selectedProjectId = e.target.value;
       render();
@@ -1554,6 +1730,9 @@
     });
 
     root.querySelector("[data-af-mark-reviewed]")?.addEventListener("click", () => markHumanReviewed());
+    root.querySelectorAll("[data-af-check-idx]").forEach((input) => {
+      input.addEventListener("change", () => updateRevisionChecklist(Number(input.dataset.afCheckIdx), input.checked));
+    });
     root.querySelector("[data-af-export-md]")?.addEventListener("click", () => {
       const project = getSelectedProject();
       const version = getCurrentVersion(project);
@@ -1957,6 +2136,19 @@
         padding: 0.75rem;
         margin-bottom: 0.5rem;
         background: var(--surface2, #1e2335);
+      }
+      #page-article-factory .afReviewGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 0.75rem;
+        margin: 1rem 0;
+      }
+      #page-article-factory .afReviewGrid .afReviewCard {
+        margin-bottom: 0;
+      }
+      #page-article-factory .afGateActive {
+        border-color: var(--accent, #4f8ef7);
+        box-shadow: 0 0 0 1px rgba(79, 142, 247, 0.28);
       }
       #page-article-factory .afChecklist {
         display: flex;
